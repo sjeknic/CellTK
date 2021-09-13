@@ -51,7 +51,7 @@ class Operation(object):
 
     def add_function_to_operation(self,
                                   func: str,
-                                  output_type: str = None,
+                                  output_type: type = None,
                                   index: int = -1,
                                   *args,
                                   **kwargs
@@ -86,7 +86,7 @@ class Operation(object):
         """
         # Default is to return the input if no function is run
         inputs = [images, masks, tracks]
-        result = inputs[INPT_NAME_IDX[self._output_type]]
+        result = inputs[INPT_NAME_IDX[self._output_type.__name__]]
 
         for (func, expec_type, args, kwargs) in self.functions:
             output_type, result = func(*inputs, *args, **kwargs)
@@ -97,22 +97,22 @@ class Operation(object):
             # Pass the result to the next function
             # TODO: This will currently raise a KeyError if it gets an unexpected type
             if isinstance(result, np.ndarray):
-                inputs[INPT_NAME_IDX[output_type]] = [result]
+                inputs[INPT_NAME_IDX[output_type.__name__]] = [result]
             else:
-                inputs[INPT_NAME_IDX[output_type]] = result
+                inputs[INPT_NAME_IDX[output_type.__name__]] = result
 
         return result
 
 
 class Preprocess(Operation):
-    _input_type = ('image',)
-    _output_type = 'image'
+    _input_type = (Image,)
+    _output_type = Image
     pass
 
 
 class Segment(Operation):
-    _input_type = ('image',)
-    _output_type = 'mask'
+    _input_type = (Image,)
+    _output_type = Mask
 
     def __init__(self,
                  input_images: Collection[str] = ['channel000'],
@@ -130,7 +130,7 @@ class Segment(Operation):
 
     @staticmethod
     @image_helper
-    def constant_thres(image: np.ndarray,
+    def constant_thres(image: Image,
                        THRES=1000,
                        NEG=False
                        ) -> Image:
@@ -140,8 +140,8 @@ class Segment(Operation):
 
 
 class Track(Operation):
-    _input_type = ('image', 'mask')
-    _output_type = 'track'
+    _input_type = (Image, Mask)
+    _output_type = Track
     pass
 
 

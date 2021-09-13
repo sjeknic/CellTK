@@ -39,10 +39,11 @@ def image_helper(func):
     output_type = inspect.signature(func).return_annotation.__name__
 
     def decorator(imgs, msks, trks, *args, **kwargs):
-        # TODO: Change this to be based on type.
         # Check which inputs the function is expecting and only pass those
-        expected = [p.name for p in inspect.signature(func).parameters.values()]
-        inpt_bools = [i in expected for i in INPT_NAMES]
+        expected_types = [i.annotation.__name__ for i in inspect.signature(func).parameters.values()]
+        expected_names = [p.name for p in inspect.signature(func).parameters.values()]
+        inpt_bools = [(i in expected_types) or (i in expected_names)
+                      for i in INPT_NAMES]
         pass_to_func = [i for b, inpt in zip(inpt_bools, [imgs, msks, trks])
                         for i in inpt if b]
 

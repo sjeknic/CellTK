@@ -156,7 +156,6 @@ class Pipeline():
                                ) -> None:
         """
         """
-
         if key not in container:
             container[key] = array
         else:
@@ -185,7 +184,7 @@ class Pipeline():
 
             req_inputs.append([imgs, msks, trks])
 
-        req_outputs = [tuple([o.output, o._output_type]) for o in self.operations]
+        req_outputs = [tuple([o.output, o._output_type.__name__]) for o in self.operations]
         # Need to do some thinking here about which inputs/outputs are used
         # where and what it means for them to be in or missing from one of the lists.
 
