@@ -10,6 +10,7 @@ import datetime as dtdt
 import numpy as np
 import tifffile as tiff
 from imageio import imread, mimread
+import cv2
 
 from base.operation import Operation
 from base.utils import Image, Mask, Track
@@ -205,9 +206,9 @@ class Pipeline():
             raise ValueError('Expected image stack with 3 dimensions. '
                              f'Got {stack.ndim}')
 
-        for idx in range(stack.shape[-1]):
+        for idx in range(stack.shape[0]):
             name = os.path.join(self.output_folder, f'{output_name}{idx}.tiff')
-            tiff.imsave(name, stack[..., idx].astype(img_dtype))
+            tiff.imsave(name, stack[idx, ...].astype(img_dtype))
 
     def _load_images_to_container(self,
                                   container: Dict[str, np.ndarray],
@@ -263,12 +264,16 @@ class Pipeline():
         temporarily storing them in a file (if low-mem mode is true)
         Slightly faster than imread.'''
         for cname, cimgs in zip(channels, channel_images):
+            # TODO: Is there a better imread function to use here?
             img_arrs = [np.asarray(mimread(c)[0]) for c in cimgs]
-            img_stack = np.stack(img_arrs, axis=-1).astype(img_dtype)
 
+            '''NOTE: Due to how numpy arrays are stored in memory, writing to the last
+            axis is faster than writing to the first. Therefore, the time axis is
+            on the first axis'''
+            img_stack = np.stack(img_arrs, axis=0).astype(img_dtype)
             # NOTE: won't work for 1D images. Does that matter?
             while img_stack.ndim < 3:
-                img_stack = np.expand_dims(img_stack, axis=-1)
+                img_stack = np.expand_dims(img_stack, axis=0)
 
             container[tuple([cname, kind])] = img_stack
 
