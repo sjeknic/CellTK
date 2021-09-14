@@ -40,7 +40,7 @@ class Operation(object):
         """
         Returns printable version of the functions and args in Operation
         """
-        string = str(super().__repr__())
+        string = str(super().__str__())
 
         for k, v in self.func_index.items():
             string += (f'\nIndex {k}: \n'
@@ -83,6 +83,9 @@ class Operation(object):
             Can take in as many of each, but must be a separate positional argument
             Cannot be named anything other than that
             If multiple, must be present in above order
+
+        TODO:
+            - np array could be preallocated for the function
         """
         # Default is to return the input if no function is run
         inputs = [images, masks, tracks]

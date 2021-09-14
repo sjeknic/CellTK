@@ -237,6 +237,7 @@ class Pipeline():
             - Not sure if it is finding image metadata. Test with images with metadata.
             - img_dtype should not scale an image up - an 8bit image should stay 8bit
             - Does this really need container as an input, could just use self.
+            - Preallocate numpy arrays for speed
         """
         # If no image paths are passed, just return the container
         if len(channel_images) == 0:
@@ -248,7 +249,7 @@ class Pipeline():
                                                       'provided.')
         # Check that the mask is correct
         if kind not in INPT_NAMES and kind not in INPT:
-            raise TypeError(f'Image kind must be one of {INPT}. Got{kind}.')
+            raise TypeError(f'Image kind must be one of {INPT}. Got {kind}.')
         elif not isinstance(kind, str):
             try:
                 kind = kind.__name__
@@ -264,16 +265,19 @@ class Pipeline():
         temporarily storing them in a file (if low-mem mode is true)
         Slightly faster than imread.'''
         for cname, cimgs in zip(channels, channel_images):
-            # TODO: Is there a better imread function to use here?
-            img_arrs = [np.asarray(mimread(c)[0]) for c in cimgs]
+            # Pre-allocate numpy array for speed
+            for n, c in enumerate(cimgs):
+                # TODO: Is there a better imread function to use here?
+                img = np.asarray(mimread(c)[0])
+                if n == 0:
+                    # TODO: Is there a neater way to do this?
+                    '''NOTE: Due to how numpy arrays are stored in memory, writing to the last
+                    axis is faster than writing to the first. Therefore, the time axis is
+                    on the first axis'''
+                    img_stack = np.empty(tuple([len(cimgs), img.shape[0], img.shape[1]]),
+                                         dtype=img_dtype)
 
-            '''NOTE: Due to how numpy arrays are stored in memory, writing to the last
-            axis is faster than writing to the first. Therefore, the time axis is
-            on the first axis'''
-            img_stack = np.stack(img_arrs, axis=0).astype(img_dtype)
-            # NOTE: won't work for 1D images. Does that matter?
-            while img_stack.ndim < 3:
-                img_stack = np.expand_dims(img_stack, axis=0)
+                img_stack[n, ...] = img
 
             container[tuple([cname, kind])] = img_stack
 
