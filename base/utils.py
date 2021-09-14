@@ -14,6 +14,21 @@ INPT_NAME_IDX = {n: i for i, n in enumerate(INPT_NAMES)}
 INPT = [Image, Mask, Track]
 INPT_IDX = {n: i for i, n in enumerate(INPT)}
 
+# Useful functions for interpolating nans in the data
+def nan_helper(y):
+    return np.isnan(y), lambda z: z.nonzero()[0]
+
+
+def nan_helper_2d(arr):
+    #probably can be done faster
+    temp = np.zeros(arr.shape)
+    temp[:] = np.nan
+    for n, y in enumerate(arr.copy()):
+        nans, z = nan_helper(y)
+        y[nans] = np.interp(z(nans), z(~nans), y[~nans])
+        temp[n, :] = y
+
+
 # Decorator that end users can use to add custom functions
 # to Operations.
 def custom_function(operation):
