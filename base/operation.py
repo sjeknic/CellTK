@@ -131,6 +131,7 @@ class Segment(Operation):
 
         self.output = output_name
 
+    # TODO: Should these methods actually be static? What's the benefit?
     @staticmethod
     @image_helper
     def constant_thres(image: Image,
@@ -140,6 +141,52 @@ class Segment(Operation):
         if NEG:
             return meas.label(image < THRES)
         return meas.label(image > THRES)
+
+    @image_helper
+    def unet_predict(self,
+                     image: Image,
+                     weight_path: str,
+                     roi: (int, str) = 2,
+                     batch: int = None,
+                     classes: int = 3,
+                     ) -> Image:
+        """
+        NOTE: If we had mulitple colors, then image would be 4D here. The Pipeline isn't
+        set up for that now, so for now the channels is just assumed to be 1.
+
+        roi - the prediction values are returned only for the roi
+        batch - number of frames passed to model. None is all of them.
+        classes - number of output categories from the model (has to match weights)
+        """
+        # probably don't need as many options here
+        _roi_dict = {'background': 0, 'bg': 0, 'edge': 1,
+                     'interior': 2, 'nuc': 2, 'cyto': 2}
+        if isinstance(roi, str):
+            try:
+                roi = _roi_dict[roi]
+            except KeyError:
+                raise ValueError(f'Did not understand region of interest {roi}.')
+
+        # Only import tensorflow and Keras if needed
+        from base.unet_utils import unet_model
+
+        if not hasattr(self, 'model'):
+            '''NOTE: If we had mulitple colors, then image would be 4D here.
+            The Pipeline isn't set up for that now, so for now the channels
+            is just assumed to be 1.'''
+            channels = 1
+            dims = (image.shape[1], image.shape[2], channels)
+            self.model = unet_model.UNetModel(dimensions=dims,
+                                              weight_path=weight_path,
+                                              model='unet')
+
+        # Pre-allocate output memory
+        # TODO: Incorporate the batch here.
+        output = np.empty(image.shape)
+        for i in range(image.shape[0]):
+            output[i, ...] = self.model.predict(image[i, ...])
+
+        return output
 
 
 class Track(Operation):
