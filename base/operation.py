@@ -170,21 +170,21 @@ class Segment(Operation):
         # Only import tensorflow and Keras if needed
         from base.unet_utils import unet_model
 
+        # TODO: I want to save the model in the UNetModel class, not the Segmentation class
         if not hasattr(self, 'model'):
             '''NOTE: If we had mulitple colors, then image would be 4D here.
             The Pipeline isn't set up for that now, so for now the channels
             is just assumed to be 1.'''
             channels = 1
             dims = (image.shape[1], image.shape[2], channels)
+
             self.model = unet_model.UNetModel(dimensions=dims,
                                               weight_path=weight_path,
                                               model='unet')
 
         # Pre-allocate output memory
         # TODO: Incorporate the batch here.
-        output = np.empty(image.shape)
-        for i in range(image.shape[0]):
-            output[i, ...] = self.model.predict(image[i, ...])
+        output = self.model.predict(image)
 
         return output
 
