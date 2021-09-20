@@ -1,6 +1,7 @@
 from typing import Tuple, List
 
 import numpy as np
+from sklearn.preprocessing import MinMaxScaler
 from tensorflow.keras.layers import (Conv1D, MaxPooling1D, UpSampling1D,
                                      Conv2D, MaxPooling2D, UpSampling2D,
                                      BatchNormalization, Input, Activation,
@@ -40,22 +41,32 @@ class UNetModel():
         self.model.load_weights(weight_path)
 
     def predict(self,
-                image: Image = None
+                image: Image = None,
+                roi: int = 2
                 ) -> Image:
         """
-        Assume that image will always be 3D, even if only one frame is received
+        Use the given model to generate a mask of predictions
         """
-        # First, image has to be normalized
+        # First, image has to be normalized while it is still 3D
         orig_shape = image.shape
+        image = self.normalize_image(image)
 
         # This is the expected dimension, add axis at -1 for channels
         if image.ndim == 3:
             image = np.expand_dims(image, -1)
         else:
             raise ValueError(f'Expected 3D stack, got {image.ndim}')
+
+        # Pad the image so that it matches the model dimensions
         image, pads = self.pad_2d(image, self.model_kws['steps'])
 
-        return self.model.predict(image)
+        # TODO: Can these models be saved and called?
+        # Predict the results and save in last axis
+        out = self.model.predict(image)
+        out = self.undo_padding(out, pads)
+        out = self.normalize_result(out)
+
+        return out
 
     def pad_model_dimension(self, shape: Tuple[int], model_steps: int) -> Tuple[int]:
         """
@@ -84,8 +95,56 @@ class UNetModel():
 
         return np.pad(image, pads, mode=mode, constant_values=constant_values), pads
 
+    def undo_padding(self,
+                     image: Image,
+                     pads: List[Tuple]
+                     ) -> Image:
+        """
+        Trim image back down to the original size
+        """
+        pads = [slice(p[0], -p[1]) if (p[0] != 0) and (p[1] != 0) else slice(None)
+                for p in pads]
+        return image[tuple(pads)]
+
+
+    def normalize_image(self,
+                        image: Image,
+                        low_percentile: float = 0.1,
+                        high_percentile: float = 99.9
+                        ) -> Image:
+        """
+        Normalizes the image to [0, 1]
+        Percentiles are included to prevent high/low outliers from impacting fit
+
+        NOTE: The specific percentages are based on what was used during training
+              with CellUNet. Results will vary if the percentiles are not the same.
+        """
+        # Find outlier values and clip
+        low_perc = np.percentile(image, low_percentile)
+        high_perc = np.percentile(image, high_percentile)
+        clipped = np.clip(image, a_min=low_perc, a_max=high_perc)
+
+        # Fit scaler on the clipped array. Cast it to N samples x 1 feature
+        scaler = MinMaxScaler(clip=True).fit(clipped.reshape(-1, 1))
+
+        # Transform the original image and reshape back to original shape
+        return scaler.transform(image.reshape(-1, 1)).reshape(image.shape)
+
+    def normalize_result(self, image: Image) -> Image:
+        """
+        Given an image ensures image.sum(-1) = 1 at each spot
+
+        NOTE: I don't think this is necessary except for some activation layers
+        """
+        for i in range(image.shape[0]):
+            image[i, ...] = image[i, ...] / image[i, ...].sum(-1)[..., None]
+        return image
+
+
     def _calculate_pads(self, shape: Tuple[int], target_mod: int) -> List[Tuple]:
         """
+        Calculate the adjustments to each axes in shape that will make it evenly
+        divisible by the target_mod.
         """
         axes_deltas = [target_mod - (s % target_mod) for s in shape]
 
@@ -208,6 +267,8 @@ class UNetModel():
         y = _add_up_module(y, filt, trans_layers)
         # Output
         y = conv_layer(classes, 1)(y)
+        # TODO: Add other activation options here.
+        # TODO: Is softmax the default for CellUNet?
         y = Activation('softmax')(y)
 
         return tensorflow.keras.models.Model(x, y)
