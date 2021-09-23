@@ -194,7 +194,7 @@ class Pipeline():
     def save_images(self,
                     stack: (Image, Mask, Track),
                     output_name: str,
-                    img_dtype: type = np.int16) -> None:
+                    img_dtype: type = None) -> None:
         """
         TODO:
             - Test different iteration strategies for efficiency
@@ -202,6 +202,7 @@ class Pipeline():
             - Use type instead of str for output (if even needed)
             - Add logging
         """
+        img_dtype = stack.dtype if img_dtype is None else img_dtype
         if stack.ndim != 3:
             raise ValueError('Expected image stack with 3 dimensions. '
                              f'Got {stack.ndim}')
