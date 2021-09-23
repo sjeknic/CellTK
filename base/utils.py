@@ -55,7 +55,7 @@ def image_helper(func):
           or a generator that passes successive slices
     """
     # Determine the expected output type
-    output_type = inspect.signature(func).return_annotation.__name__
+    output_type = inspect.signature(func).return_annotation
 
     def decorator(*args, **kwargs):
         '''This function is so that this decorator can work

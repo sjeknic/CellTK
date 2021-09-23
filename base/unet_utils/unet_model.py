@@ -37,6 +37,7 @@ class UNetModel():
         # Build model
         self.model_kws = UNET_KWS
         adj_dims = self.pad_model_dimension(dimensions, self.model_kws['steps'])
+
         self.model = self._build_model(adj_dims, **self.model_kws)
         self.model.load_weights(weight_path)
 
@@ -48,7 +49,6 @@ class UNetModel():
         Use the given model to generate a mask of predictions
         """
         # First, image has to be normalized while it is still 3D
-        orig_shape = image.shape
         image = self.normalize_image(image)
 
         # This is the expected dimension, add axis at -1 for channels
@@ -66,17 +66,21 @@ class UNetModel():
         out = self.undo_padding(out, pads)
         out = self.normalize_result(out)
 
-        return out
+        return out[..., roi]
 
-    def pad_model_dimension(self, shape: Tuple[int], model_steps: int) -> Tuple[int]:
+    def pad_model_dimension(self,
+                            shape: Tuple[int],
+                            model_steps: int
+                            ) -> Tuple[int]:
         """
+        Pads a shape to be divisible by the model
         """
         # Dimensions are independent of frames. height x width x channels(1)
         pads = self._calculate_pads(shape[:-1], 2 ** model_steps)
         # Remember to account for the channels dimension
         pads.append((0, 0))
         # Pads is a list of tuples that sums to the delta on each axis
-        return [int(s + sum(p)) for s, p in zip(shape, pads)]
+        return tuple([int(s + sum(p)) for s, p in zip(shape, pads)])
 
     def pad_2d(self,
                image: Image,
@@ -85,6 +89,7 @@ class UNetModel():
                constant_values: float = 0.
                ) -> Image:
         """
+        Pads an image to be divisible by the model
         This assumes that image is supposed to be 4 dimensional.
         Batch x Height x Width x Channels
         """
@@ -105,7 +110,6 @@ class UNetModel():
         pads = [slice(p[0], -p[1]) if (p[0] != 0) and (p[1] != 0) else slice(None)
                 for p in pads]
         return image[tuple(pads)]
-
 
     def normalize_image(self,
                         image: Image,
@@ -140,7 +144,6 @@ class UNetModel():
             image[i, ...] = image[i, ...] / image[i, ...].sum(-1)[..., None]
         return image
 
-
     def _calculate_pads(self, shape: Tuple[int], target_mod: int) -> List[Tuple]:
         """
         Calculate the adjustments to each axes in shape that will make it evenly
@@ -158,15 +161,8 @@ class UNetModel():
 
         return pads
 
-    '''TODO: I think this is going to have to be changed to be a classmethod. The problem
-    is that if images are aligned or something, then they would actually end up having different
-    dimensions. Which means that each Segment operation class could have it's own. One way to handle
-    it would be to simply not save the model at all and leave it after Segment is done, but this seems
-    like it could be inefficient if no aligning is done. Another option would be to save the models
-    as a class attribute that are indexed by the dimension of the model. This would be more efficient
-    but I'm worried about how much memory that's going to use. '''
-    def _build_model(self,
-                     dimensions: Tuple[int],
+    @staticmethod
+    def _build_model(dimensions: Tuple[int],
                      classes: int = 3,
                      steps: int = 2,
                      layers: int = 2,
@@ -260,13 +256,14 @@ class UNetModel():
         # Pooling
         y, trans_layers = _add_pool_module(x)
         # Base layer
-        new_filt = self.model_kws['init_filters'] * 2 ** len(trans_layers)
+        new_filt = init_filters * 2 ** len(trans_layers)
         y = _add_conv_module(y, filt=new_filt)
         # Upsampling
         filt = y.shape[-1] / 2
         y = _add_up_module(y, filt, trans_layers)
         # Output
         y = conv_layer(classes, 1)(y)
+
         # TODO: Add other activation options here.
         # TODO: Is softmax the default for CellUNet?
         y = Activation('softmax')(y)
