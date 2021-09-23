@@ -60,10 +60,8 @@ class Operation(object):
         args and kwargs should be passed to the function.
 
         TODO:
-            - Update output to no longer be str, but type
-        """
-        output_type = self._output_type if output_type is None else output_type
 
+        """
         if not hasattr(self, func):
             raise NameError(f"Function {func} not found in {self}.")
         else:
@@ -137,7 +135,7 @@ class Segment(Operation):
     def constant_thres(image: Image,
                        THRES=1000,
                        NEG=False
-                       ) -> Image:
+                       ) -> Mask:
         if NEG:
             return meas.label(image < THRES)
         return meas.label(image > THRES)
@@ -170,7 +168,6 @@ class Segment(Operation):
         # Only import tensorflow and Keras if needed
         from base.unet_utils import unet_model
 
-        # TODO: I want to save the model in the UNetModel class, not the Segmentation class
         if not hasattr(self, 'model'):
             '''NOTE: If we had mulitple colors, then image would be 4D here.
             The Pipeline isn't set up for that now, so for now the channels
@@ -184,8 +181,14 @@ class Segment(Operation):
 
         # Pre-allocate output memory
         # TODO: Incorporate the batch here.
-        output = self.model.predict(image)
+        if batch is None:
+            output = self.model.predict(image[:, :, :], roi=roi)
+        else:
+            arrs = np.array_split(image, image.shape[0] // batch, axis=0)
+            output = np.concatenate([self.model.predict(a, roi=roi)
+                                     for a in arrs], axis=0)
 
+        # TODO: dtype can probably be downsampled from float32 before returning
         return output
 
 
