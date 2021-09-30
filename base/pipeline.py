@@ -15,6 +15,7 @@ import cv2
 from base.operation import Operation
 from base.utils import Image, Mask, Track
 from base.utils import INPT, INPT_NAMES, INPT_IDX, INPT_NAME_IDX
+from base.custom_array import CustomArray
 
 
 class Pipeline():
@@ -48,6 +49,7 @@ class Pipeline():
 
         TODO:
             - Should be able to parse args and load a yaml as well
+            - How to handle masks and tracks that have different channels from image
         """
         self.output_folder = image_folder if output_folder is None else output_folder
         self.operations = []
@@ -60,6 +62,10 @@ class Pipeline():
                                [image_folder, mask_folder, track_folder]
                                ):
             files = self.get_image_paths(im, channels)
+
+            # TODO: This might be better suited for after the operations are added.
+            # That way the user doesn't necessarily have to specify in advance which
+            # images will be needed. Can be inferred.
             self._image_container = self._load_images_to_container(
                                                         self._image_container,
                                                         channels,
@@ -144,15 +150,22 @@ class Pipeline():
 
         for inpts, otpts, oper in zip(inputs, outputs, self.operations):
             # Get images and pass to operation
-            imgs, msks, trks = self._get_images_from_container(inpts)
-            oper_result = oper.run_operation(imgs, msks, trks)
+            # try/except block is here to raise more helpful messages for user
+            # TODO: Add logging of files and whether they were found
+            try:
+                imgs, msks, trks, arrs = self._get_images_from_container(inpts)
+            except KeyError as e:
+                raise KeyError(f'Failed to find all inputs for {oper} \n',
+                               e.__str__())
 
             # Save the results in the image container
+            oper_result = oper.run_operation(imgs, msks, trks, arrs)
             self._image_container = self.update_image_container(
                                             self._image_container,
                                             oper_result,
                                             otpts)
 
+            # Write to disk if needed
             if oper.save:
                 self.save_images(oper_result, otpts[0])
 
@@ -164,6 +177,8 @@ class Pipeline():
                                key: Tuple[str],
                                ) -> None:
         """
+        TODO:
+            - How to handle if array is not an image stack (say df or something.)
         """
         if key not in container:
             container[key] = array
@@ -176,35 +191,13 @@ class Pipeline():
 
         return container
 
-    def _input_output_handler(self):
-        """
-        Iterate through all the operations and figure out which images
-        to save and which to remove.
-        If an input doesn't exist, try reloading the images.
-        If an output that will be used as an input doesn't exist, raise error
-        Also, remember the names that should get passed to each operation, based
-        on what they request.
-        """
-        req_inputs = []
-        for o in self.operations:
-            imgs = [tuple([i, Image.__name__]) for i in o.input_images]
-            msks = [tuple([m, Mask.__name__]) for m in o.input_masks]
-            trks = [tuple([t, Track.__name__]) for t in o.input_tracks]
-
-            req_inputs.append([imgs, msks, trks])
-
-        req_outputs = [tuple([o.output, o._output_type.__name__]) for o in self.operations]
-        # Need to do some thinking here about which inputs/outputs are used
-        # where and what it means for them to be in or missing from one of the lists.
-
-        return req_inputs, req_outputs
-
     def save_images(self,
                     stack: (Image, Mask, Track),
                     output_name: str,
                     img_dtype: type = None) -> None:
         """
         TODO:
+            - New output folder needs to be made for each operation
             - Test different iteration strategies for efficiency
             - Should not upscale images
             - Use type instead of str for output (if even needed)
@@ -218,6 +211,29 @@ class Pipeline():
         for idx in range(stack.shape[0]):
             name = os.path.join(self.output_folder, f'{output_name}{idx}.tiff')
             tiff.imsave(name, stack[idx, ...].astype(img_dtype))
+
+    def _input_output_handler(self):
+        """
+        Iterate through all the operations and figure out which images
+        to save and which to remove.
+        If an input doesn't exist, try reloading the images.
+        If an output that will be used as an input doesn't exist, raise error
+        """
+        req_inputs = []
+        req_outputs = []
+        for o in self.operations:
+            imgs = [tuple([i, Image.__name__]) for i in o.input_images]
+            msks = [tuple([m, Mask.__name__]) for m in o.input_masks]
+            trks = [tuple([t, Track.__name__]) for t in o.input_tracks]
+            arrs = [tuple([a, CustomArray.__name__]) for a in o.input_arrays]
+
+            req_inputs.append([imgs, msks, trks, arrs])
+            req_outputs.append(o.output_id)
+
+        # Need to do some thinking here about which inputs/outputs are used
+        # where and what it means for them to be in or missing from one of the lists.
+
+        return req_inputs, req_outputs
 
     def _load_images_to_container(self,
                                   container: Dict[str, np.ndarray],
@@ -245,8 +261,6 @@ class Pipeline():
               If so, should no longer be private
             - Not sure if it is finding image metadata. Test with images with metadata.
             - img_dtype should not scale an image up - an 8bit image should stay 8bit
-            - Does this really need container as an input, could just use self.
-            - Preallocate numpy arrays for speed
         """
         # If no image paths are passed, just return the container
         if len(channel_images) == 0:
@@ -354,7 +368,6 @@ class Orchestrator():
     def __init__(self):
         # Get the user inputs (path to yaml for now...)
         self._get_command_line_inputs()
-
 
     def parse_yaml(self, path: str) -> Dict:
         """
