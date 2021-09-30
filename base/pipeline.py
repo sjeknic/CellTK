@@ -108,14 +108,22 @@ class Pipeline():
 
         TODO:
             - Add option for saving individual results of the output
+            - Not sure the index results always make sense, best to add all
+              operations at once
         """
         if isinstance(operation, Collection):
             if all([isinstance(o, Operation) for o in operation]):
-                self.operations[index:index] = operation
+                if index == -1:
+                    self.operations.extend(operation)
+                else:
+                    self.operations[index:index] = operation
             else:
                 raise ValueError('Not all elements of operation are class Operation.')
         elif isinstance(operation, Operation):
-            self.operations.insert(index, operation)
+            if index == -1:
+                self.operations.append(operation)
+            else:
+                self.operations.insert(index, operation)
         else:
             raise ValueError(f'Expected type Operation, got {type(operation)}.')
 
