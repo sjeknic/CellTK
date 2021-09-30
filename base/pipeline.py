@@ -13,9 +13,8 @@ from imageio import imread, mimread
 import cv2
 
 from base.operation import Operation
-from base.utils import Image, Mask, Track
+from base.utils import Image, Mask, Track, Arr
 from base.utils import INPT, INPT_NAMES, INPT_IDX, INPT_NAME_IDX
-from base.custom_array import CustomArray
 
 
 class Pipeline():
@@ -27,11 +26,12 @@ class Pipeline():
     file_location = os.path.dirname(os.path.realpath(__file__))
 
     def __init__(self,
-                 image_folder: str,
-                 channels: Collection[str] = None,
+                 parent_folder: str = None,
+                 output_folder: str = None,
+                 image_folder: str = None,
                  mask_folder: str = None,
                  track_folder: str = None,
-                 output_folder: str = None,
+                 array_folder: str = None,
                  input_yaml: str = None,
                  overwrite: bool = True
                  ) -> None:
@@ -49,56 +49,15 @@ class Pipeline():
 
         TODO:
             - Should be able to parse args and load a yaml as well
-            - How to handle masks and tracks that have different channels from image
         """
-        self.output_folder = image_folder if output_folder is None else output_folder
-        self.operations = []
+        # Define paths to find and save images
+        self._set_all_paths(parent_folder, output_folder, image_folder,
+                            mask_folder, track_folder, array_folder)
+        self._make_output_folder(overwrite)
 
-        self._make_output_folder(self.output_folder, overwrite)
-
-        # Collect images and sort by channel
+        # Prepare for getting operations and images
         self._image_container = {}
-        for im_type, im in zip([Image, Mask, Track],
-                               [image_folder, mask_folder, track_folder]
-                               ):
-            files = self.get_image_paths(im, channels)
-
-            # TODO: This might be better suited for after the operations are added.
-            # That way the user doesn't necessarily have to specify in advance which
-            # images will be needed. Can be inferred.
-            self._image_container = self._load_images_to_container(
-                                                        self._image_container,
-                                                        channels,
-                                                        files,
-                                                        kind=im_type)
-
-    def get_image_paths(self,
-                        folder: str,
-                        channels: Collection[str] = None
-                        ) -> Collection[str]:
-        """
-        TODO:
-            - Add image selection based on regex
-            - Should channels use regex or glob to match name
-        """
-        # Return empty list if no inputs
-        if folder is None:
-            return []
-
-        # Find images and sort into list based on channel
-        all_images = sorted(os.listdir(folder))
-        if channels is not None:
-            channel_images = [[a for a in all_images if c in a]
-                              for c in channels]
-        else:
-            channels = ['all']
-            channel_images = [all_images]
-
-        # Get the full path to the images
-        channel_images = [[os.path.join(folder, i) for i in c]
-                          for c in channel_images]
-
-        return channel_images
+        self.operations = []
 
     def add_operations(self,
                        operation: Collection[Operation],
@@ -135,7 +94,7 @@ class Pipeline():
 
         self.operation_index = {i: o for i, o in enumerate(self.operations)}
 
-    def run(self) -> (Image, Mask, Track):
+    def run(self) -> (Image, Mask, Track, Arr):
         """
         Runs all of the operations in self.operations on the images
 
@@ -143,10 +102,9 @@ class Pipeline():
 
         Returns:
         """
-        # for each operation
-        # inputs = three lists of image stacks
-        # outputs = tuple of expected name and output_type (as str for now)
+        # Determine needed inputs and outputs and load to container
         inputs, outputs = self._input_output_handler()
+        self._load_images_to_container(self._image_container, inputs, outputs)
 
         for inpts, otpts, oper in zip(inputs, outputs, self.operations):
             # Get images and pass to operation
@@ -216,8 +174,9 @@ class Pipeline():
         """
         Iterate through all the operations and figure out which images
         to save and which to remove.
-        If an input doesn't exist, try reloading the images.
-        If an output that will be used as an input doesn't exist, raise error
+
+        TODO:
+            - If an output that will be used as an input doesn't exist, raise error
         """
         req_inputs = []
         req_outputs = []
@@ -225,7 +184,7 @@ class Pipeline():
             imgs = [tuple([i, Image.__name__]) for i in o.input_images]
             msks = [tuple([m, Mask.__name__]) for m in o.input_masks]
             trks = [tuple([t, Track.__name__]) for t in o.input_tracks]
-            arrs = [tuple([a, CustomArray.__name__]) for a in o.input_arrays]
+            arrs = [tuple([a, Arr.__name__]) for a in o.input_arrays]
 
             req_inputs.append([imgs, msks, trks, arrs])
             req_outputs.append(o.output_id)
@@ -235,14 +194,26 @@ class Pipeline():
 
         return req_inputs, req_outputs
 
+    def _get_image_paths(self,
+                         folder: str,
+                         match_str: Collection[str] = None
+                         ) -> Collection[str]:
+        """
+        TODO:
+            - Add image selection based on regex
+            - Should channels use regex or glob to match name
+        """
+        # Find images and sort into list
+        im_names = [os.path.join(folder, i) for i in sorted(os.listdir(folder))
+                    if match_str in i]
+        return im_names
+
     def _load_images_to_container(self,
-                                  container: Dict[str, np.ndarray],
-                                  channels: Collection[str],
-                                  channel_images: Collection[str],
-                                  kind: type = Image,
-                                  img_dtype: type = np.int16,
-                                  save_metadata: bool = False
-                                  ) -> Dict[str, tuple]:
+                                  container: Dict[tuple, np.ndarray],
+                                  inputs: Collection[tuple],
+                                  outputs: Collection[tuple],
+                                  img_dtype: type = np.int16
+                                  ) -> Dict[tuple, np.ndarray]:
         """
         Loads image files and saves the result as a 3D np.ndarray
         in the given container.
@@ -262,47 +233,46 @@ class Pipeline():
             - Not sure if it is finding image metadata. Test with images with metadata.
             - img_dtype should not scale an image up - an 8bit image should stay 8bit
         """
-        # If no image paths are passed, just return the container
-        if len(channel_images) == 0:
-            return container
+        for idx, name in enumerate(INPT_NAMES):
+            fol = getattr(self, f'{name}_folder')
 
-        # Check that images are present for all channels
-        assert len(channels) == len(channel_images), ('Same number of channels '
-                                                      'and images must be '
-                                                      'provided.')
-        # Check that the mask is correct
-        if kind not in INPT_NAMES and kind not in INPT:
-            raise TypeError(f'Image kind must be one of {INPT}. Got {kind}.')
-        elif not isinstance(kind, str):
-            try:
-                kind = kind.__name__
-            except AttributeError:
-                raise AttributeError('Did not understand desired image input.'
-                                     f'Make sure to use custom types {INPT_NAMES}')
+            # Get unique list of all inputs requested by operations
+            all_requested = [sl for l in [i[idx] for i in inputs] for sl in l]
+            to_load = list(set(all_requested))
 
-        # Load the images
-        '''NOTE: Using mimread instead of imread to add the option of limiting
-        the memory of the loaded image. However, mimread still only loads one
-        image at a time, so it is unlikely to ever hit the memory limit.
-        Could be worth tracking the memory and deleting large arrays or
-        temporarily storing them in a file (if low-mem mode is true)
-        Slightly faster than imread.'''
-        for cname, cimgs in zip(channels, channel_images):
-            # Pre-allocate numpy array for speed
-            for n, c in enumerate(cimgs):
-                # TODO: Is there a better imread function to use here?
-                img = np.asarray(mimread(c)[0])
-                if n == 0:
-                    # TODO: Is there a neater way to do this?
-                    '''NOTE: Due to how numpy arrays are stored in memory, writing to the last
-                    axis is faster than writing to the first. Therefore, the time axis is
-                    on the first axis'''
-                    img_stack = np.empty(tuple([len(cimgs), img.shape[0], img.shape[1]]),
-                                         dtype=img_dtype)
+            for key in to_load:
+                pths = self._get_image_paths(fol, key[0])
+                if len(pths) == 0:
+                    # If no images are found in the required path, check if they
+                    # will be made when the operations are run
+                    # TODO: The order matters. Should raise error if it is made
+                    #       after it is needed.
+                    if key not in outputs:
+                        raise ValueError(f'Data {key} cannot be found and is '
+                                         'not listed as an output.')
+                else:
+                    # Load the images
+                    '''NOTE: Using mimread instead of imread to add the option of limiting
+                    the memory of the loaded image. However, mimread still only loads one
+                    image at a time, so it is unlikely to ever hit the memory limit.
+                    Could be worth tracking the memory and deleting large arrays or
+                    temporarily storing them in a file (if low-mem mode is true)
+                    Slightly faster than imread.'''
+                    # Pre-allocate numpy array for speed
+                    for n, p in enumerate(pths):
+                        # TODO: Is there a better imread function to use here?
+                        img = np.asarray(mimread(p)[0])
+                        if n == 0:
+                            # TODO: Is there a neater way to do this?
+                            '''NOTE: Due to how numpy arrays are stored in memory, writing to the last
+                            axis is faster than writing to the first. Therefore, the time axis is
+                            on the first axis'''
+                            img_stack = np.empty(tuple([len(pths), img.shape[0], img.shape[1]]),
+                                                 dtype=img.dtype)
 
-                img_stack[n, ...] = img
+                        img_stack[n, ...] = img
 
-            container[tuple([cname, kind])] = img_stack
+                    container[key] = img_stack
 
         return container
 
@@ -327,14 +297,44 @@ class Pipeline():
 
         return temp
 
+    def _set_all_paths(self,
+                       parent_folder: str,
+                       output_folder: str,
+                       image_folder: str,
+                       mask_folder: str,
+                       track_folder: str,
+                       array_folder: str
+                       ) -> None:
+        """
+        TODO:
+            - Should these use Path module?
+            - Should image, mask, track be set as relative folders?
+                - If so, based on outputs or on parent?
+        """
+        # Parent folder defaults to folder where Pipeline was called
+        if parent_folder is None:
+            self.parent_folder = os.path.abspath(sys.argv[0])
+        else:
+            self.parent_folder = parent_folder
+
+        # Output folder defaults to folder in parent_folder
+        if output_folder is None:
+            self.output_folder = os.path.join(self.parent_folder, 'outputs')
+        else:
+            self.output_folder = output_folder
+
+        # All image folders default to output_folder or parent_folder
+        self.image_folder = self.parent_folder if image_folder is None else image_folder
+        self.mask_folder = self.output_folder if mask_folder is None else mask_folder
+        self.track_folder = self.output_folder if track_folder is None else track_folder
+        self.array_folder = self.output_folder if array_folder is None else array_folder
+
     def _make_output_folder(self,
-                            output_path: str,
                             overwrite: bool = True
                             ) -> None:
         """
         This will also be responsible for logging and passing the yaml
         """
-        self.output_folder = os.path.join(self.file_location, output_path)
         if not os.path.exists(self.output_folder):
             os.makedirs(self.output_folder)
             fmode = 'a'
@@ -352,7 +352,6 @@ class Pipeline():
             os.makedirs(self.output_folder)
 
         # TODO: Add Logging file here
-        return
 
 
 class Orchestrator():
