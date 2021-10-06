@@ -211,9 +211,9 @@ class CustomArray():
 
         # Match keys and coordinates
         self._key_dim_pairs = {
-            a: [k for k, v in coords.items() if a in v][0] for a in all_poss
+            a: [k for k, v in coords.items() if a in tuple(v)][0] for a in all_poss
         }
         # NOTE: Not sure I will need this one, could just use xarr internals
         self._key_coord_pairs = {
-            a: [v.index(a) for k, v in coords.items() if a in v][0] for a in all_poss
+            a: [v.index(a) for k, v in coords.items() if a in tuple(v)][0] for a in all_poss
         }
