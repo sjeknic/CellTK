@@ -6,23 +6,19 @@ import numpy as np
 
 class CustomArray():
     """
-    This will hold the data for one site (hopefully)
-         The question will probably be exactly how and what dimensions will line up...
+    ax 0 - cell locations (nuc, cyto, population, etc.)
+    ax 1 - channels (TRITC, FITC, etc.)
+    ax 2 - metrics (median_int, etc.)
+    ax 3 - cells
+    ax 4 - frames
 
-        * numbers are arbitrary, will change based on read/write speed.
-        Opt 2:
-            ax 0 - cell locations (nuc, cyto, population, etc.)
-            ax 1 - channels (TRITC, FITC, etc.)
-            ax 2 - metrics (median_int, etc.)
-            ax 3 - cells
-            ax 4 - frames
+    Question: what axes are the fastest and slowest to write too. Does that count still
+    if I'm using xarr. And do I even need xarr still, because I am skipping most of the
+    actual functions
 
-    Another question is how will this CustomArray actually be built. I think that
-    depends a lot on how the data extraction looks like. So I'm going to start thinking
-    about that as well. For now, the whole array has to be provided....
     """
-    __slots__ = ('xarr', 'name', 'attrs', 'coords', '_dim_idxs',
-                 '_key_dim_pairs', '_key_coord_pairs')
+    __slots__ = ('_xarr', 'name', 'attrs', 'coords', '_arr_dim', '_dim_idxs',
+                 '_key_dim_pairs', '_key_coord_pairs', '_nan_mask')
 
     def __init__(self,
                  regions: Collection[str] = ['nuc'],
@@ -43,52 +39,78 @@ class CustomArray():
               is relating to the DataSet structure when all of the np arrays
               are implemented. The simplest way might just be to index all of them
               and stack the results. But for now keeping as is
+            - Handling of metrics which will have multiple entries (i.e. bbox-0, bbox-1, etc.)
+              The simplest might be to just automatically convert the keys when the array is loaded.
+              The issue with this is that this would also have to happen in __getitem__, which
+              seems like it would slow things down. One option could be to check if any of those metrics
+              exist when the CustomArray is made. If they are __getitem__ first has to call a function to
+              sort that out, and if not, that function could just be a pass through function.
+            - Reorder if-statements for speed in key_coord functions.
+            - Add option to return nans, for now default is to not return them
+            - Add ability to save time steps
         """
         # Save some values
         self.name = name
         self.attrs = attrs
 
         # Set _arr_dim based on input values
-        _arr_dim = (len(regions), len(channels), len(metrics),
-                    len(cells), len(frames))
+        self._arr_dim = (len(regions), len(channels), len(metrics),
+                         len(cells), len(frames))
         # Create empty data array
-        arr = np.empty(_arr_dim)
+        arr = np.empty(self._arr_dim)
 
         # Create coordinate dictionary
         self.coords = dict(region=regions, channel=channels, metric=metrics,
                            cell=cells, frame=frames)
         self._make_key_coord_pairs(self.coords)
 
-        self.xarr = xr.DataArray(data=arr, coords=self.coords,
-                                 name=name, attrs=attrs)
+        self._xarr = xr.DataArray(data=arr, coords=self.coords,
+                                  name=name, attrs=attrs)
+        self._nan_mask = np.empty(self._xarr.values.shape).astype(bool)
+        self._nan_mask[:] = True
 
     @property
     def shape(self):
-        return self.xarr.shape
+        return self._xarr.shape
+
+    @property
+    def ndim(self):
+        return self._xarr.ndim
 
     def __getitem__(self, key):
-        """
-        """
+        # TODO: Write a separate __getitem__ for DataStructures to call
         # Sort given indices to the appropriate axes
         if not isinstance(key, tuple):
             key = tuple([key])
         indices = self._convert_keys_to_index(key)
 
         # Always return as a numpy array
-        return self.xarr.values[indices]
+        return self._xarr.values[indices]
 
     def __setitem__(self, key, value):
+        # Sort given indices to the appropriate axes
         if not isinstance(key, tuple):
             key = tuple([key])
         indices = self._convert_keys_to_index(key)
 
-        self.xarr.values[indices] = value
+        self._xarr.values[indices] = value
 
     def __str__(self):
-        return self.xarr.__str__()
+        return self._xarr.__str__()
 
-    def _convert_keys_to_index(self, key):
+    def _convert_keys_to_index(self, key) -> Tuple[(int, slice)]:
         """
+        Converts strings and slices given in key to the saved
+        dimensions and coordinates of self._xarr.
+
+        Args:
+            - key: tuple(slices)
+
+        Returns:
+            tuple(slices)
+
+        TODO:
+            - Add handling of Ellipsis in key
         """
         # Check that key is not too long
         if len(key) > len(self.coords):
@@ -110,7 +132,9 @@ class CustomArray():
             if isinstance(k, slice):
                 if isinstance(k.start, type(None)) and isinstance(k.stop, type(None)):
                     # All none means user had to put it in the correct spot
-                    indices[k_idx] = k
+                    idx = k_idx
+                    start_coord = k.start
+                    stop_coord = k.stop
                     # Count it if it is in the cell axis
                     if k_idx == cell_idx:
                         seen_int += 1
