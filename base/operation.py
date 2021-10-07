@@ -1,7 +1,6 @@
 from typing import Collection, Tuple, Dict, Callable
 
 import numpy as np
-import pandas as pd
 import skimage.measure as meas
 
 from base.utils import image_helper, Image, Mask, Track, Arr, INPT_NAME_IDX
@@ -19,6 +18,7 @@ class Operation(object):
     def __init__(self,
                  output: str,
                  save: bool = False,
+                 _output_id: Tuple[str] = None,
                  **kwargs
                  ) -> None:
         """
@@ -42,7 +42,12 @@ class Operation(object):
         self.input_masks = []
         self.input_tracks = []
         self.input_arrays = []
-        self.output_id = None
+
+        if _output_id is not None:
+            self.output_id = _output_id
+        else:
+            output_type = self._output_type.__name__
+            self.output_id = tuple([output, output_type])
 
     def __setattr__(self, name, value) -> None:
         '''TODO: Not needed here, but the idea behind a custom __setattr__
@@ -126,10 +131,24 @@ class Operation(object):
         return result
 
 
-class Preprocess(Operation):
+class Processing(Operation):
     _input_type = (Image,)
     _output_type = Image
-    pass
+
+    def __init__(self,
+                 input_images: Collection[str] = ['channel000'],
+                 output: str = 'process',
+                 save: bool = False,
+                 _output_id: Tuple[str] = None,
+                 ) -> None:
+        super().__init__(output, save, _output_id)
+
+        if isinstance(input_images, str):
+            self.input_images = [input_images]
+        else:
+            self.input_images = input_images
+
+        self.output = output
 
 
 class Segment(Operation):
@@ -142,7 +161,7 @@ class Segment(Operation):
                  save: bool = False,
                  _output_id: Tuple[str] = None,
                  ) -> None:
-        super().__init__(output, save)
+        super().__init__(output, save, _output_id)
 
         if isinstance(input_images, str):
             self.input_images = [input_images]
@@ -150,12 +169,6 @@ class Segment(Operation):
             self.input_images = input_images
 
         self.output = output
-
-        if _output_id is not None:
-            self.output_id = _output_id
-        else:
-            output_type = self._output_type.__name__
-            self.output_id = tuple([output, output_type])
 
     # TODO: Should these methods actually be static? What's the benefit?
     @staticmethod
@@ -223,11 +236,28 @@ class Segment(Operation):
 class Track(Operation):
     _input_type = (Image, Mask)
     _output_type = Track
-    pass
 
+    def __init__(self,
+                 input_images: Collection[str] = [],
+                 input_masks: Collection[str] = [],
+                 output: str = 'track',
+                 save: bool = False,
+                 track_file: bool = True,
+                 _output_id: Tuple[str] = None,
+                 ) -> None:
+        super().__init__(output, save, _output_id)
 
-class Postprocess(Operation):
-    pass
+        if isinstance(input_images, str):
+            self.input_images = [input_images]
+        else:
+            self.input_images = input_images
+
+        if isinstance(input_masks, str):
+            self.input_masks = [input_masks]
+        else:
+            self.input_masks = input_masks
+
+        self.output = output
 
 
 class Evaluate(Operation):
@@ -258,7 +288,6 @@ class Extract(Operation):
                 'orientation', 'perimeter', 'solidity',
                 # 'bbox', 'centroid', 'coords'  # require multiple scalars
                 ]
-    _metrics = ['label', 'mean_intensity']
     _extra_properties = []
 
     def __init__(self,
@@ -269,7 +298,8 @@ class Extract(Operation):
                  regions: Collection[str] = [],
                  condition: str = None,
                  output: str = 'data_frame',
-                 save: bool = False
+                 save: bool = False,
+                 _output_id: Tuple[str] = None
                  ) -> None:
         """
         channel and region _map should be the names that will get saved in the final df
@@ -284,7 +314,7 @@ class Extract(Operation):
               be able to.
         """
 
-        super().__init__(output, save)
+        super().__init__(output, save, _output_id)
 
         if isinstance(input_images, str):
             self.input_images = [input_images]
@@ -374,7 +404,6 @@ class Extract(Operation):
 
                 # TODO: Remember to include Tracks as a possible input
                 # Extract data using scipy
-
                 rp = [meas.regionprops_table(masks[r_idx][i], images[c_idx][i],
                                              properties=metrics, cache=True)
                       for i in range(images[c_idx].shape[0])]

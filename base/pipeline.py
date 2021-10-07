@@ -22,8 +22,14 @@ class Pipeline():
     This is the no longer outermost holder class. It will hold all of the Operation classes.
     """
 
-    # Need a better way to define where the path should be...
+    # TODO: need a better way to define where the path should be...
     file_location = os.path.dirname(os.path.realpath(__file__))
+
+    __slots__ = ('_image_container', 'operations',
+                 'parent_folder', 'output_folder',
+                 'image_folder', 'mask_folder',
+                 'track_folder', 'array_folder',
+                 'operation_index')
 
     def __init__(self,
                  parent_folder: str = None,
@@ -49,6 +55,8 @@ class Pipeline():
 
         TODO:
             - Should be able to parse args and load a yaml as well
+            - Look at context management: https://stackoverflow.com/a/34325346
+                Here and/or in Orchestrator to ensure image_containers are deleted
         """
         # Define paths to find and save images
         self._set_all_paths(parent_folder, output_folder, image_folder,
@@ -137,6 +145,7 @@ class Pipeline():
         """
         TODO:
             - How to handle if array is not an image stack (say df or something.)
+                Probably just still save it all the same I think.
         """
         if key not in container:
             container[key] = array

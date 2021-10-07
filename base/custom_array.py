@@ -78,10 +78,10 @@ class CustomArray():
         return self._xarr.ndim
 
     def __getitem__(self, key):
-        # TODO: Write a separate __getitem__ for DataStructures to call
-        # Sort given indices to the appropriate axes
+        # Needed if only one key is passed
         if not isinstance(key, tuple):
             key = tuple([key])
+        # Sort given indices to the appropriate axes
         indices = self._convert_keys_to_index(key)
 
         # Always return as a numpy array
@@ -94,6 +94,13 @@ class CustomArray():
         indices = self._convert_keys_to_index(key)
 
         self._xarr.values[indices] = value
+
+    def _getitem_w_idx(self, idx):
+        """
+        Used by CustomSet to index CustomArray w/o recalculating
+        the indices each time
+        """
+        return self._xarr.values[idx]
 
     def __str__(self):
         return self._xarr.__str__()
@@ -163,8 +170,8 @@ class CustomArray():
                     if (start_dim is not None and
                        stop_dim is not None and
                        start_dim != stop_dim):
-                        raise KeyError(f"Dimensions don't match: {k.start} is in "
-                                       f"{start_dim}, {k.stop} is in {stop_dim}.")
+                        raise IndexError(f"Dimensions don't match: {k.start} is in "
+                                         f"{start_dim}, {k.stop} is in {stop_dim}.")
 
                     # Get axis and coord indices and remake the slice
                     idx = self._dim_idxs[start_dim]
@@ -217,3 +224,61 @@ class CustomArray():
         self._key_coord_pairs = {
             a: [v.index(a) for k, v in coords.items() if a in tuple(v)][0] for a in all_poss
         }
+
+
+class CellSet():
+    """
+    Add Typing hints when the imports are fixed
+    """
+
+    __slots__ = ('name', 'attrs', 'sites')
+
+    def __init__(self,
+                 arrays: Collection = None,
+                 name: str = None,
+                 attrs: dict = None,
+                 **kwargs
+                 ) -> None:
+        """
+        """
+        # Save some values
+        self.name = name
+        self.attrs = attrs
+        self.sites = {}
+
+        if arrays is not None:
+            [self.__setitem__(None, a) for a in arrays]
+
+    def __setitem__(self, key=None, value=None):
+
+        # If no value is passed, nothing is done
+        if value is None:
+            return
+
+        # Get key from array or set increment
+        if key is None:
+            key = len(self.sites) + 1 if value.name is None else value.name
+
+        self.sites[key] = value
+
+    def __getitem__(self, key):
+        """
+        Assumption is that all Arrays have the same coordinates.
+        The first Array is used to generate the dictionaries for indexing
+        """
+        try:
+            # First try to return a site the user requested
+            return self.sites[key]
+        except KeyError:
+            # If site doesn't exist, try using key to index all sites
+            if not isinstance(key, tuple):
+                key = tuple([key])
+            indices = tuple(self.sites.values())[0]._convert_keys_to_index(key)
+
+            return [v._getitem_w_idx(indices) for v in self.sites.values()]
+
+    def __len__(self):
+        return len(self.sites)
+
+    def __str__(self):
+        return str(self.sites)
