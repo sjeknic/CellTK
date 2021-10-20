@@ -16,6 +16,9 @@ class CustomArray():
     if I'm using xarr. And do I even need xarr still, because I am skipping most of the
     actual functions
 
+    TODO:
+        - Add ability to save file
+
     """
     __slots__ = ('_xarr', 'name', 'attrs', 'coords', '_arr_dim', '_dim_idxs',
                  '_key_dim_pairs', '_key_coord_pairs', '_nan_mask')
@@ -229,6 +232,9 @@ class CustomArray():
 class CellSet():
     """
     Add Typing hints when the imports are fixed
+
+    TODO:
+        - Add ability to save all Arrays in single file
     """
 
     __slots__ = ('name', 'attrs', 'sites')
