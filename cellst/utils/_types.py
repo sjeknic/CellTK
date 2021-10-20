@@ -1,20 +1,16 @@
-from typing import Tuple, Collection
+from typing import NewType, Collection, Tuple
 
-import xarray as xr
 import numpy as np
+import xarray as xr
 
 
-class CustomArray():
+class CellArray():
     """
     ax 0 - cell locations (nuc, cyto, population, etc.)
     ax 1 - channels (TRITC, FITC, etc.)
     ax 2 - metrics (median_int, etc.)
     ax 3 - cells
     ax 4 - frames
-
-    Question: what axes are the fastest and slowest to write too. Does that count still
-    if I'm using xarr. And do I even need xarr still, because I am skipping most of the
-    actual functions
 
     TODO:
         - Add ability to save file
@@ -229,7 +225,7 @@ class CustomArray():
         }
 
 
-class CellSet():
+class PositionArray():
     """
     Add Typing hints when the imports are fixed
 
@@ -288,3 +284,16 @@ class CellSet():
 
     def __str__(self):
         return str(self.sites)
+
+
+# Define custom types to make output tracking esier
+Image = NewType('image', np.ndarray)
+Mask = NewType('mask', np.ndarray)
+Track = NewType('track', np.ndarray)
+Arr = NewType('array', CellArray)
+
+# Save input names and types
+INPT_NAMES = [Image.__name__, Mask.__name__, Track.__name__, Arr.__name__]
+INPT_NAME_IDX = {n: i for i, n in enumerate(INPT_NAMES)}
+INPT = [Image, Mask, Track, Arr]
+INPT_IDX = {n: i for i, n in enumerate(INPT)}

@@ -10,7 +10,7 @@ from tensorflow.keras import backend as K
 from keras.layers.advanced_activations import LeakyReLU
 import tensorflow.keras.models
 
-from cellst.utils.utils import Image
+from cellst.utils._types import Image
 
 
 ALPHA = 0.3

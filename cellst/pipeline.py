@@ -13,8 +13,8 @@ from imageio import imread, mimread
 import cv2
 
 from cellst.operation import Operation
-from cellst.utils.utils import Image, Mask, Track, Arr
-from cellst.utils.utils import INPT, INPT_NAMES, INPT_IDX, INPT_NAME_IDX
+from cellst.utils._types import Image, Mask, Track, Arr
+from cellst.utils._types import INPT, INPT_NAMES, INPT_IDX, INPT_NAME_IDX
 
 
 class Pipeline():

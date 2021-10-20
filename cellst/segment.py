@@ -4,7 +4,8 @@ import numpy as np
 import skimage.measure as meas
 
 from cellst.operation import Operation
-from cellst.utils.utils import Image, Mask, image_helper
+from cellst.utils._types import Image, Mask
+from cellst.utils.utils import image_helper
 
 
 class Segment(Operation):

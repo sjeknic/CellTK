@@ -2,7 +2,7 @@ from typing import Collection, Tuple
 
 import numpy as np
 
-from cellst.utils.utils import Image, Mask, Track, Arr, INPT_NAME_IDX
+from cellst.utils._types import Image, Mask, Track, Arr, INPT_NAME_IDX
 
 
 class Operation(object):

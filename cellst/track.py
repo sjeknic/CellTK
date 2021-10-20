@@ -1,7 +1,7 @@
 from typing import Collection, Tuple
 
 from cellst.operation import Operation
-from cellst.utils.utils import Image, Mask, Track
+from cellst.utils._types import Image, Mask, Track
 
 
 class Track(Operation):

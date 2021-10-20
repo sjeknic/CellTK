@@ -4,8 +4,7 @@ import numpy as np
 import skimage.measure as meas
 
 from cellst.operation import Operation
-from cellst.utils.utils import Image, Mask, Track, Arr
-from cellst.custom_array import CustomArray
+from cellst.utils._types import Image, Mask, Track, Arr, CellArray
 
 
 class Extract(Operation):
@@ -138,7 +137,7 @@ class Extract(Operation):
         frames = range(max([i.shape[0] for i in images]))
 
         # Initialize data structure
-        data = CustomArray(self.regions, self.channels, metrics, cells, frames)
+        data = CellArray(self.regions, self.channels, metrics, cells, frames)
 
         # Iterate through all channels and masks
         for c_idx, cnl in enumerate(self.channels):

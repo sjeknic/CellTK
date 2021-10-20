@@ -1,7 +1,7 @@
 from typing import Collection, Tuple
 
 from cellst.operation import Operation
-from cellst.utils.utils import Image
+from cellst.utils._types import Image
 
 
 class Process(Operation):

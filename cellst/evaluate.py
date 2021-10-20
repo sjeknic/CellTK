@@ -1,5 +1,5 @@
 from cellst.operation import Operation
-from cellst.utils.utils import Arr
+from cellst.utils._types import Arr
 
 
 class Evaluate(Operation):
