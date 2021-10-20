@@ -1,27 +1,18 @@
 import types
 import inspect
-from typing import NewType
 
 import numpy as np
 
-from base.custom_array import CustomArray
+from cellst.utils._types import Image, Mask, Track
+from cellst.utils._types import INPT_NAMES
 
-# Define custom types to make output tracking esier
-Image = NewType('image', np.ndarray)
-Mask = NewType('mask', np.ndarray)
-Track = NewType('track', np.ndarray)
-Arr = NewType('array', CustomArray)
-
-INPT_NAMES = [Image.__name__, Mask.__name__, Track.__name__, Arr.__name__]
-INPT_NAME_IDX = {n: i for i, n in enumerate(INPT_NAMES)}
-INPT = [Image, Mask, Track, Arr]
-INPT_IDX = {n: i for i, n in enumerate(INPT)}
 
 # Useful functions for interpolating nans in the data
 def nan_helper(y):
     return np.isnan(y), lambda z: z.nonzero()[0]
 
 
+# Interpolates along rows in 2D array
 def nan_helper_2d(arr):
     #probably can be done faster
     temp = np.zeros(arr.shape)
