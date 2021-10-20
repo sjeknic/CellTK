@@ -4,7 +4,7 @@ from typing import NewType
 
 import numpy as np
 
-from base.custom_array import CustomArray
+from cellst.custom_array import CustomArray
 
 # Define custom types to make output tracking esier
 Image = NewType('image', np.ndarray)

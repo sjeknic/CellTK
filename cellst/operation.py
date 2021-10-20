@@ -3,8 +3,8 @@ from typing import Collection, Tuple, Dict, Callable
 import numpy as np
 import skimage.measure as meas
 
-from base.utils import image_helper, Image, Mask, Track, Arr, INPT_NAME_IDX
-from base.custom_array import CustomArray
+from cellst.utils.utils import image_helper, Image, Mask, Track, Arr, INPT_NAME_IDX
+from cellst.custom_array import CustomArray
 
 
 class Operation(object):
