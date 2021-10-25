@@ -2,10 +2,13 @@ from typing import Collection, Tuple
 
 import numpy as np
 import skimage.measure as meas
+from skimage.segmentation import clear_border
+from skimage.morphology import remove_small_objects, opening
 
 from cellst.operation import Operation
 from cellst.utils._types import Image, Mask
 from cellst.utils.utils import image_helper
+from cellst.utils.operation_utils import remove_small_holes_keep_labels, gray_fill_holes_celltk
 
 
 class Segment(Operation):
@@ -14,6 +17,7 @@ class Segment(Operation):
 
     def __init__(self,
                  input_images: Collection[str] = ['channel000'],
+                 input_masks: Collection[str] = ['mask'],
                  output: str = 'mask',
                  save: bool = False,
                  _output_id: Tuple[str] = None,
@@ -25,7 +29,41 @@ class Segment(Operation):
         else:
             self.input_images = input_images
 
+        if isinstance(input_masks, str):
+            self.input_masks = [input_masks]
+        else:
+            self.input_masks = input_masks
+
         self.output = output
+
+    @staticmethod
+    @image_helper
+    def clean_labels(mask: Mask,
+                     min_radius: float = 3,
+                     max_radius: float = 15,
+                     open_size: int = 3,
+                     ) -> Mask:
+        min_area, max_area = np.pi * np.array((min_radius, max_radius)) ** 2
+
+        # TODO: Is there a way to do this on all frames w/o the loop
+        out = np.empty(mask.shape)
+        for fr in range(mask.shape[0]):
+            ma = mask[fr, ...]
+
+            # TODO: Get one of these working from CellTK
+            labels = remove_small_holes_keep_labels(ma, np.pi * min_radius ** 2)
+
+            labels = clear_border(labels, buffer_size=2)
+            labels = remove_small_objects(labels, min_area, connectivity=2)
+            anti = remove_small_objects(labels, max_area, connectivity=2)
+            labels[anti > 0] = 0
+            labels = opening(labels, np.ones((open_size, open_size)))
+
+            # TODO: There should be a check here for non-contiguous objects?
+
+            out[fr, ...] = labels
+
+        return out.astype(np.uint16)
 
     # TODO: Should these methods actually be static? What's the benefit?
     @staticmethod
@@ -64,7 +102,7 @@ class Segment(Operation):
                 raise ValueError(f'Did not understand region of interest {roi}.')
 
         # Only import tensorflow and Keras if needed
-        from base.unet_utils import unet_model
+        from cellst.utils.unet_model import UNetModel
 
         if not hasattr(self, 'model'):
             '''NOTE: If we had mulitple colors, then image would be 4D here.
@@ -73,9 +111,9 @@ class Segment(Operation):
             channels = 1
             dims = (image.shape[1], image.shape[2], channels)
 
-            self.model = unet_model.UNetModel(dimensions=dims,
-                                              weight_path=weight_path,
-                                              model='unet')
+            self.model = UNetModel(dimensions=dims,
+                                   weight_path=weight_path,
+                                   model='unet')
 
         # Pre-allocate output memory
         # TODO: Incorporate the batch here.

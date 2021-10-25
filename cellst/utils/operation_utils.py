@@ -17,7 +17,7 @@ def remove_small_holes_keep_labels(image: np.ndarray,
         - Confirm correct selem to use or make option
     """
     dilated = dilation(image, selem=np.ones((3, 3)))
-    fill = remove_small_holes(image, area_threshold=10,
+    fill = remove_small_holes(image, area_threshold=size,
                               connectivity=2, in_place=False)
     return np.where(fill > 0, dilated, 0)
 
