@@ -8,14 +8,16 @@ from cellst.utils._types import Image, Mask
 
 from kit_sch_ge.tracker.tracking import (TrackingConfig, MultiCellTracker,
                                          Tracklet)
-from kit_sch_ge.tracker.export import ExportResults, catch_tra_issues
+from kit_sch_ge.tracker.export import ExportResults, catch_tra_issues, create_tracking_mask_image
 from kit_sch_ge.tracker.extract_data import get_indices_pandas
 from kit_sch_ge.tracker.postprocessing import (add_dummy_masks, untangle_tracks,
                                                no_fn_correction, no_untangling)
 
 """
 This file inherits some of the classes from kit_sch_ge to make
-them work in this framework.
+them work in this framework. In general, trying to keep all of
+the variable names the same as in kit_sch_ge, even if that ends
+up confusing in the context of CellST.
 """
 
 
@@ -116,7 +118,8 @@ class ExportResults(ExportResults):
 
         tracks = catch_tra_issues(tracks, time_steps)
 
-        return self.create_lineage_file(tracks)
+        return (self.create_segm_masks(tracks, img_shape),
+                self.create_lineage_file(tracks))
 
     def create_lineage_file(self, tracks):
         """
@@ -140,3 +143,29 @@ class ExportResults(ExportResults):
         df = pd.DataFrame.from_dict(track_info)
 
         return df.to_numpy()
+
+    def create_segm_masks(self, all_tracks, img_shape):
+        tracks_in_frame = {}
+
+        # create for each time step dict entry, otherwise missing time steps possible -> no img exported
+        for t_step in self.time_steps:
+            if t_step not in tracks_in_frame:
+                tracks_in_frame[t_step] = []
+
+        for track_data in all_tracks.values():
+            time_steps = sorted(list(track_data.masks.keys()))
+            for t_step in time_steps:
+                if t_step not in tracks_in_frame:
+                    tracks_in_frame[t_step] = []
+                tracks_in_frame[t_step].append(track_data.track_id)
+
+        t_max = sorted(list(tracks_in_frame.keys()))[-1]
+        all_masks = np.empty((len(self.time_steps), *img_shape))
+
+        # NOTE: idx is different than time. time can be non-consecutive
+        for idx, (time, track_ids) in enumerate(tracks_in_frame.items()):
+            tracking_mask = create_tracking_mask_image(all_tracks, time, track_ids, img_shape)
+            tracking_mask = np.array(np.squeeze(tracking_mask), dtype=np.uint16)
+            all_masks[idx, ...] = tracking_mask
+
+        return all_masks

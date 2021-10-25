@@ -38,6 +38,36 @@ class Track(Operation):
 
         self.output = output
 
+    def track_to_lineage(self, track: Track, lineage: np.ndarray):
+        """Given a set of track images, reconstruct all the lineages"""
+        pass
+
+    def lineage_to_track(self,
+                         mask: Mask,
+                         lineage: np.ndarray
+                         ) -> Track:
+        """
+        Each mask in each frame should have a random(?) pixel
+        set to the negative value of the parent cell.
+
+        TODO:
+            - This is less reliable, and totally lost, with small regions
+            - must check that it allows for negatives
+        """
+        out = mask.copy().astype(np.int16)
+        for (lab, app, dis, par) in lineage:
+            if par:
+                # Get all pixels in the label
+                lab_pxl = np.where(mask[app, ...] == lab)
+
+                # Find the centroid and set to the parent value
+                # TODO: this won't work in all cases. trivial example if size==1
+                x = int(np.floor(np.sum(lab_pxl[0]) / len(lab_pxl[0])))
+                y = int(np.floor(np.sum(lab_pxl[1]) / len(lab_pxl[1])))
+                out[app, x, y] = -1 * par
+
+        return out
+
     @image_helper
     def kit_sch_ge_track(self,
                          image: Image,
@@ -83,5 +113,7 @@ class Track(Operation):
         tracks = tracker()
 
         exporter = ExportResults(postprocessing_key)
-        lineage = exporter(tracks, img_shape=img_shape, time_steps=list(range(image.shape[0])))
+        mask, lineage = exporter(tracks, img_shape=img_shape, time_steps=list(range(image.shape[0])))
+        track = self.lineage_to_track(mask, lineage)
 
+        return track
