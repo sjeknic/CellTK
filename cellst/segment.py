@@ -17,7 +17,7 @@ class Segment(Operation):
 
     def __init__(self,
                  input_images: Collection[str] = ['channel000'],
-                 input_masks: Collection[str] = ['mask'],
+                 input_masks: Collection[str] = [],
                  output: str = 'mask',
                  save: bool = False,
                  _output_id: Tuple[str] = None,
@@ -70,12 +70,26 @@ class Segment(Operation):
     @staticmethod
     @image_helper
     def constant_thres(image: Image,
-                       THRES=1000,
-                       NEG=False
+                       thres: float = 1000,
+                       negative: bool = False,
+                       connectivity: int = 2
                        ) -> Mask:
-        if NEG:
-            return meas.label(image < THRES).astype(np.int16)
-        return meas.label(image > THRES).astype(np.int16)
+        """
+        TODO:
+            - Do I have to explicitly set the output array to uint16?
+        """
+        if negative:
+            test_arr = image <= thres
+        else:
+            test_arr = image >= thres
+
+        # Need to iterate over frames, otherwise connections are
+        # considered along the time axis as well.
+        out = np.empty(image.shape).astype(np.uint16)
+        for fr in range(image.shape[0]):
+            out[fr, ...] = meas.label(test_arr[fr, ...],
+                                      connectivity=connectivity)
+        return out
 
     @image_helper
     def unet_predict(self,
@@ -93,7 +107,6 @@ class Segment(Operation):
         batch - number of frames passed to model. None is all of them.
         classes - number of output categories from the model (has to match weights)
         """
-        # probably don't need as many options here
         _roi_dict = {'background': 0, 'bg': 0, 'edge': 1,
                      'interior': 2, 'nuc': 2, 'cyto': 2}
         if isinstance(roi, str):
