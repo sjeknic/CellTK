@@ -4,6 +4,7 @@ import numpy as np
 import skimage.measure as meas
 from skimage.segmentation import clear_border
 from skimage.morphology import remove_small_objects, opening
+from scipy.ndimage import gaussian_filter
 
 from cellst.operation import Operation
 from cellst.utils._types import Image, Mask
@@ -89,6 +90,25 @@ class Segment(Operation):
         for fr in range(image.shape[0]):
             out[fr, ...] = meas.label(test_arr[fr, ...],
                                       connectivity=connectivity)
+        return out
+
+    @staticmethod
+    @image_helper
+    def adaptive_thres(image: Image,
+                       relative_thres: float = 0.1,
+                       sigma: float = 50,
+                       connectivity: int = 2
+                       ) -> Mask:
+        """
+        Applies Gaussian blur to the image and selects pixels that
+        are relative_thres larger than the blurred image.
+        """
+        out = np.empty(image.shape).astype(np.uint16)
+        for fr in range(image.shape[0]):
+            filt = gaussian_filter(image[fr, ...], sigma)
+            filt = image[fr, ...] > filt * (1 + relative_thres)
+            out[fr, ...] = meas.label(filt, connectivity=connectivity)
+
         return out
 
     @image_helper
