@@ -43,27 +43,28 @@ class Segment(Operation):
                      max_radius: float = 15,
                      open_size: int = 3,
                      ) -> Mask:
-        min_area, max_area = np.pi * np.array((min_radius, max_radius)) ** 2
+        """
+        Applies light cleaning. Removes small, large, and border-connected
+        objectes. Applies opening.
 
-        # TODO: Is there a way to do this on all frames w/o the loop
-        out = np.empty(mask.shape)
+        TODO:
+            - Still getting some objects that are not contiguous.
+        """
+        min_area, max_area = np.pi * np.array((min_radius, max_radius)) ** 2
+        out = np.empty(mask.shape).astype(np.uint16)
         for fr in range(mask.shape[0]):
             ma = mask[fr, ...]
 
-            # TODO: Get one of these working from CellTK
             labels = remove_small_holes_keep_labels(ma, np.pi * min_radius ** 2)
-
             labels = clear_border(labels, buffer_size=2)
-            labels = remove_small_objects(labels, min_area, connectivity=2)
-            anti = remove_small_objects(labels, max_area, connectivity=2)
-            labels[anti > 0] = 0
-            labels = opening(labels, np.ones((open_size, open_size)))
-
-            # TODO: There should be a check here for non-contiguous objects?
+            pos = remove_small_objects(labels, min_area, connectivity=2)
+            neg = remove_small_objects(labels, max_area, connectivity=2)
+            pos[neg > 0] = 0
+            labels = opening(pos, np.ones((open_size, open_size)))
 
             out[fr, ...] = labels
 
-        return out.astype(np.uint16)
+        return out
 
     # TODO: Should these methods actually be static? What's the benefit?
     @staticmethod
