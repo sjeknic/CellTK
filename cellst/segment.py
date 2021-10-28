@@ -4,6 +4,7 @@ import numpy as np
 import skimage.measure as meas
 from skimage.segmentation import clear_border
 from skimage.morphology import remove_small_objects, opening
+from skimage.filters import threshold_otsu
 from scipy.ndimage import gaussian_filter
 
 from cellst.operation import Operation
@@ -108,6 +109,24 @@ class Segment(Operation):
             filt = gaussian_filter(image[fr, ...], sigma)
             filt = image[fr, ...] > filt * (1 + relative_thres)
             out[fr, ...] = meas.label(filt, connectivity=connectivity)
+
+        return out
+
+    @staticmethod
+    @image_helper
+    def otsu_thres(image: Image,
+                   nbins: int = 256,
+                   connectivity: int = 2
+                   ) -> Mask:
+        """
+        Uses Otsu's method to determine the threshold. All pixels
+        above the threshold are kept
+        """
+        out = np.empty(image.shape).astype(np.uint16)
+        for fr in range(image.shape[0]):
+            thres = threshold_otsu(image[fr, ...], nbins=nbins)
+            out[fr, ...] = meas.label(image[fr, ...] > thres,
+                                      connectivity=connectivity)
 
         return out
 
