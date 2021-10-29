@@ -169,6 +169,7 @@ class Pipeline():
             - Should not upscale images
             - Use type instead of str for output (if even needed)
             - Add logging
+            - Allow for non-consecutive indices
         """
         img_dtype = stack.dtype if img_dtype is None else img_dtype
         if stack.ndim != 3:

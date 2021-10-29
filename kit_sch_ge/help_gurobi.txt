@@ -1,0 +1,25 @@
+In the tracking step a solver (Gurobi) is used to solve integer linear programs
+For academic purposes, Gurobi provides an academic license free of charge.
+
+To run the tracking, Gurobi needs to be installed:
+1) register at https://www.gurobi.com
+if academia: select academic license
+
+2)download gurobi optimizer version 9.1.1 from https://www.gurobi.com/downloads/gurobi-software/
+
+3) move download to a local directory (LOCAL_DIR)
+mv /../Downloads/gurobi9.1.1_linux64.tar.gz /LOCAL_DIR
+
+4) change to local dir and unzip
+tar xvfz gurobi9.1.1_linux64.tar.gz
+
+5) add gurobi to path
+export PATH=$PATH:/LOCAL_DIR/gurobi911/linux/bin
+
+6) get gurobi license key https://www.gurobi.com/downloads/end-user-license-agreement-academic/
+
+7) copy license key to comand line
+grbgetkey xxxx-xxxx-xxx
+hit enter (select provided default directory to store license file)
+
+8) run tracking

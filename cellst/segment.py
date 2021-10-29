@@ -86,6 +86,7 @@ class Segment(Operation):
         return out
 
     # TODO: Should these methods actually be static? What's the benefit?
+    # TODO: Consistent kwarg naming scheme
     @staticmethod
     @image_helper
     def constant_thres(image: Image,
