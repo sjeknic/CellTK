@@ -2,7 +2,7 @@ from typing import Collection, Tuple
 
 import numpy as np
 
-from cellst.operation import Operation
+from cellst.operation import BaseTrack
 from cellst.utils._types import Image, Mask, Track
 from cellst.utils.utils import image_helper
 
@@ -12,32 +12,7 @@ from cellst.utils.kit_sch_ge_utils import (TrackingConfig, MultiCellTracker,
                                            ExportResults)
 
 
-class Track(Operation):
-    _input_type = (Image, Mask)
-    _output_type = Track
-
-    def __init__(self,
-                 input_images: Collection[str] = [],
-                 input_masks: Collection[str] = [],
-                 output: str = 'track',
-                 save: bool = False,
-                 track_file: bool = True,
-                 _output_id: Tuple[str] = None,
-                 ) -> None:
-        super().__init__(output, save, _output_id)
-
-        if isinstance(input_images, str):
-            self.input_images = [input_images]
-        else:
-            self.input_images = input_images
-
-        if isinstance(input_masks, str):
-            self.input_masks = [input_masks]
-        else:
-            self.input_masks = input_masks
-
-        self.output = output
-
+class Track(BaseTrack):
     def track_to_lineage(self, track: Track, lineage: np.ndarray):
         """
         Given a set of track images, reconstruct all the lineages

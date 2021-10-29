@@ -8,37 +8,13 @@ from skimage.morphology import remove_small_objects, opening
 from skimage.filters import threshold_otsu
 from scipy.ndimage import gaussian_filter
 
-from cellst.operation import Operation
+from cellst.operation import BaseSegment
 from cellst.utils._types import Image, Mask
 from cellst.utils.utils import image_helper
 from cellst.utils.operation_utils import remove_small_holes_keep_labels
 
 
-class Segment(Operation):
-    _input_type = (Image,)
-    _output_type = Mask
-
-    def __init__(self,
-                 input_images: Collection[str] = ['channel000'],
-                 input_masks: Collection[str] = [],
-                 output: str = 'mask',
-                 save: bool = False,
-                 _output_id: Tuple[str] = None,
-                 ) -> None:
-        super().__init__(output, save, _output_id)
-
-        if isinstance(input_images, str):
-            self.input_images = [input_images]
-        else:
-            self.input_images = input_images
-
-        if isinstance(input_masks, str):
-            self.input_masks = [input_masks]
-        else:
-            self.input_masks = input_masks
-
-        self.output = output
-
+class Segment(BaseSegment):
     @staticmethod
     @image_helper
     def clean_labels(mask: Mask,
