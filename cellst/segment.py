@@ -3,7 +3,7 @@ from typing import Collection, Tuple
 import numpy as np
 import skimage.measure as meas
 from skimage.segmentation import (clear_border, random_walker,
-                                  relabel_sequential)
+                                  relabel_sequential, watershed)
 from skimage.morphology import remove_small_objects, opening
 from skimage.filters import threshold_otsu
 from scipy.ndimage import gaussian_filter
@@ -64,7 +64,7 @@ class Segment(Operation):
             neg = remove_small_objects(labels, max_area, connectivity=2)
             pos[neg > 0] = 0
             labels = opening(pos, np.ones((open_size, open_size)))
-
+            # TODO: Add relabel sequential here
             out[fr, ...] = labels
 
         return out
@@ -165,7 +165,59 @@ class Segment(Operation):
             # the masks too much.
             mask = probs >= seg_thres
             for p in range(probs.shape[0]):
+                # Where mask is True, label those pixels with p
                 np.place(out[fr, ...], mask[p, ...], p)
+
+        return out
+
+    @staticmethod
+    @image_helper
+    def agglomeration_segmentation(image: Image,
+                                   agglom_min: float = 0.7,
+                                   agglom_max: float = None,
+                                   compact: float = 100,
+                                   seed_thres: float = 0.975,
+                                   seed_min_size: float = 12,
+                                   steps: int = 100,
+                                   connectivity: int = 2
+                                   ) -> Mask:
+        """
+        Starts from a seed mask determined by a constant threshold. Then
+        incrementally uses watershed to connect neighboring pixels to the
+        seed.
+
+        Similar to, but likely faster than, random walk segmentation.
+
+        TODO:
+            - This function could be able to take in a pre-made seed mask
+              This might be challenging, because I don't think I can currently
+              make any of (Image, Mask, Track, Arr) optional.
+        """
+        # Candidate pixels and percentiles can be set on 3D stack
+        if agglom_max is None: agglom_max = np.nanmax(image)
+        percs = np.linspace(agglom_max, agglom_min, steps)
+
+        out = np.empty(image.shape).astype(np.uint16)
+        for fr in range(image.shape[0]):
+            # Generate seeds based on constant threshold
+            seeds = image[fr, ...] > seed_thres
+            seeds = remove_small_objects(seeds, seed_min_size, connectivity=2)
+
+            # Iterate through pixel values and add using watershed
+            _old_perc = agglom_max
+            for _perc in percs:
+                # Candidate pixels are between _perc and the last _perc value
+                cand_mask = np.logical_and(image[fr, ...] > _perc,
+                                           image[fr, ...] <= _old_perc)
+                # Keep seeds in the mask as well
+                cand_mask = np.logical_or(seeds > 0, cand_mask > 0)
+
+                # Watershed and save as seeds for the next iteration
+                seeds = watershed(image[fr, ...], seeds, mask=cand_mask,
+                                  watershed_line=True, compactness=compact)
+                _old_perc = _perc
+
+            out[fr, ...] = meas.label(seeds, connectivity=connectivity)
 
         return out
 
