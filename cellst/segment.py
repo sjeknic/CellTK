@@ -2,7 +2,8 @@ from typing import Collection, Tuple
 
 import numpy as np
 import skimage.measure as meas
-from skimage.segmentation import clear_border
+from skimage.segmentation import (clear_border, random_walker,
+                                  relabel_sequential)
 from skimage.morphology import remove_small_objects, opening
 from skimage.filters import threshold_otsu
 from scipy.ndimage import gaussian_filter
@@ -10,7 +11,7 @@ from scipy.ndimage import gaussian_filter
 from cellst.operation import Operation
 from cellst.utils._types import Image, Mask
 from cellst.utils.utils import image_helper
-from cellst.utils.operation_utils import remove_small_holes_keep_labels, gray_fill_holes_celltk
+from cellst.utils.operation_utils import remove_small_holes_keep_labels
 
 
 class Segment(Operation):
@@ -127,6 +128,44 @@ class Segment(Operation):
             thres = threshold_otsu(image[fr, ...], nbins=nbins)
             out[fr, ...] = meas.label(image[fr, ...] > thres,
                                       connectivity=connectivity)
+
+        return out
+
+    @staticmethod
+    @image_helper
+    def random_walk_segmentation(image: Image,
+                                 seed_thres: float = 0.99,
+                                 seed_min_size: float = 12,
+                                 beta: float = 80,
+                                 tol: float = 0.01,
+                                 seg_thres: float = 0.85,
+                                 ) -> Mask:
+        """
+        Uses random aniostropic diffusion from seeds determined
+        by a constant threshold to assign each pixel in the image.
+        NOTE: This function is similar to, but slower than, agglomerations.
+
+        TODO:
+            - Could setting the image values all to 0 help the
+              random_walk not expand too much.
+        """
+        out = np.empty(image.shape).astype(np.uint16)
+        seeds = image >= seed_thres
+        for fr in range(image.shape[0]):
+            # Generate seeds
+            seed = meas.label(seeds[fr, ...])
+            seed = remove_small_objects(seed, seed_min_size)
+
+            # Anisotropic diffusion from each seed
+            probs = random_walker(image[fr, ...], seed,
+                                  beta=beta, tol=tol,
+                                  return_full_prob=True)
+
+            # Using probabilites because the ranom-walk expands
+            # the masks too much.
+            mask = probs >= seg_thres
+            for p in range(probs.shape[0]):
+                np.place(out[fr, ...], mask[p, ...], p)
 
         return out
 
