@@ -45,6 +45,9 @@ class Segment(Operation):
                      min_radius: float = 3,
                      max_radius: float = 15,
                      open_size: int = 3,
+                     relabel: bool = False,
+                     sequential: bool = False,
+                     connectivity: int = 2,
                      ) -> Mask:
         """
         Applies light cleaning. Removes small, large, and border-connected
@@ -58,13 +61,26 @@ class Segment(Operation):
         for fr in range(mask.shape[0]):
             ma = mask[fr, ...]
 
+            # Fill in holes and remove border-connected objects
             labels = remove_small_holes_keep_labels(ma, np.pi * min_radius ** 2)
             labels = clear_border(labels, buffer_size=2)
-            pos = remove_small_objects(labels, min_area, connectivity=2)
-            neg = remove_small_objects(labels, max_area, connectivity=2)
+
+            # Remove small and large objects and open
+            pos = remove_small_objects(labels, min_area,
+                                       connectivity=connectivity)
+            neg = remove_small_objects(labels, max_area,
+                                       connectivity=connectivity)
             pos[neg > 0] = 0
             labels = opening(pos, np.ones((open_size, open_size)))
-            # TODO: Add relabel sequential here
+
+            # Relabel the labels to separate non-contiguous objects
+            if relabel:
+                labels = meas.label(labels, connectivity=connectivity)
+
+            # Make labels sequential if needed
+            if sequential:
+                labels = relabel_sequential(labels)[0]
+
             out[fr, ...] = labels
 
         return out
