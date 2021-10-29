@@ -92,6 +92,7 @@ def image_helper(func):
                       for i in INPT_NAMES]
         pass_to_func = [i for b, inpt in zip(inpt_bools, [imgs, msks, trks, arrs])
                         for i in inpt if b]
+
         return pass_to_func, args, kwargs
 
     return decorator
