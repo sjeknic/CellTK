@@ -1,7 +1,7 @@
 from typing import Collection, Tuple
 
 import numpy as np
-import skimage.measure as meas
+from skimage.measure import label
 from skimage.segmentation import (clear_border, random_walker,
                                   relabel_sequential, watershed)
 from skimage.morphology import remove_small_objects, opening
@@ -75,7 +75,7 @@ class Segment(Operation):
 
             # Relabel the labels to separate non-contiguous objects
             if relabel:
-                labels = meas.label(labels, connectivity=connectivity)
+                labels = label(labels, connectivity=connectivity)
 
             # Make labels sequential if needed
             if sequential:
@@ -106,8 +106,8 @@ class Segment(Operation):
         # considered along the time axis as well.
         out = np.empty(image.shape).astype(np.uint16)
         for fr in range(image.shape[0]):
-            out[fr, ...] = meas.label(test_arr[fr, ...],
-                                      connectivity=connectivity)
+            out[fr, ...] = label(test_arr[fr, ...],
+                                 connectivity=connectivity)
         return out
 
     @staticmethod
@@ -125,7 +125,7 @@ class Segment(Operation):
         for fr in range(image.shape[0]):
             filt = gaussian_filter(image[fr, ...], sigma)
             filt = image[fr, ...] > filt * (1 + relative_thres)
-            out[fr, ...] = meas.label(filt, connectivity=connectivity)
+            out[fr, ...] = label(filt, connectivity=connectivity)
 
         return out
 
@@ -142,8 +142,8 @@ class Segment(Operation):
         out = np.empty(image.shape).astype(np.uint16)
         for fr in range(image.shape[0]):
             thres = threshold_otsu(image[fr, ...], nbins=nbins)
-            out[fr, ...] = meas.label(image[fr, ...] > thres,
-                                      connectivity=connectivity)
+            out[fr, ...] = label(image[fr, ...] > thres,
+                                 connectivity=connectivity)
 
         return out
 
@@ -169,7 +169,7 @@ class Segment(Operation):
         seeds = image >= seed_thres
         for fr in range(image.shape[0]):
             # Generate seeds
-            seed = meas.label(seeds[fr, ...])
+            seed = label(seeds[fr, ...])
             seed = remove_small_objects(seed, seed_min_size)
 
             # Anisotropic diffusion from each seed
@@ -233,7 +233,7 @@ class Segment(Operation):
                                   watershed_line=True, compactness=compact)
                 _old_perc = _perc
 
-            out[fr, ...] = meas.label(seeds, connectivity=connectivity)
+            out[fr, ...] = label(seeds, connectivity=connectivity)
 
         return out
 
