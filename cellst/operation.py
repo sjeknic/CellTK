@@ -41,6 +41,9 @@ class Operation():
         self.input_tracks = []
         self.input_arrays = []
 
+        # Create a class to save intermediate arrays for saving
+        self.save_arrays = {}
+
         if _output_id is not None:
             self.output_id = _output_id
         else:
@@ -72,22 +75,23 @@ class Operation():
     def add_function_to_operation(self,
                                   func: str,
                                   output_type: type = None,
-                                  index: int = -1,
+                                  name: str = None,
                                   *args,
                                   **kwargs
                                   ) -> None:
         """
-        args and kwargs should be passed to the function.
+        args and kwargs are passed directly to the function.
+        if name is not None, the files will be saved in a separate folder
 
         TODO:
             - Add option for func to be a Callable
             - Is func_index needed at all?
         """
-        if not hasattr(self, func):
-            raise NameError(f"Function {func} not found in {self}.")
-        else:
+        try:
             func = getattr(self, func)
-            self.functions.append(tuple([func, output_type, args, kwargs]))
+            self.functions.append(tuple([func, output_type, args, kwargs, name]))
+        except NameError:
+            raise NameError(f"Function {func} not found in {self}.")
 
         self.func_index = {i: f for i, f in enumerate(self.functions)}
 
@@ -111,9 +115,7 @@ class Operation():
         inputs = [images, masks, tracks, arrays]
         result = inputs[INPT_NAME_IDX[self._output_type.__name__]]
 
-        for (func, expec_type, args, kwargs) in self.functions:
-            # TODO: Only gets output type from decorator or if
-            #       function explicitly returns it
+        for (func, expec_type, args, kwargs, name) in self.functions:
             output_type, result = func(*inputs, *args, **kwargs)
 
             # The user-defined expected type will overwrite output_type
@@ -125,6 +127,17 @@ class Operation():
                 inputs[INPT_NAME_IDX[output_type.__name__]] = [result]
             else:
                 inputs[INPT_NAME_IDX[output_type.__name__]] = result
+
+            # Save the function if needed for Pipeline to write files
+            # By default, intermediate steps are saved in folder name
+            # with file name output_type.__name__
+            if name is not None:
+                self.save_arrays[name] = output_type.__name__, result
+
+        # Save the final result for saving as well
+        # By default, final result is saved in folder self.output
+        # with file name as self.output
+        self.save_arrays[self.output] = self.output, result
 
         return result
 

@@ -3,6 +3,7 @@ import sys
 import argparse
 import yaml
 import multiprocessing
+import warnings
 from typing import Dict, List, Collection, Union, Generator, Tuple
 from glob import glob
 import datetime as dtdt
@@ -133,7 +134,7 @@ class Pipeline():
 
             # Write to disk if needed
             if oper.save:
-                self.save_images(oper_result, otpts[0])
+                self.save_images(oper.save_arrays)
 
         return oper_result
 
@@ -159,10 +160,12 @@ class Pipeline():
         return container
 
     def save_images(self,
-                    stack: (Image, Mask, Track),
-                    output_name: str,
-                    img_dtype: type = None) -> None:
+                    save_arrays: Dict[str, Tuple],
+                    img_dtype: type = None
+                    ) -> None:
         """
+        New save function to handle multiple saves per operation
+
         TODO:
             - New output folder needs to be made for each operation
             - Test different iteration strategies for efficiency
@@ -171,14 +174,21 @@ class Pipeline():
             - Add logging
             - Allow for non-consecutive indices
         """
-        img_dtype = stack.dtype if img_dtype is None else img_dtype
-        if stack.ndim != 3:
-            raise ValueError('Expected image stack with 3 dimensions. '
-                             f'Got {stack.ndim}')
 
-        for idx in range(stack.shape[0]):
-            name = os.path.join(self.output_folder, f'{output_name}{idx}.tiff')
-            tiff.imsave(name, stack[idx, ...].astype(img_dtype))
+        for name, (otpt_type, arr) in save_arrays.items():
+            img_dtype = arr.dtype if img_dtype is None else img_dtype
+            if arr.ndim != 3:
+                warnings.warn("Expected stack with 3 dimensions."
+                              f"Got {arr.ndim} for {name}", UserWarning)
+
+            # Make output directory if needed
+            save_folder = os.path.join(self.output_folder, name)
+            if not os.path.exists(save_folder):
+                os.makedirs(save_folder)
+
+            for idx in range(arr.shape[0]):
+                name = os.path.join(save_folder, f"{otpt_type}{idx}.tiff")
+                tiff.imsave(name, arr[idx, ...].astype(img_dtype))
 
     def _input_output_handler(self):
         """
@@ -212,6 +222,7 @@ class Pipeline():
         TODO:
             - Add image selection based on regex
             - Should channels use regex or glob to match name
+            - There should be an option to allow it to walk into sub-directories
         """
         # Find images and sort into list
         im_names = [os.path.join(folder, i) for i in sorted(os.listdir(folder))
