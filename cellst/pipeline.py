@@ -216,17 +216,50 @@ class Pipeline():
 
     def _get_image_paths(self,
                          folder: str,
-                         match_str: Collection[str] = None
+                         match_str: str,
+                         subfolder: str = None
                          ) -> Collection[str]:
         """
+        match_str: Tuple[str], [0] is the  mat
+
+        1. Look for images in subfolder if given
+        2. Look for images in folder
+        3. Look for subfolder that matches match_str.
+        4. If exists, return those images.
+
         TODO:
             - Add image selection based on regex
             - Should channels use regex or glob to match name
-            - There should be an option to allow it to walk into sub-directories
+            - Could be moved to a utils file - staticmethod
         """
+        # First check in designated subfolder
+        if subfolder is not None:
+            folder = os.path.join(folder, subfolder)
+
         # Find images and sort into list
-        im_names = [os.path.join(folder, i) for i in sorted(os.listdir(folder))
-                    if match_str in i]
+        im_names = [os.path.join(folder, im)
+                    for im in sorted(os.listdir(folder))
+                    if match_str in im
+                    and os.path.isfile(os.path.join(folder, im))]
+
+        # If no images were found, look for a subdirectory
+        if len(im_names) == 0:
+            try:
+                # Take first subdirectory found
+                subfol = [fol for fol in sorted(os.listdir(folder))
+                          if os.path.isdir(os.path.join(folder, fol))][0]
+                folder = os.path.join(folder, subfol)
+
+                # Look ONLY for images in that subdirectory
+                # Load all images, even if match_str doesn't match
+                im_names = [os.path.join(folder, im)
+                            for im in sorted(os.listdir(folder))
+                            if os.path.isfile(os.path.join(folder, im))]
+            except IndexError:
+                # Indidcates that no sub_folders were found
+                # im_names should be [] at this point
+                pass
+
         return im_names
 
     def _load_images_to_container(self,
@@ -264,36 +297,38 @@ class Pipeline():
             for key in to_load:
                 pths = self._get_image_paths(fol, key[0])
                 if len(pths) == 0:
-                    # If no images are found in the required path, check if they
-                    # will be made when the operations are run
-                    # TODO: The order matters. Should raise error if it is made
-                    #       after it is needed.
-                    if key not in outputs:
+                    # If no images are found in the path, check output_folder
+                    fol = self.output_folder
+                    pths = self._get_image_paths(fol, key[0])
+                    # If still no images, check the listed outputs
+                    if len(pths) == 0 and key not in outputs:
+                        # TODO: The order matters. Should raise error if it is made
+                        #       after it is needed.
                         raise ValueError(f'Data {key} cannot be found and is '
                                          'not listed as an output.')
-                else:
-                    # Load the images
-                    '''NOTE: Using mimread instead of imread to add the option of limiting
-                    the memory of the loaded image. However, mimread still only loads one
-                    image at a time, so it is unlikely to ever hit the memory limit.
-                    Could be worth tracking the memory and deleting large arrays or
-                    temporarily storing them in a file (if low-mem mode is true)
-                    Slightly faster than imread.'''
-                    # Pre-allocate numpy array for speed
-                    for n, p in enumerate(pths):
-                        # TODO: Is there a better imread function to use here?
-                        img = np.asarray(mimread(p)[0])
-                        if n == 0:
-                            # TODO: Is there a neater way to do this?
-                            '''NOTE: Due to how numpy arrays are stored in memory, writing to the last
-                            axis is faster than writing to the first. Therefore, the time axis is
-                            on the first axis'''
-                            img_stack = np.empty(tuple([len(pths), img.shape[0], img.shape[1]]),
-                                                 dtype=img.dtype)
 
-                        img_stack[n, ...] = img
+                # Load the images
+                '''NOTE: Using mimread instead of imread to add the option of limiting
+                the memory of the loaded image. However, mimread still only loads one
+                image at a time, so it is unlikely to ever hit the memory limit.
+                Could be worth tracking the memory and deleting large arrays or
+                temporarily storing them in a file (if low-mem mode is true)
+                Slightly faster than imread.'''
+                # Pre-allocate numpy array for speed
+                for n, p in enumerate(pths):
+                    # TODO: Is there a better imread function to use here?
+                    img = np.asarray(mimread(p)[0])
+                    if n == 0:
+                        # TODO: Is there a neater way to do this?
+                        '''NOTE: Due to how numpy arrays are stored in memory, writing to the last
+                        axis is faster than writing to the first. Therefore, the time axis is
+                        on the first axis'''
+                        img_stack = np.empty(tuple([len(pths), img.shape[0], img.shape[1]]),
+                                             dtype=img.dtype)
 
-                    container[key] = img_stack
+                    img_stack[n, ...] = img
+
+                container[key] = img_stack
 
         return container
 
