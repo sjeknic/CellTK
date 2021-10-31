@@ -1,4 +1,5 @@
 from typing import Collection, Tuple
+import warnings
 
 import numpy as np
 
@@ -44,6 +45,7 @@ class Operation():
         # Create a class to save intermediate arrays for saving
         self.save_arrays = {}
 
+        # Create output id for tracking the images
         if _output_id is not None:
             self.output_id = _output_id
         else:
@@ -167,7 +169,7 @@ class BaseSegment(Operation):
     _output_type = Mask
 
     def __init__(self,
-                 input_images: Collection[str] = ['channel000'],
+                 input_images: Collection[str] = [],
                  input_masks: Collection[str] = [],
                  output: str = 'mask',
                  save: bool = False,
@@ -291,11 +293,30 @@ class BaseExtract(Operation):
         else:
             self.regions = regions
 
-        # Only one function can be used for the Extract module
-        # TODO: Overwrite add_function to raise an error, user was
-        #       likely trying to add extra_properties instead
-        self.functions = [tuple([self.extract_data_from_image, Arr, [], {}])]
+        # Automatically add extract_data_from_image
+        self.functions = [tuple([self.extract_data_from_image, Arr, [], {}, None])]
         self.func_index = {i: f for i, f in enumerate(self.functions)}
+
+    def add_function_to_operation(self,
+                                  func: str,
+                                  output_type: type = None,
+                                  name: str = None,
+                                  *args,
+                                  **kwargs
+                                  ) -> None:
+        """
+        args and kwargs are passed directly to the function.
+        if name is not None, the files will be saved in a separate folder
+
+        Extract is automatically added, so this function should skip it
+        """
+        if func == 'extract_data_from_image':
+            warnings.warn('extract_data_from_image is automatically added'
+                          ' to Extract class. Skipping extra addtion.',
+                          UserWarning)
+        else:
+            super().add_function_to_operation(func, output_type, name,
+                                              args, kwargs)
 
 
 class BaseEvaluate(Operation):
