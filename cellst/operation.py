@@ -97,6 +97,23 @@ class Operation():
 
         self.func_index = {i: f for i, f in enumerate(self.functions)}
 
+    def __call__(self,
+                 images: Collection[np.ndarray] = [],
+                 masks: Collection[np.ndarray] = [],
+                 tracks: Collection[np.ndarray] = [],
+                 arrays: Collection[np.ndarray] = []
+                 ) -> (Image, Mask, Track, Arr):
+        """
+        Calls run_operation. This is intended to be
+        used independently of Pipeline.
+
+        TODO:
+            - Is there any way to make this function more generalizable
+              or easier for the user to call?
+        """
+        return self.run_operation(images, masks, tracks, arrays)
+
+
     def run_operation(self,
                       images: Collection[np.ndarray] = [],
                       masks: Collection[np.ndarray] = [],
