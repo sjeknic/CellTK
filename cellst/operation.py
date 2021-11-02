@@ -348,18 +348,17 @@ class BaseExtract(Operation):
                                   **kwargs
                                   ) -> None:
         """
-        args and kwargs are passed directly to the function.
-        if name is not None, the files will be saved in a separate folder
+        Extract currently only supports one function due to how
+        extract_data_from_images expects the inputs. Therefore, for
+        now there is no easy way to add a different function.
 
-        Extract is automatically added, so this function should skip it
+        TODO:
+            - Implement option for new functions
         """
-        if func == 'extract_data_from_image':
-            warnings.warn('extract_data_from_image is automatically added'
-                          ' to Extract class. Skipping extra addtion.',
-                          UserWarning)
-        else:
-            super().add_function_to_operation(func, output_type, name,
-                                              args, kwargs)
+        raise NotImplementedError('Adding new functions to Extract is '
+                                  'not currently supported. '
+                                  'extract_data_from_image is included '
+                                  'by default.')
 
     def __call__(self,
                  images: Collection[Image],
@@ -374,9 +373,34 @@ class BaseExtract(Operation):
         This directly calls extract_data_from_image
         instead of using run_operation
         """
-        kwargs = dict(channels=channels, regions=regions, condition=condition,
-                      lineages=lineages)
-        return self.extract_data_from_image(images, masks, tracks, **kwargs)
+        kwargs = dict(channels=channels, regions=regions,
+                      condition=condition, lineages=lineages)
+        return self.run_operation(images, masks, tracks, [], **kwargs)
+
+    def run_operation(self,
+                      images: Collection[np.ndarray] = [],
+                      masks: Collection[np.ndarray] = [],
+                      tracks: Collection[np.ndarray] = [],
+                      arrays: Collection[np.ndarray] = [],
+                      *args, **kwargs
+                      ) -> (Image, Mask, Track, Arr):
+        """
+        Extract function is different because it expects to get a list
+        of images, masks, etc. Therefore, can't use @ImageHelper.
+        Instead, run_operation should directly call extract_data_from_image
+        with the lists of inputs and return the result.
+        Only note is that currently extract_data_from_images has no use
+        for arrays, therefore those are not passed, but they must be input
+        """
+        # Default is to return the input if no function is run
+        inputs = [images, masks, tracks, arrays]
+        result = arrays
+
+        # Arrays are not passed to the function
+        result = self.extract_data_from_image(*inputs[:-1], *args, **kwargs)
+        self.save_arrays[self.output] = self.output, result
+
+        return result
 
 
 class BaseEvaluate(Operation):
