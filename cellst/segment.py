@@ -1,5 +1,3 @@
-from typing import Collection, Tuple
-
 import numpy as np
 from skimage.measure import label
 from skimage.segmentation import (clear_border, random_walker,
@@ -15,9 +13,9 @@ from cellst.utils.operation_utils import remove_small_holes_keep_labels
 
 
 class Segment(BaseSegment):
-    @staticmethod
     @ImageHelper(by_frame=True)
-    def clean_labels(mask: Mask,
+    def clean_labels(self,
+                     mask: Mask,
                      min_radius: float = 3,
                      max_radius: float = 15,
                      open_size: int = 3,
@@ -53,17 +51,15 @@ class Segment(BaseSegment):
 
         return labels
 
-    # TODO: Should these methods actually be static? What's the benefit?
-    @staticmethod
     @ImageHelper(by_frame=True)
-    def constant_thres(image: Image,
+    def constant_thres(self,
+                       image: Image,
                        thres: float = 1000,
                        negative: bool = False,
                        connectivity: int = 2
                        ) -> Mask:
         """
-        TODO:
-            - Do I have to explicitly set the output array to uint16?
+        Labels pixels above or below a constant threshold
         """
         if negative:
             test_arr = image <= thres
@@ -72,24 +68,24 @@ class Segment(BaseSegment):
 
         return label(test_arr, connectivity=connectivity)
 
-    @staticmethod
     @ImageHelper(by_frame=True)
-    def adaptive_thres(image: Image,
+    def adaptive_thres(self,
+                       image: Image,
                        relative_thres: float = 0.1,
                        sigma: float = 50,
                        connectivity: int = 2
                        ) -> Mask:
         """
         Applies Gaussian blur to the image and selects pixels that
-        are relative_thres larger than the blurred image.
+        are relative_thres brighter than the blurred image.
         """
         filt = gaussian_filter(image, sigma)
         filt = image > filt * (1 + relative_thres)
         return label(filt, connectivity=connectivity)
 
-    @staticmethod
     @ImageHelper(by_frame=True)
-    def otsu_thres(image: Image,
+    def otsu_thres(self,
+                   image: Image,
                    nbins: int = 256,
                    connectivity: int = 2
                    ) -> Mask:
@@ -100,9 +96,9 @@ class Segment(BaseSegment):
         thres = threshold_otsu(image, nbins=nbins)
         return label(image > thres, connectivity=connectivity)
 
-    @staticmethod
     @ImageHelper(by_frame=True)
-    def random_walk_segmentation(image: Image,
+    def random_walk_segmentation(self,
+                                 image: Image,
                                  seed_thres: float = 0.99,
                                  seed_min_size: float = 12,
                                  beta: float = 80,
@@ -137,9 +133,9 @@ class Segment(BaseSegment):
 
         return out
 
-    @staticmethod
     @ImageHelper(by_frame=True)
-    def agglomeration_segmentation(image: Image,
+    def agglomeration_segmentation(self,
+                                   image: Image,
                                    agglom_min: float = 0.7,
                                    agglom_max: float = None,
                                    compact: float = 100,
