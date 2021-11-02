@@ -106,10 +106,7 @@ class Operation():
         """
         Calls run_operation. This is intended to be
         used independently of Pipeline.
-
-        TODO:
-            - Is there any way to make this function more generalizable
-              or easier for the user to call?
+        Each BaseOperation should implement it's own __call__
         """
         return self.run_operation(images, masks, tracks, arrays)
 
@@ -179,6 +176,15 @@ class BaseProcess(Operation):
 
         self.output = output
 
+    def __call__(self,
+                 images: Collection[np.ndarray] = [],
+                 ) -> Image:
+        """
+        Calls run_operation. This is intended to be
+        used independently of Pipeline.
+        """
+        return self.run_operation(images, [], [], [])
+
 
 class BaseSegment(Operation):
     _input_type = (Image,)
@@ -204,6 +210,16 @@ class BaseSegment(Operation):
             self.input_masks = input_masks
 
         self.output = output
+
+    def __call__(self,
+                 images: Collection[np.ndarray] = [],
+                 masks: Collection[np.ndarray] = []
+                 ) -> Mask:
+        """
+        Calls run_operation. This is intended to be
+        used independently of Pipeline.
+        """
+        return self.run_operation(images, masks, [], [])
 
 
 class BaseTrack(Operation):
@@ -231,6 +247,16 @@ class BaseTrack(Operation):
             self.input_masks = input_masks
 
         self.output = output
+
+    def __call__(self,
+                 images: Collection[np.ndarray] = [],
+                 masks: Collection[np.ndarray] = []
+                 ) -> Track:
+        """
+        Calls run_operation. This is intended to be
+        used independently of Pipeline.
+        """
+        return self.run_operation(images, masks, [], [])
 
 
 class BaseExtract(Operation):
@@ -338,3 +364,12 @@ class BaseExtract(Operation):
 class BaseEvaluate(Operation):
     _input_type = (Arr,)
     _output_type = Arr
+
+    def __call__(self,
+                 arrs: Collection[Arr]
+                 ) -> Arr:
+        """
+        Calls run_operation. This is intended to be
+        used independently of Pipeline.
+        """
+        return self.run_operation([], [], [], arrs)
