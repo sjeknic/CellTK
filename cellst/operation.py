@@ -9,10 +9,11 @@ from cellst.utils._types import Image, Mask, Track, Arr, INPT_NAME_IDX
 class Operation():
     """
     This is the base class for the operations (segmentation, tracking, etc.)
-
-    TODO:
-        - Implement __slots__
     """
+    __name__ = 'Operation'
+    __slots__ = ('save', 'output', 'functions', 'func_index', 'input_images',
+                 'input_masks', 'input_tracks', 'input_arrays', 'save_arrays',
+                 'output_id', '_input_type', '_output_type')
 
     def __init__(self,
                  output: str,
@@ -122,9 +123,6 @@ class Operation():
             Can take in as many of each, but must be a separate positional argument
             Either name or type hint must match the types above
             If multiple, must be present in above order
-
-        TODO:
-            - np array could be preallocated for the function
         """
         # Default is to return the input if no function is run
         inputs = [images, masks, tracks, arrays]
@@ -158,6 +156,7 @@ class Operation():
 
 
 class BaseProcess(Operation):
+    __name__ = 'Process'
     _input_type = (Image,)
     _output_type = Image
 
@@ -187,6 +186,7 @@ class BaseProcess(Operation):
 
 
 class BaseSegment(Operation):
+    __name__ = 'Segment'
     _input_type = (Image,)
     _output_type = Mask
 
@@ -223,6 +223,7 @@ class BaseSegment(Operation):
 
 
 class BaseTrack(Operation):
+    __name__ = 'Track'
     _input_type = (Image, Mask)
     _output_type = Track
 
@@ -259,7 +260,10 @@ class BaseTrack(Operation):
         return self.run_operation(images, masks, [], [])
 
 
+# TODO: Write new run_operation to not pass arrays to the
+#       extract data from image function
 class BaseExtract(Operation):
+    __name__ = 'Extract'
     _input_type = (Image, Mask, Track)
     _output_type = Arr
     # Label will always be first, even for user supplied metrics
@@ -367,8 +371,8 @@ class BaseExtract(Operation):
                  condition: str = None,
                  ) -> Arr:
         """
-        Calls run_operation. This is intended to be
-        used independently of Pipeline.
+        This directly calls extract_data_from_image
+        instead of using run_operation
         """
         kwargs = dict(channels=channels, regions=regions, condition=condition,
                       lineages=lineages)
@@ -376,6 +380,7 @@ class BaseExtract(Operation):
 
 
 class BaseEvaluate(Operation):
+    __name__ = 'Evaluate'
     _input_type = (Arr,)
     _output_type = Arr
 
