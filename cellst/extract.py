@@ -67,9 +67,11 @@ class Extract(BaseExtract):
 
         # Confirm sizes of inputs match
         if len(images) != len(channels):
-            raise ValueError(f'Got {len(images)} images and {len(channels)} channels.')
+            raise ValueError(f'Got {len(images)} images '
+                             f'and {len(channels)} channels.')
         if len(tracks_to_use) != len(regions):
-            raise ValueError(f'Got {len(tracks)} tracks and {len(regions)} regions.')
+            raise ValueError(f'Got {len(tracks_to_use)} tracks '
+                             f'and {len(regions)} regions.')
 
         # TODO: Add handling of extra_properties
         # Label must always be the first metric for easy indexing of cells
@@ -99,7 +101,8 @@ class Extract(BaseExtract):
 
                 # TODO: Remember to include Tracks as a possible input
                 # Extract data using scipy
-                rp = [regionprops_table(tracks_to_use[r_idx][i], images[c_idx][i],
+                rp = [regionprops_table(tracks_to_use[r_idx][i],
+                                        images[c_idx][i],
                                         properties=metrics, cache=True)
                       for i in range(images[c_idx].shape[0])]
 
