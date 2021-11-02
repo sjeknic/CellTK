@@ -289,7 +289,7 @@ class BaseExtract(Operation):
                  input_tracks: Collection[str] = [],
                  channels: Collection[str] = [],
                  regions: Collection[str] = [],
-                 lineage_file: np.ndarray = None,
+                 lineages: Collection[np.ndarray] = [],
                  condition: str = None,
                  output: str = 'data_frame',
                  save: bool = False,
@@ -330,7 +330,8 @@ class BaseExtract(Operation):
         if len(regions) == 0:
             regions = input_masks
 
-        kwargs = dict(channels=channels, regions=regions)
+        kwargs = dict(channels=channels, regions=regions, lineages=lineages,
+                      condition=condition)
         # Automatically add extract_data_from_image
         self.functions = [tuple([self.extract_data_from_image, Arr, [], kwargs, None])]
         self.func_index = {i: f for i, f in enumerate(self.functions)}
@@ -362,7 +363,7 @@ class BaseExtract(Operation):
                  tracks: Collection[Track] = [],
                  channels: Collection[str] = [],
                  regions: Collection[str] = [],
-                 lineage: np.ndarray = None,
+                 lineages: Collection[np.ndarray] = [],
                  condition: str = None,
                  ) -> Arr:
         """
@@ -370,7 +371,7 @@ class BaseExtract(Operation):
         used independently of Pipeline.
         """
         kwargs = dict(channels=channels, regions=regions, condition=condition,
-                      lineage=lineage)
+                      lineages=lineages)
         return self.extract_data_from_image(images, masks, tracks, **kwargs)
 
 

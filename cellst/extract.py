@@ -7,6 +7,7 @@ from skimage.measure import regionprops_table
 from cellst.operation import BaseExtract
 from cellst.utils.utils import ImageHelper
 from cellst.utils._types import Image, Mask, Track, Arr, CellArray
+from cellst.utils.operation_utils import lineage_to_track
 
 
 class Extract(BaseExtract):
@@ -17,7 +18,7 @@ class Extract(BaseExtract):
                                 tracks: Collection[Track] = [],
                                 channels: Collection[str] = [],
                                 regions: Collection[str] = [],
-                                lineage: np.ndarray = None,
+                                lineages: Collection[np.ndarray] = [],
                                 condition: str = None,
                                 *args) -> Arr:
         """
@@ -53,12 +54,16 @@ class Extract(BaseExtract):
         if len(tracks) != 0:
             tracks_to_use = tracks
         elif len(masks) != 0:
-            if lineage is None:
+            if len(lineages) == 0:
                 warnings.warn('Got mask but not lineage file. No cell division'
                               ' can be tracked', UserWarning)
                 tracks_to_use = masks
             else:
-                tracks_to_use = lineage_to_track(masks, lineage)
+                if len(masks) != len(tracks):
+                    raise ValueError(f'Got {len(masks)} masks '
+                                     f'and {len(lineages)} lineages.')
+                tracks_to_use = [lineage_to_track(m, l)
+                                 for m, l in zip(masks, lineages)]
 
         # Confirm sizes of inputs match
         if len(images) != len(channels):
@@ -94,7 +99,7 @@ class Extract(BaseExtract):
 
                 # TODO: Remember to include Tracks as a possible input
                 # Extract data using scipy
-                rp = [regionprops_table(masks[r_idx][i], images[c_idx][i],
+                rp = [regionprops_table(tracks_to_use[r_idx][i], images[c_idx][i],
                                         properties=metrics, cache=True)
                       for i in range(images[c_idx].shape[0])]
 

@@ -40,14 +40,13 @@ def gray_fill_holes_celltk(labels):
             labels[hole > 0] = uniq[0]
     return labels
 
+
 def track_to_lineage(self, track: Track, lineage: np.ndarray):
     """
     Given a set of track images, reconstruct all the lineages
-
-    TODO:
-        - This function might be more appropriate in Extract
     """
     pass
+
 
 def lineage_to_track(self,
                      mask: Mask,
