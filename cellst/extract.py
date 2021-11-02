@@ -21,6 +21,7 @@ class Extract(BaseExtract):
         ax 3 - cells
         ax 4 - frames
 
+        NOTE: Extract takes in all inputs, so no need for decorator
         TODO:
             - Allow an option for caching or not in regionprops
         """

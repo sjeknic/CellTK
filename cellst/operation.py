@@ -113,7 +113,6 @@ class Operation():
         """
         return self.run_operation(images, masks, tracks, arrays)
 
-
     def run_operation(self,
                       images: Collection[np.ndarray] = [],
                       masks: Collection[np.ndarray] = [],

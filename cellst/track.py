@@ -4,7 +4,7 @@ import numpy as np
 
 from cellst.operation import BaseTrack
 from cellst.utils._types import Image, Mask, Track
-from cellst.utils.utils import image_helper
+from cellst.utils.utils import ImageHelper
 
 # Needed for Track.kit_sch_ge_track
 from kit_sch_ge.tracker.extract_data import get_indices_pandas
@@ -48,7 +48,7 @@ class Track(BaseTrack):
 
         return out
 
-    @image_helper
+    @ImageHelper(by_frame=False)
     def kit_sch_ge_track(self,
                          image: Image,
                          mask: Mask,
