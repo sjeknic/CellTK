@@ -98,10 +98,10 @@ class Operation():
         self.func_index = {i: f for i, f in enumerate(self.functions)}
 
     def __call__(self,
-                 images: Collection[np.ndarray] = [],
-                 masks: Collection[np.ndarray] = [],
-                 tracks: Collection[np.ndarray] = [],
-                 arrays: Collection[np.ndarray] = []
+                 images: Collection[Image] = [],
+                 masks: Collection[Mask] = [],
+                 tracks: Collection[Track] = [],
+                 arrays: Collection[Arr] = []
                  ) -> (Image, Mask, Track, Arr):
         """
         Calls run_operation. This is intended to be
@@ -177,7 +177,7 @@ class BaseProcess(Operation):
         self.output = output
 
     def __call__(self,
-                 images: Collection[np.ndarray] = [],
+                 images: Collection[Image] = [],
                  ) -> Image:
         """
         Calls run_operation. This is intended to be
@@ -212,8 +212,8 @@ class BaseSegment(Operation):
         self.output = output
 
     def __call__(self,
-                 images: Collection[np.ndarray] = [],
-                 masks: Collection[np.ndarray] = []
+                 images: Collection[Image] = [],
+                 masks: Collection[Mask] = []
                  ) -> Mask:
         """
         Calls run_operation. This is intended to be
@@ -249,8 +249,8 @@ class BaseTrack(Operation):
         self.output = output
 
     def __call__(self,
-                 images: Collection[np.ndarray] = [],
-                 masks: Collection[np.ndarray] = []
+                 images: Collection[Image] = [],
+                 masks: Collection[Mask] = []
                  ) -> Track:
         """
         Calls run_operation. This is intended to be
@@ -289,6 +289,7 @@ class BaseExtract(Operation):
                  input_tracks: Collection[str] = [],
                  channels: Collection[str] = [],
                  regions: Collection[str] = [],
+                 lineage_file: np.ndarray = None,
                  condition: str = None,
                  output: str = 'data_frame',
                  save: bool = False,
@@ -300,8 +301,7 @@ class BaseExtract(Operation):
         TODO:
             - Clean up this whole function when it's working
             - metrics needs to always start with label
-            - If Mask is given, but not track, look for tracking file
-                - Raise warning that parent daughter connections will fail if missing
+            - Raise warning that parent daughter connections will fail if missing
             - Condition should get passed to this function. Pipeline likely cannot because
               the same operation will be used for multiple Pipelines. But Orchestrator should
               be able to.
@@ -325,18 +325,14 @@ class BaseExtract(Operation):
             self.input_tracks = input_tracks
 
         if len(channels) == 0:
-            self.channels = input_images
-        else:
-            self.channels = channels
+            channels = input_images
 
-        # TODO: This should look for both masks and tracks
         if len(regions) == 0:
-            self.regions = input_masks
-        else:
-            self.regions = regions
+            regions = input_masks
 
+        kwargs = dict(channels=channels, regions=regions)
         # Automatically add extract_data_from_image
-        self.functions = [tuple([self.extract_data_from_image, Arr, [], {}, None])]
+        self.functions = [tuple([self.extract_data_from_image, Arr, [], kwargs, None])]
         self.func_index = {i: f for i, f in enumerate(self.functions)}
 
     def add_function_to_operation(self,
@@ -359,6 +355,23 @@ class BaseExtract(Operation):
         else:
             super().add_function_to_operation(func, output_type, name,
                                               args, kwargs)
+
+    def __call__(self,
+                 images: Collection[Image],
+                 masks: Collection[Mask] = [],
+                 tracks: Collection[Track] = [],
+                 channels: Collection[str] = [],
+                 regions: Collection[str] = [],
+                 lineage: np.ndarray = None,
+                 condition: str = None,
+                 ) -> Arr:
+        """
+        Calls run_operation. This is intended to be
+        used independently of Pipeline.
+        """
+        kwargs = dict(channels=channels, regions=regions, condition=condition,
+                      lineage=lineage)
+        return self.extract_data_from_image(images, masks, tracks, **kwargs)
 
 
 class BaseEvaluate(Operation):
