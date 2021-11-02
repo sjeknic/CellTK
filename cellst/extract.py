@@ -1,17 +1,15 @@
-from typing import Collection, Tuple
+from typing import Collection
 import warnings
 
 import numpy as np
 from skimage.measure import regionprops_table
 
 from cellst.operation import BaseExtract
-from cellst.utils.utils import ImageHelper
 from cellst.utils._types import Image, Mask, Track, Arr, CellArray
 from cellst.utils.operation_utils import lineage_to_track
 
 
 class Extract(BaseExtract):
-    @ImageHelper(by_frame=False)
     def extract_data_from_image(self,
                                 images: Collection[Image],
                                 masks: Collection[Mask] = [],
@@ -50,7 +48,7 @@ class Extract(BaseExtract):
 
         # Check that all required inputs are there
         if len(tracks) == 0 and len(masks) == 0:
-            raise ValueError(f'Missing masks and/or tracks.')
+            raise ValueError('Missing masks and/or tracks.')
         if len(tracks) != 0:
             tracks_to_use = tracks
         elif len(masks) != 0:
@@ -65,13 +63,18 @@ class Extract(BaseExtract):
                 tracks_to_use = [lineage_to_track(m, l)
                                  for m, l in zip(masks, lineages)]
 
+        print(len(tracks_to_use))
         # Confirm sizes of inputs match
         if len(images) != len(channels):
-            raise ValueError(f'Got {len(images)} images '
-                             f'and {len(channels)} channels.')
+            warnings.warn(f'Got {len(images)} images '
+                          f'and {len(channels)} channels.'
+                          'Using default naming.', UserWarning)
+            channels = [f'image{n}' for n in range(len(images))]
         if len(tracks_to_use) != len(regions):
-            raise ValueError(f'Got {len(tracks_to_use)} tracks '
-                             f'and {len(regions)} regions.')
+            warnings.warn(f'Got {len(tracks_to_use)} tracks '
+                          f'and {len(regions)} regions.'
+                          'Using default naming.', UserWarning)
+            regions = [f'region{n}' for n in range(len(tracks_to_use))]
 
         # TODO: Add handling of extra_properties
         # Label must always be the first metric for easy indexing of cells
@@ -99,7 +102,6 @@ class Extract(BaseExtract):
         for c_idx, cnl in enumerate(channels):
             for r_idx, rgn in enumerate(regions):
 
-                # TODO: Remember to include Tracks as a possible input
                 # Extract data using scipy
                 rp = [regionprops_table(tracks_to_use[r_idx][i],
                                         images[c_idx][i],
@@ -123,5 +125,5 @@ class Extract(BaseExtract):
             # Need to move the frames from the first axis to the last
             data[rgn, cnl, :, :, :] = np.moveaxis(all_nans, 0, -1)
 
-        # Needs to return output_type to be consistent
-        return Arr, data
+        # Does not need to return type to Extract.run_operation
+        return data
