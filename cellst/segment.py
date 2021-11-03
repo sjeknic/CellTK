@@ -4,7 +4,7 @@ from skimage.segmentation import (clear_border, random_walker,
                                   relabel_sequential, watershed)
 from skimage.morphology import remove_small_objects, opening
 from skimage.filters import threshold_otsu
-from scipy.ndimage import gaussian_filter
+from scipy.ndimage import gaussian_filter, watershed_ift
 
 from cellst.operation import BaseSegment
 from cellst.utils._types import Image, Mask
@@ -91,7 +91,7 @@ class Segment(BaseSegment):
                    ) -> Mask:
         """
         Uses Otsu's method to determine the threshold. All pixels
-        above the threshold are kept
+        above the threshold are labeled
         """
         thres = threshold_otsu(image, nbins=nbins)
         return label(image > thres, connectivity=connectivity)
@@ -161,7 +161,7 @@ class Segment(BaseSegment):
         percs = np.linspace(agglom_max, agglom_min, steps)
 
         # Generate seeds based on constant threshold
-        seeds = image > seed_thres
+        seeds = image >= seed_thres
         if seed_min_size is not None:
             seeds = remove_small_objects(seeds, seed_min_size, connectivity=2)
 
@@ -180,6 +180,34 @@ class Segment(BaseSegment):
             _old_perc = _perc
 
         return label(seeds, connectivity=connectivity)
+
+    @ImageHelper(by_frame=True)
+    def watershed_ift_segmentation(self,
+                                   image: Image,
+                                   seed_thres: float = 0.975,
+                                   seed_min_size: float = 12,
+                                   connectivity: int = 2
+                                   ) -> Mask:
+        """
+        Wrapper for scipy.ndimage.watershed_ift.
+        TODO:
+            - Accept pre-made seed mask from a different function
+        """
+        # Generate seeds based on constant threshold
+        seeds = label(image >= seed_thres)
+        if seed_min_size is not None:
+            seeds = remove_small_objects(seeds, seed_min_size, connectivity=2)
+
+        # Convert background pixels to negative
+        seeds[seeds == 0] = -1
+        # Search area is equivalent to connectivity = 2
+        struct = np.ones((3, 3))
+
+        # Watershed and remove negatives
+        out = watershed_ift(image, seeds, struct)
+        out[out < 0] = 0
+
+        return out
 
     @ImageHelper(by_frame=False)
     def unet_predict(self,
