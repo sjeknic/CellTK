@@ -10,8 +10,7 @@ import datetime as dtdt
 
 import numpy as np
 import tifffile as tiff
-from imageio import imread, mimread
-import cv2
+import imageio as iio
 
 from cellst.operation import Operation
 from cellst.utils._types import Image, Mask, Track, Arr
@@ -111,6 +110,12 @@ class Pipeline():
 
         Returns:
         """
+        # Can skip doing anything if no operations have been added
+        if len(self.operations) == 0:
+            warnings.warn('No operations in Pipeline. Returning None.',
+                          UserWarning)
+            return None
+
         # Determine needed inputs and outputs and load to container
         inputs, outputs = self._input_output_handler()
         self._load_images_to_container(self._image_container, inputs, outputs)
@@ -133,6 +138,7 @@ class Pipeline():
                                             otpts)
 
             # Write to disk if needed
+            # TODO: Don't think this function works for Arr type
             if oper.save:
                 self.save_images(oper.save_arrays)
 
@@ -245,9 +251,10 @@ class Pipeline():
         # If no images were found, look for a subdirectory
         if len(im_names) == 0:
             try:
-                # Take first subdirectory found
+                # Take first subdirectory found that has match_str
                 subfol = [fol for fol in sorted(os.listdir(folder))
-                          if os.path.isdir(os.path.join(folder, fol))][0]
+                          if os.path.isdir(os.path.join(folder, fol))
+                          if match_str in fol][0]
                 folder = os.path.join(folder, subfol)
 
                 # Look ONLY for images in that subdirectory
@@ -310,14 +317,15 @@ class Pipeline():
                 # Load the images
                 '''NOTE: Using mimread instead of imread to add the option of limiting
                 the memory of the loaded image. However, mimread still only loads one
-                image at a time, so it is unlikely to ever hit the memory limit.
+                file at a time, so it is unlikely to ever hit the memory limit.
                 Could be worth tracking the memory and deleting large arrays or
                 temporarily storing them in a file (if low-mem mode is true)
                 Slightly faster than imread.'''
                 # Pre-allocate numpy array for speed
                 for n, p in enumerate(pths):
                     # TODO: Is there a better imread function to use here?
-                    img = np.asarray(mimread(p)[0])
+                    img = iio.mimread(p)[0]
+
                     if n == 0:
                         # TODO: Is there a neater way to do this?
                         '''NOTE: Due to how numpy arrays are stored in memory, writing to the last
