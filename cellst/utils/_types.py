@@ -231,6 +231,7 @@ class PositionArray():
 
     TODO:
         - Add ability to save all Arrays in single file
+        - Will need to pad arrays with different number of cells with np.nan
     """
 
     __slots__ = ('name', 'attrs', 'sites')
@@ -277,6 +278,7 @@ class PositionArray():
                 key = tuple([key])
             indices = tuple(self.sites.values())[0]._convert_keys_to_index(key)
 
+            # TODO: Makes more sense for this to return a dictionary
             return [v._getitem_w_idx(indices) for v in self.sites.values()]
 
     def __len__(self):

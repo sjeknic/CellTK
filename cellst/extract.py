@@ -6,7 +6,7 @@ from skimage.measure import regionprops_table
 
 from cellst.operation import BaseExtract
 from cellst.utils._types import Image, Mask, Track, Arr, CellArray
-from cellst.utils.operation_utils import lineage_to_track
+from cellst.utils.operation_utils import lineage_to_track, track_to_lineage
 
 
 class Extract(BaseExtract):
@@ -51,6 +51,7 @@ class Extract(BaseExtract):
             raise ValueError('Missing masks and/or tracks.')
         if len(tracks) != 0:
             tracks_to_use = tracks
+            lineages = [track_to_lineage(t) for t in tracks]
         elif len(masks) != 0:
             if len(lineages) == 0:
                 warnings.warn('Got mask but not lineage file. No cell division'
@@ -63,7 +64,6 @@ class Extract(BaseExtract):
                 tracks_to_use = [lineage_to_track(m, l)
                                  for m, l in zip(masks, lineages)]
 
-        print(len(tracks_to_use))
         # Confirm sizes of inputs match
         if len(images) != len(channels):
             warnings.warn(f'Got {len(images)} images '
@@ -83,14 +83,11 @@ class Extract(BaseExtract):
             metrics.insert(0, 'label')
         else:
             if metrics[0] != 'label':
-                try:
-                    metrics.remove('label')
-                except ValueError:
-                    pass
+                metrics.remove('label')
                 metrics.insert(0, 'label')
 
         # Get unique cell indexes and the number of frames
-        cells = np.unique(np.concatenate([np.unique(m) for m in masks]))
+        cells = np.unique(np.concatenate([np.unique(t) for t in tracks_to_use]))
         cells_index = {int(a): i for i, a in enumerate(cells)}
         frames = range(max([i.shape[0] for i in images]))
 

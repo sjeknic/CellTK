@@ -161,7 +161,7 @@ class BaseProcess(Operation):
     _output_type = Image
 
     def __init__(self,
-                 input_images: Collection[str] = ['channel000'],
+                 input_images: Collection[str] = [],
                  output: str = 'process',
                  save: bool = False,
                  _output_id: Tuple[str] = None,
@@ -288,7 +288,7 @@ class BaseExtract(Operation):
     _extra_properties = []
 
     def __init__(self,
-                 input_images: Collection[str] = ['channel000'],
+                 input_images: Collection[str] = [],
                  input_masks: Collection[str] = [],
                  input_tracks: Collection[str] = [],
                  channels: Collection[str] = [],

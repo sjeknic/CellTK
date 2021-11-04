@@ -130,9 +130,9 @@ class ImageHelper():
             dtype = pass_to_func[0].dtype
         elif self.output_type.__name__ == 'mask':
             # If mask, use only positive integers
-            dtype = np.int16
-        elif self.output_type.__name__ == 'track':
             dtype = np.uint16
+        elif self.output_type.__name__ == 'track':
+            dtype = np.int16
         else:
             raise TypeError('Was unable to determine type for '
                             f'output of {self.func}.')
