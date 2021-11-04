@@ -48,54 +48,31 @@ def track_to_lineage(track: Track) -> np.ndarray:
     Given a set of track images, reconstruct all the lineages
     lineage.shape[1] is 4 for label, first frame, last frame, parent
     TODO:
-        - Feels like this is clunky. Could be both faster and neater
+        - Could be both faster and neater?
     """
-    def _get_daughter(idx):
-        # index 0 is frames
-        x_idx = idx[1]
-        y_idx = idx[2]
 
-        # Make indices for cross positions
-        left_idx = tuple([idx[0], x_idx - 1, y_idx])
-        right_idx = tuple([idx[0], x_idx + 1, y_idx])
-        up_idx = tuple([idx[0], x_idx, y_idx + 1])
-        down_idx = tuple([idx[0], x_idx, y_idx - 1])
-        cross_idx = [left_idx, right_idx, up_idx, down_idx]
+    def _get_cell_info(f, x, y):
+        f0, f1 = (np.min(f), np.max(f) + 1)
+        x0, x1 = (np.min(x), np.max(x) + 1)
+        y0, y1 = (np.min(y), np.max(y) + 1)
 
-        # Get possible values
-        poss = np.array([track[c] for c in cross_idx])
-        poss = poss[poss != 0]
-        # TODO: This will fail if the object is very small.
-        #       probably default to using mode or np unique
-        assert all([p == poss[0] for p in poss]), 'Ambiguous parent id'
+        test = track[f0:f1, x0:x1, y0:y1]
+        try:
+            par = -1 * test[test < 0][0]
+        except IndexError:
+            par = 0
 
-        return poss[0]
-
-    # Pre-allocate lineage
-    cells = np.unique(track[track > 0])
+        return f0, f1, par
 
     # Use cells to fill in info in lineage
+    cells = np.unique(track[track > 0])
+    # Pre-allocate lineage
     # lineage.shape[1] is 4 for label, first frame, last frame, parent
-    lineage = np.empty((len(cells), 4)).astype(np.int16)
+    lineage = np.empty((len(cells), 4)).astype(np.uint16)
     for row, cell in enumerate(cells):
-        frames = np.where(track == cell)[0]
-        frst, last = (np.min(frames), np.max(frames))
+        f, x, y = np.where(track == cell)
 
-        lineage[row, 0] = cell
-        lineage[row, 1] = frst
-        lineage[row, 2] = last
-        lineage[row, 3] = 0  # default for cells with no parent
-
-    # Each negative pixel should uniquely id a parent
-    negatives = np.argwhere(track < 0)
-    for neg in negatives:
-        par = track[tuple(neg)]
-        assert par < 0, 'Incorrect parent index'
-        dau = _get_daughter(neg)
-        row = np.where(lineage == dau)[0]
-        assert len(row) == 1, 'Ambiguous daughter id'
-
-        lineage[row, 3] = -1 * par
+        lineage[row] = [cell, *_get_cell_info(f, x, y)]
 
     return lineage
 
