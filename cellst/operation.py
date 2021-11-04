@@ -1,5 +1,4 @@
 from typing import Collection, Tuple
-import warnings
 
 import numpy as np
 
@@ -8,7 +7,7 @@ from cellst.utils._types import Image, Mask, Track, Arr, INPT_NAME_IDX
 
 class Operation():
     """
-    This is the base class for the operations (segmentation, tracking, etc.)
+    This is the base class for all operations (segmentation, tracking, etc.)
     """
     __name__ = 'Operation'
     __slots__ = ('save', 'output', 'functions', 'func_index', 'input_images',
@@ -75,6 +74,19 @@ class Operation():
                        f'   kwargs: {v[2]}')
         return string
 
+    def __call__(self,
+                 images: Collection[Image] = [],
+                 masks: Collection[Mask] = [],
+                 tracks: Collection[Track] = [],
+                 arrays: Collection[Arr] = []
+                 ) -> (Image, Mask, Track, Arr):
+        """
+        Calls run_operation. This is intended to be
+        used independently of Pipeline.
+        Each BaseOperation should implement it's own __call__
+        """
+        return self.run_operation(images, masks, tracks, arrays)
+
     def add_function_to_operation(self,
                                   func: str,
                                   output_type: type = None,
@@ -97,19 +109,6 @@ class Operation():
             raise NameError(f"Function {func} not found in {self}.")
 
         self.func_index = {i: f for i, f in enumerate(self.functions)}
-
-    def __call__(self,
-                 images: Collection[Image] = [],
-                 masks: Collection[Mask] = [],
-                 tracks: Collection[Track] = [],
-                 arrays: Collection[Arr] = []
-                 ) -> (Image, Mask, Track, Arr):
-        """
-        Calls run_operation. This is intended to be
-        used independently of Pipeline.
-        Each BaseOperation should implement it's own __call__
-        """
-        return self.run_operation(images, masks, tracks, arrays)
 
     def run_operation(self,
                       images: Collection[np.ndarray] = [],
@@ -260,28 +259,14 @@ class BaseTrack(Operation):
         return self.run_operation(images, masks, [], [])
 
 
-# TODO: Write new run_operation to not pass arrays to the
-#       extract data from image function
 class BaseExtract(Operation):
     __name__ = 'Extract'
     _input_type = (Image, Mask, Track)
     _output_type = Arr
-    # Label will always be first, even for user supplied metrics
-    """TODO: This is important. xr.DataArray can only handle a single datatype.
-    This is similar to CellTK/covertrace. However, it prevents the use of some interesting
-    properties, such as coords. An approach to fix this is to use an xr.DataSet to hold multiple
-    xr.DataArrays of multiple types. However, I am concerned that this will
-    greatly slow down the indexing, and it also complicates returning multiple
-    values. For now, I'm just going to focus on metrics that can be stored as scalars.
-    TODO: Additionally, some of the metrics that can be stored as scalars are returned
-    as multiple metrics (i.e. bbox = bbox-0, bbox-1, bbox-2, bbox-3). These need to be
-    automatically handled. See scipy.regionprops and scipy.regionprops_table for
-    more information on which properites."""
+    # Label must always be first, even for user supplied metrics
     _metrics = ['label', 'area', 'convex_area',
-                # 'equivalent_diameter_area',
-                # 'centroid_weighted',  # centroid weighted by intensity
+                # 'equivalent_diameter_area', 'centroid_weighted',
                 'mean_intensity',
-                # 'intensity_mean', 'intensity_min',  # need to add median intensity
                 'orientation', 'perimeter', 'solidity',
                 # 'bbox', 'centroid', 'coords'  # require multiple scalars
                 ]
@@ -340,26 +325,6 @@ class BaseExtract(Operation):
         self.functions = [tuple([self.extract_data_from_image, Arr, [], kwargs, None])]
         self.func_index = {i: f for i, f in enumerate(self.functions)}
 
-    def add_function_to_operation(self,
-                                  func: str,
-                                  output_type: type = None,
-                                  name: str = None,
-                                  *args,
-                                  **kwargs
-                                  ) -> None:
-        """
-        Extract currently only supports one function due to how
-        extract_data_from_images expects the inputs. Therefore, for
-        now there is no easy way to add a different function.
-
-        TODO:
-            - Implement option for new functions
-        """
-        raise NotImplementedError('Adding new functions to Extract is '
-                                  'not currently supported. '
-                                  'extract_data_from_image is included '
-                                  'by default.')
-
     def __call__(self,
                  images: Collection[Image],
                  masks: Collection[Mask] = [],
@@ -376,6 +341,26 @@ class BaseExtract(Operation):
         kwargs = dict(channels=channels, regions=regions,
                       condition=condition, lineages=lineages)
         return self.run_operation(images, masks, tracks, [], **kwargs)
+
+    def add_function_to_operation(self,
+                                  func: str,
+                                  output_type: type = None,
+                                  name: str = None,
+                                  *args,
+                                  **kwargs
+                                  ) -> None:
+        """
+        Extract currently only supports one function due to how
+        extract_data_from_images expects the inputs. Therefore, for
+        now there is no easy way to add a different function.
+
+        TODO:
+            - Implement option for new metrics during extract
+        """
+        raise NotImplementedError('Adding new functions to Extract is '
+                                  'not currently supported. '
+                                  'extract_data_from_image is included '
+                                  'by default.')
 
     def run_operation(self,
                       images: Collection[np.ndarray] = [],

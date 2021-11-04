@@ -51,6 +51,7 @@ class Extract(BaseExtract):
             raise ValueError('Missing masks and/or tracks.')
         if len(tracks) != 0:
             tracks_to_use = tracks
+            # TODO: Using bbox from regionprops_table could be faster?
             lineages = [track_to_lineage(t) for t in tracks]
         elif len(masks) != 0:
             if len(lineages) == 0:
