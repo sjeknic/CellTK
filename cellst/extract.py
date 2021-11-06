@@ -1,99 +1,23 @@
-from typing import Collection, Tuple
+from typing import Collection
+import warnings
 
 import numpy as np
-import skimage.measure as meas
+from skimage.measure import regionprops_table
 
-from cellst.operation import Operation
+from cellst.operation import BaseExtract
 from cellst.utils._types import Image, Mask, Track, Arr, CellArray
+from cellst.utils.operation_utils import lineage_to_track, track_to_lineage
 
 
-class Extract(Operation):
-    _input_type = (Image, Mask, Track)
-    _output_type = Arr
-    # Label will always be first, even for user supplied metrics
-    """TODO: This is important. xr.DataArray can only handle a single datatype.
-    This is similar to CellTK/covertrace. However, it prevents the use of some interesting
-    properties, such as coords. An approach to fix this is to use an xr.DataSet to hold multiple
-    xr.DataArrays of multiple types. However, I am concerned that this will
-    greatly slow down the indexing, and it also complicates returning multiple
-    values. For now, I'm just going to focus on metrics that can be stored as scalars.
-    TODO: Additionally, some of the metrics that can be stored as scalars are returned
-    as multiple metrics (i.e. bbox = bbox-0, bbox-1, bbox-2, bbox-3). These need to be
-    automatically handled. See scipy.regionprops and scipy.regionprops_table for
-    more information on which properites."""
-    _metrics = ['label', 'area', 'convex_area',
-                # 'equivalent_diameter_area',
-                # 'centroid_weighted',  # centroid weighted by intensity
-                'mean_intensity',
-                # 'intensity_mean', 'intensity_min',  # need to add median intensity
-                'orientation', 'perimeter', 'solidity',
-                # 'bbox', 'centroid', 'coords'  # require multiple scalars
-                ]
-    _extra_properties = []
-
-    def __init__(self,
-                 input_images: Collection[str] = ['channel000'],
-                 input_masks: Collection[str] = [],
-                 input_tracks: Collection[str] = [],
-                 channels: Collection[str] = [],
-                 regions: Collection[str] = [],
-                 condition: str = None,
-                 output: str = 'data_frame',
-                 save: bool = False,
-                 _output_id: Tuple[str] = None
-                 ) -> None:
-        """
-        channel and region _map should be the names that will get saved in the final df
-        with the images and masks they correspond to.
-        TODO:
-            - Clean up this whole function when it's working
-            - metrics needs to always start with label
-            - If Mask is given, but not track, look for tracking file
-                - Raise warning that parent daughter connections will fail if missing
-            - Condition should get passed to this function. Pipeline likely cannot because
-              the same operation will be used for multiple Pipelines. But Orchestrator should
-              be able to.
-        """
-
-        super().__init__(output, save, _output_id)
-
-        if isinstance(input_images, str):
-            self.input_images = [input_images]
-        else:
-            self.input_images = input_images
-
-        if isinstance(input_masks, str):
-            self.input_masks = [input_masks]
-        else:
-            self.input_masks = input_masks
-
-        if isinstance(input_tracks, str):
-            self.input_tracks = [input_tracks]
-        else:
-            self.input_tracks = input_tracks
-
-        if len(channels) == 0:
-            self.channels = input_images
-        else:
-            self.channels = channels
-
-        # TODO: This should look for both masks and tracks
-        if len(regions) == 0:
-            self.regions = input_masks
-        else:
-            self.regions = regions
-
-        # Only one function can be used for the Extract module
-        # TODO: Overwrite add_function to raise an error, user was
-        #       likely trying to add extra_properties instead
-        self.functions = [tuple([self.extract_data_from_image, Arr, [], {}])]
-        self.func_index = {i: f for i, f in enumerate(self.functions)}
-
+class Extract(BaseExtract):
     def extract_data_from_image(self,
                                 images: Collection[Image],
-                                masks: Collection[Mask],
-                                tracks: Collection[Track],
-                                array: Collection[Arr] = [],
+                                masks: Collection[Mask] = [],
+                                tracks: Collection[Track] = [],
+                                channels: Collection[str] = [],
+                                regions: Collection[str] = [],
+                                lineages: Collection[np.ndarray] = [],
+                                condition: str = None,
                                 *args) -> Arr:
         """
         ax 0 - cell locations (nuc, cyto, population, etc.)
@@ -102,8 +26,13 @@ class Extract(Operation):
         ax 3 - cells
         ax 4 - frames
 
+        NOTE: Extract takes in all inputs, so no need for decorator
+        NOTE: Inputs are optional so that __call__ can use either mask
+              or track
+
         TODO:
             - Allow an option for caching or not in regionprops
+            - Allow input of tracking file
         """
         '''TODO: Track should return a mask that starts at 0 as background,
         and increments by one for the number of cells. This simplifies finding
@@ -117,6 +46,37 @@ class Extract(Operation):
         information from the parent. Which will already be in data, so it can just
         be copied?'''
 
+        # Check that all required inputs are there
+        if len(tracks) == 0 and len(masks) == 0:
+            raise ValueError('Missing masks and/or tracks.')
+        if len(tracks) != 0:
+            tracks_to_use = tracks
+            # TODO: Using bbox from regionprops_table could be faster?
+            lineages = [track_to_lineage(t) for t in tracks]
+        elif len(masks) != 0:
+            if len(lineages) == 0:
+                warnings.warn('Got mask but not lineage file. No cell division'
+                              ' can be tracked', UserWarning)
+                tracks_to_use = masks
+            else:
+                if len(masks) != len(tracks):
+                    raise ValueError(f'Got {len(masks)} masks '
+                                     f'and {len(lineages)} lineages.')
+                tracks_to_use = [lineage_to_track(m, l)
+                                 for m, l in zip(masks, lineages)]
+
+        # Confirm sizes of inputs match
+        if len(images) != len(channels):
+            warnings.warn(f'Got {len(images)} images '
+                          f'and {len(channels)} channels.'
+                          'Using default naming.', UserWarning)
+            channels = [f'image{n}' for n in range(len(images))]
+        if len(tracks_to_use) != len(regions):
+            warnings.warn(f'Got {len(tracks_to_use)} tracks '
+                          f'and {len(regions)} regions.'
+                          'Using default naming.', UserWarning)
+            regions = [f'region{n}' for n in range(len(tracks_to_use))]
+
         # TODO: Add handling of extra_properties
         # Label must always be the first metric for easy indexing of cells
         metrics = self._metrics
@@ -124,29 +84,26 @@ class Extract(Operation):
             metrics.insert(0, 'label')
         else:
             if metrics[0] != 'label':
-                while True:
-                    try:
-                        metrics.remove('label')
-                    except ValueError:
-                        break
-
+                metrics.remove('label')
                 metrics.insert(0, 'label')
 
-        cells = np.unique(np.concatenate([np.unique(m) for m in masks]))
+        # Get unique cell indexes and the number of frames
+        cells = np.unique(np.concatenate([np.unique(t) for t in tracks_to_use]))
         cells_index = {int(a): i for i, a in enumerate(cells)}
         frames = range(max([i.shape[0] for i in images]))
 
         # Initialize data structure
-        data = CellArray(self.regions, self.channels, metrics, cells, frames)
+        data = CellArray(regions, channels, metrics, cells, frames,
+                         name=condition)
 
         # Iterate through all channels and masks
-        for c_idx, cnl in enumerate(self.channels):
-            for r_idx, rgn in enumerate(self.regions):
+        for c_idx, cnl in enumerate(channels):
+            for r_idx, rgn in enumerate(regions):
 
-                # TODO: Remember to include Tracks as a possible input
                 # Extract data using scipy
-                rp = [meas.regionprops_table(masks[r_idx][i], images[c_idx][i],
-                                             properties=metrics, cache=True)
+                rp = [regionprops_table(tracks_to_use[r_idx][i],
+                                        images[c_idx][i],
+                                        properties=metrics, cache=True)
                       for i in range(images[c_idx].shape[0])]
 
                 # This is used for padding empty values with np.nan
@@ -164,9 +121,7 @@ class Extract(Operation):
 
             # Don't need to explicitly set the last indices
             # Need to move the frames from the first axis to the last
-            # And is this actually faster than just writing to the desired location to start.
             data[rgn, cnl, :, :, :] = np.moveaxis(all_nans, 0, -1)
 
-        # Needs to return output_type to be consistent
-        # TODO: This should be corrected
-        return Arr, data
+        # Does not need to return type to Extract.run_operation
+        return data

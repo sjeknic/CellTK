@@ -2,78 +2,19 @@ from typing import Collection, Tuple
 
 import numpy as np
 
-from cellst.operation import Operation
+from cellst.operation import BaseTrack
 from cellst.utils._types import Image, Mask, Track
-from cellst.utils.utils import image_helper
+from cellst.utils.utils import ImageHelper
 
 # Needed for Track.kit_sch_ge_track
 from kit_sch_ge.tracker.extract_data import get_indices_pandas
 from cellst.utils.kit_sch_ge_utils import (TrackingConfig, MultiCellTracker,
                                            ExportResults)
+from cellst.utils.operation_utils import lineage_to_track
 
 
-class Track(Operation):
-    _input_type = (Image, Mask)
-    _output_type = Track
-
-    def __init__(self,
-                 input_images: Collection[str] = [],
-                 input_masks: Collection[str] = [],
-                 output: str = 'track',
-                 save: bool = False,
-                 track_file: bool = True,
-                 _output_id: Tuple[str] = None,
-                 ) -> None:
-        super().__init__(output, save, _output_id)
-
-        if isinstance(input_images, str):
-            self.input_images = [input_images]
-        else:
-            self.input_images = input_images
-
-        if isinstance(input_masks, str):
-            self.input_masks = [input_masks]
-        else:
-            self.input_masks = input_masks
-
-        self.output = output
-
-    def track_to_lineage(self, track: Track, lineage: np.ndarray):
-        """
-        Given a set of track images, reconstruct all the lineages
-
-        TODO:
-            - This function might be more appropriate in Extract
-        """
-        pass
-
-    def lineage_to_track(self,
-                         mask: Mask,
-                         lineage: np.ndarray
-                         ) -> Track:
-        """
-        Each mask in each frame should have a random(?) pixel
-        set to the negative value of the parent cell.
-
-        TODO:
-            - This is less reliable, and totally lost, with small regions
-            - must check that it allows for negatives
-        """
-        out = mask.copy().astype(np.int16)
-        for (lab, app, dis, par) in lineage:
-            if par:
-                # Get all pixels in the label
-                lab_pxl = np.where(mask[app, ...] == lab)
-
-                # Find the centroid and set to the parent value
-                # TODO: this won't work in all cases. trivial example if size==1
-                x = int(np.floor(np.sum(lab_pxl[0]) / len(lab_pxl[0])))
-                y = int(np.floor(np.sum(lab_pxl[1]) / len(lab_pxl[1])))
-                out[app, x, y] = -1 * par
-
-        return out
-
-    @image_helper
+class Track(BaseTrack):
+    @ImageHelper(by_frame=False)
     def kit_sch_ge_track(self,
                          image: Image,
                          mask: Mask,
@@ -119,6 +60,6 @@ class Track(Operation):
 
         exporter = ExportResults(postprocessing_key)
         mask, lineage = exporter(tracks, img_shape=img_shape, time_steps=list(range(image.shape[0])))
-        track = self.lineage_to_track(mask, lineage)
+        track = lineage_to_track(mask, lineage)
 
         return track

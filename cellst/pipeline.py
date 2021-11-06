@@ -3,14 +3,14 @@ import sys
 import argparse
 import yaml
 import multiprocessing
+import warnings
 from typing import Dict, List, Collection, Union, Generator, Tuple
 from glob import glob
 import datetime as dtdt
 
 import numpy as np
 import tifffile as tiff
-from imageio import imread, mimread
-import cv2
+import imageio as iio
 
 from cellst.operation import Operation
 from cellst.utils._types import Image, Mask, Track, Arr
@@ -110,6 +110,12 @@ class Pipeline():
 
         Returns:
         """
+        # Can skip doing anything if no operations have been added
+        if len(self.operations) == 0:
+            warnings.warn('No operations in Pipeline. Returning None.',
+                          UserWarning)
+            return None
+
         # Determine needed inputs and outputs and load to container
         inputs, outputs = self._input_output_handler()
         self._load_images_to_container(self._image_container, inputs, outputs)
@@ -132,8 +138,9 @@ class Pipeline():
                                             otpts)
 
             # Write to disk if needed
+            # TODO: Don't think this function works for Arr type
             if oper.save:
-                self.save_images(oper_result, otpts[0])
+                self.save_images(oper.save_arrays)
 
         return oper_result
 
@@ -159,10 +166,12 @@ class Pipeline():
         return container
 
     def save_images(self,
-                    stack: (Image, Mask, Track),
-                    output_name: str,
-                    img_dtype: type = None) -> None:
+                    save_arrays: Dict[str, Tuple],
+                    img_dtype: type = None
+                    ) -> None:
         """
+        New save function to handle multiple saves per operation
+
         TODO:
             - New output folder needs to be made for each operation
             - Test different iteration strategies for efficiency
@@ -171,14 +180,21 @@ class Pipeline():
             - Add logging
             - Allow for non-consecutive indices
         """
-        img_dtype = stack.dtype if img_dtype is None else img_dtype
-        if stack.ndim != 3:
-            raise ValueError('Expected image stack with 3 dimensions. '
-                             f'Got {stack.ndim}')
 
-        for idx in range(stack.shape[0]):
-            name = os.path.join(self.output_folder, f'{output_name}{idx}.tiff')
-            tiff.imsave(name, stack[idx, ...].astype(img_dtype))
+        for name, (otpt_type, arr) in save_arrays.items():
+            img_dtype = arr.dtype if img_dtype is None else img_dtype
+            if arr.ndim != 3:
+                warnings.warn("Expected stack with 3 dimensions."
+                              f"Got {arr.ndim} for {name}", UserWarning)
+
+            # Make output directory if needed
+            save_folder = os.path.join(self.output_folder, name)
+            if not os.path.exists(save_folder):
+                os.makedirs(save_folder)
+
+            for idx in range(arr.shape[0]):
+                name = os.path.join(save_folder, f"{otpt_type}{idx}.tiff")
+                tiff.imsave(name, arr[idx, ...].astype(img_dtype))
 
     def _input_output_handler(self):
         """
@@ -206,16 +222,51 @@ class Pipeline():
 
     def _get_image_paths(self,
                          folder: str,
-                         match_str: Collection[str] = None
+                         match_str: str,
+                         subfolder: str = None
                          ) -> Collection[str]:
         """
+        match_str: Tuple[str], [0] is the  mat
+
+        1. Look for images in subfolder if given
+        2. Look for images in folder
+        3. Look for subfolder that matches match_str.
+        4. If exists, return those images.
+
         TODO:
             - Add image selection based on regex
             - Should channels use regex or glob to match name
+            - Could be moved to a utils file - staticmethod
         """
+        # First check in designated subfolder
+        if subfolder is not None:
+            folder = os.path.join(folder, subfolder)
+
         # Find images and sort into list
-        im_names = [os.path.join(folder, i) for i in sorted(os.listdir(folder))
-                    if match_str in i]
+        im_names = [os.path.join(folder, im)
+                    for im in sorted(os.listdir(folder))
+                    if match_str in im
+                    and os.path.isfile(os.path.join(folder, im))]
+
+        # If no images were found, look for a subdirectory
+        if len(im_names) == 0:
+            try:
+                # Take first subdirectory found that has match_str
+                subfol = [fol for fol in sorted(os.listdir(folder))
+                          if os.path.isdir(os.path.join(folder, fol))
+                          if match_str in fol][0]
+                folder = os.path.join(folder, subfol)
+
+                # Look ONLY for images in that subdirectory
+                # Load all images, even if match_str doesn't match
+                im_names = [os.path.join(folder, im)
+                            for im in sorted(os.listdir(folder))
+                            if os.path.isfile(os.path.join(folder, im))]
+            except IndexError:
+                # Indidcates that no sub_folders were found
+                # im_names should be [] at this point
+                pass
+
         return im_names
 
     def _load_images_to_container(self,
@@ -253,36 +304,39 @@ class Pipeline():
             for key in to_load:
                 pths = self._get_image_paths(fol, key[0])
                 if len(pths) == 0:
-                    # If no images are found in the required path, check if they
-                    # will be made when the operations are run
-                    # TODO: The order matters. Should raise error if it is made
-                    #       after it is needed.
-                    if key not in outputs:
+                    # If no images are found in the path, check output_folder
+                    fol = self.output_folder
+                    pths = self._get_image_paths(fol, key[0])
+                    # If still no images, check the listed outputs
+                    if len(pths) == 0 and key not in outputs:
+                        # TODO: The order matters. Should raise error if it is made
+                        #       after it is needed.
                         raise ValueError(f'Data {key} cannot be found and is '
                                          'not listed as an output.')
-                else:
-                    # Load the images
-                    '''NOTE: Using mimread instead of imread to add the option of limiting
-                    the memory of the loaded image. However, mimread still only loads one
-                    image at a time, so it is unlikely to ever hit the memory limit.
-                    Could be worth tracking the memory and deleting large arrays or
-                    temporarily storing them in a file (if low-mem mode is true)
-                    Slightly faster than imread.'''
-                    # Pre-allocate numpy array for speed
-                    for n, p in enumerate(pths):
-                        # TODO: Is there a better imread function to use here?
-                        img = np.asarray(mimread(p)[0])
-                        if n == 0:
-                            # TODO: Is there a neater way to do this?
-                            '''NOTE: Due to how numpy arrays are stored in memory, writing to the last
-                            axis is faster than writing to the first. Therefore, the time axis is
-                            on the first axis'''
-                            img_stack = np.empty(tuple([len(pths), img.shape[0], img.shape[1]]),
-                                                 dtype=img.dtype)
 
-                        img_stack[n, ...] = img
+                # Load the images
+                '''NOTE: Using mimread instead of imread to add the option of limiting
+                the memory of the loaded image. However, mimread still only loads one
+                file at a time, so it is unlikely to ever hit the memory limit.
+                Could be worth tracking the memory and deleting large arrays or
+                temporarily storing them in a file (if low-mem mode is true)
+                Slightly faster than imread.'''
+                # Pre-allocate numpy array for speed
+                for n, p in enumerate(pths):
+                    # TODO: Is there a better imread function to use here?
+                    img = iio.mimread(p)[0]
 
-                    container[key] = img_stack
+                    if n == 0:
+                        # TODO: Is there a neater way to do this?
+                        '''NOTE: Due to how numpy arrays are stored in memory, writing to the last
+                        axis is faster than writing to the first. Therefore, the time axis is
+                        on the first axis'''
+                        img_stack = np.empty(tuple([len(pths), img.shape[0], img.shape[1]]),
+                                             dtype=img.dtype)
+
+                    img_stack[n, ...] = img
+
+                container[key] = img_stack
 
         return container
 

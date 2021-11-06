@@ -1,47 +1,21 @@
-from typing import Collection, Tuple
-
 import numpy as np
 from skimage.measure import label
 from skimage.segmentation import (clear_border, random_walker,
                                   relabel_sequential, watershed)
 from skimage.morphology import remove_small_objects, opening
 from skimage.filters import threshold_otsu
-from scipy.ndimage import gaussian_filter
+from scipy.ndimage import gaussian_filter, watershed_ift
 
-from cellst.operation import Operation
+from cellst.operation import BaseSegment
 from cellst.utils._types import Image, Mask
-from cellst.utils.utils import image_helper
+from cellst.utils.utils import ImageHelper
 from cellst.utils.operation_utils import remove_small_holes_keep_labels
 
 
-class Segment(Operation):
-    _input_type = (Image,)
-    _output_type = Mask
-
-    def __init__(self,
-                 input_images: Collection[str] = ['channel000'],
-                 input_masks: Collection[str] = [],
-                 output: str = 'mask',
-                 save: bool = False,
-                 _output_id: Tuple[str] = None,
-                 ) -> None:
-        super().__init__(output, save, _output_id)
-
-        if isinstance(input_images, str):
-            self.input_images = [input_images]
-        else:
-            self.input_images = input_images
-
-        if isinstance(input_masks, str):
-            self.input_masks = [input_masks]
-        else:
-            self.input_masks = input_masks
-
-        self.output = output
-
-    @staticmethod
-    @image_helper
-    def clean_labels(mask: Mask,
+class Segment(BaseSegment):
+    @ImageHelper(by_frame=True)
+    def clean_labels(self,
+                     mask: Mask,
                      min_radius: float = 3,
                      max_radius: float = 15,
                      open_size: int = 3,
@@ -56,101 +30,75 @@ class Segment(Operation):
         TODO:
             - Still getting some objects that are not contiguous.
         """
+        # Fill in holes and remove border-connected objects
+        labels = remove_small_holes_keep_labels(mask, np.pi * min_radius ** 2)
+        labels = clear_border(labels, buffer_size=2)
+
+        # Remove small and large objects and open
         min_area, max_area = np.pi * np.array((min_radius, max_radius)) ** 2
-        out = np.empty(mask.shape).astype(np.uint16)
-        for fr in range(mask.shape[0]):
-            ma = mask[fr, ...]
+        pos = remove_small_objects(labels, min_area, connectivity=connectivity)
+        neg = remove_small_objects(labels, max_area, connectivity=connectivity)
+        pos[neg > 0] = 0
+        labels = opening(pos, np.ones((open_size, open_size)))
 
-            # Fill in holes and remove border-connected objects
-            labels = remove_small_holes_keep_labels(ma, np.pi * min_radius ** 2)
-            labels = clear_border(labels, buffer_size=2)
+        # Relabel the labels to separate non-contiguous objects
+        if relabel:
+            labels = label(labels, connectivity=connectivity)
 
-            # Remove small and large objects and open
-            pos = remove_small_objects(labels, min_area,
-                                       connectivity=connectivity)
-            neg = remove_small_objects(labels, max_area,
-                                       connectivity=connectivity)
-            pos[neg > 0] = 0
-            labels = opening(pos, np.ones((open_size, open_size)))
+        # Make labels sequential if needed
+        if sequential:
+            labels = relabel_sequential(labels)[0]
 
-            # Relabel the labels to separate non-contiguous objects
-            if relabel:
-                labels = label(labels, connectivity=connectivity)
+        return labels
 
-            # Make labels sequential if needed
-            if sequential:
-                labels = relabel_sequential(labels)[0]
-
-            out[fr, ...] = labels
-
-        return out
-
-    # TODO: Should these methods actually be static? What's the benefit?
-    # TODO: Consistent kwarg naming scheme
-    @staticmethod
-    @image_helper
-    def constant_thres(image: Image,
+    @ImageHelper(by_frame=True)
+    def constant_thres(self,
+                       image: Image,
                        thres: float = 1000,
                        negative: bool = False,
                        connectivity: int = 2
                        ) -> Mask:
         """
-        TODO:
-            - Do I have to explicitly set the output array to uint16?
+        Labels pixels above or below a constant threshold
         """
         if negative:
             test_arr = image <= thres
         else:
             test_arr = image >= thres
 
-        # Need to iterate over frames, otherwise connections are
-        # considered along the time axis as well.
-        out = np.empty(image.shape).astype(np.uint16)
-        for fr in range(image.shape[0]):
-            out[fr, ...] = label(test_arr[fr, ...],
-                                 connectivity=connectivity)
-        return out
+        return label(test_arr, connectivity=connectivity)
 
-    @staticmethod
-    @image_helper
-    def adaptive_thres(image: Image,
+    @ImageHelper(by_frame=True)
+    def adaptive_thres(self,
+                       image: Image,
                        relative_thres: float = 0.1,
                        sigma: float = 50,
                        connectivity: int = 2
                        ) -> Mask:
         """
         Applies Gaussian blur to the image and selects pixels that
-        are relative_thres larger than the blurred image.
+        are relative_thres brighter than the blurred image.
         """
-        out = np.empty(image.shape).astype(np.uint16)
-        for fr in range(image.shape[0]):
-            filt = gaussian_filter(image[fr, ...], sigma)
-            filt = image[fr, ...] > filt * (1 + relative_thres)
-            out[fr, ...] = label(filt, connectivity=connectivity)
+        filt = gaussian_filter(image, sigma)
+        filt = image > filt * (1 + relative_thres)
+        return label(filt, connectivity=connectivity)
 
-        return out
-
-    @staticmethod
-    @image_helper
-    def otsu_thres(image: Image,
+    @ImageHelper(by_frame=True)
+    def otsu_thres(self,
+                   image: Image,
                    nbins: int = 256,
                    connectivity: int = 2
                    ) -> Mask:
         """
         Uses Otsu's method to determine the threshold. All pixels
-        above the threshold are kept
+        above the threshold are labeled
         """
-        out = np.empty(image.shape).astype(np.uint16)
-        for fr in range(image.shape[0]):
-            thres = threshold_otsu(image[fr, ...], nbins=nbins)
-            out[fr, ...] = label(image[fr, ...] > thres,
-                                 connectivity=connectivity)
+        thres = threshold_otsu(image, nbins=nbins)
+        return label(image > thres, connectivity=connectivity)
 
-        return out
-
-    @staticmethod
-    @image_helper
-    def random_walk_segmentation(image: Image,
+    @ImageHelper(by_frame=True)
+    def random_walk_segmentation(self,
+                                 image: Image,
                                  seed_thres: float = 0.99,
                                  seed_min_size: float = 12,
                                  beta: float = 80,
@@ -164,32 +112,30 @@ class Segment(Operation):
 
         TODO:
             - Could setting the image values all to 0 help the
-              random_walk not expand too much.
+              random_walk not expand too much when labeling?
         """
-        out = np.empty(image.shape).astype(np.uint16)
-        seeds = image >= seed_thres
-        for fr in range(image.shape[0]):
-            # Generate seeds
-            seed = label(seeds[fr, ...])
-            seed = remove_small_objects(seed, seed_min_size)
+        # Generate seeds
+        seeds = label(image >= seed_thres)
+        if seed_min_size is not None:
+            seeds = remove_small_objects(seeds, seed_min_size)
 
-            # Anisotropic diffusion from each seed
-            probs = random_walker(image[fr, ...], seed,
-                                  beta=beta, tol=tol,
-                                  return_full_prob=True)
+        # Anisotropic diffusion from each seed
+        probs = random_walker(image, seeds,
+                              beta=beta, tol=tol,
+                              return_full_prob=True)
 
-            # Using probabilites because the ranom-walk expands
-            # the masks too much.
-            mask = probs >= seg_thres
-            for p in range(probs.shape[0]):
-                # Where mask is True, label those pixels with p
-                np.place(out[fr, ...], mask[p, ...], p)
+        # Label seeds based on probability threshold
+        mask = probs >= seg_thres
+        out = np.empty(mask.shape).astype(np.uint16)
+        for p in range(probs.shape[0]):
+            # Where mask is True, label those pixels with p
+            np.place(out, mask[p, ...], p)
 
         return out
 
-    @staticmethod
-    @image_helper
-    def agglomeration_segmentation(image: Image,
+    @ImageHelper(by_frame=True)
+    def agglomeration_segmentation(self,
+                                   image: Image,
                                    agglom_min: float = 0.7,
                                    agglom_max: float = None,
                                    compact: float = 100,
@@ -214,31 +160,56 @@ class Segment(Operation):
         if agglom_max is None: agglom_max = np.nanmax(image)
         percs = np.linspace(agglom_max, agglom_min, steps)
 
-        out = np.empty(image.shape).astype(np.uint16)
-        for fr in range(image.shape[0]):
-            # Generate seeds based on constant threshold
-            seeds = image[fr, ...] > seed_thres
+        # Generate seeds based on constant threshold
+        seeds = image >= seed_thres
+        if seed_min_size is not None:
             seeds = remove_small_objects(seeds, seed_min_size, connectivity=2)
 
-            # Iterate through pixel values and add using watershed
-            _old_perc = agglom_max
-            for _perc in percs:
-                # Candidate pixels are between _perc and the last _perc value
-                cand_mask = np.logical_and(image[fr, ...] > _perc,
-                                           image[fr, ...] <= _old_perc)
-                # Keep seeds in the mask as well
-                cand_mask = np.logical_or(seeds > 0, cand_mask > 0)
+        # Iterate through pixel values and add using watershed
+        _old_perc = agglom_max
+        for _perc in percs:
+            # Candidate pixels are between _perc and the last _perc value
+            cand_mask = np.logical_and(image > _perc,
+                                       image <= _old_perc)
+            # Keep seeds in the mask as well
+            cand_mask = np.logical_or(seeds > 0, cand_mask > 0)
 
-                # Watershed and save as seeds for the next iteration
-                seeds = watershed(image[fr, ...], seeds, mask=cand_mask,
-                                  watershed_line=True, compactness=compact)
-                _old_perc = _perc
+            # Watershed and save as seeds for the next iteration
+            seeds = watershed(image, seeds, mask=cand_mask,
+                              watershed_line=True, compactness=compact)
+            _old_perc = _perc
 
-            out[fr, ...] = label(seeds, connectivity=connectivity)
+        return label(seeds, connectivity=connectivity)
+
+    @ImageHelper(by_frame=True)
+    def watershed_ift_segmentation(self,
+                                   image: Image,
+                                   seed_thres: float = 0.975,
+                                   seed_min_size: float = 12,
+                                   connectivity: int = 2
+                                   ) -> Mask:
+        """
+        Wrapper for scipy.ndimage.watershed_ift.
+        TODO:
+            - Accept pre-made seed mask from a different function
+        """
+        # Generate seeds based on constant threshold
+        seeds = label(image >= seed_thres)
+        if seed_min_size is not None:
+            seeds = remove_small_objects(seeds, seed_min_size, connectivity=2)
+
+        # Convert background pixels to negative
+        seeds[seeds == 0] = -1
+        # Search area is equivalent to connectivity = 2
+        struct = np.ones((3, 3))
+
+        # Watershed and remove negatives
+        out = watershed_ift(image, seeds, struct)
+        out[out < 0] = 0
 
         return out
 
-    @image_helper
+    @ImageHelper(by_frame=False)
     def unet_predict(self,
                      image: Image,
                      weight_path: str,

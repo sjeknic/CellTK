@@ -68,14 +68,6 @@ class CellArray():
         self._nan_mask = np.empty(self._xarr.values.shape).astype(bool)
         self._nan_mask[:] = True
 
-    @property
-    def shape(self):
-        return self._xarr.shape
-
-    @property
-    def ndim(self):
-        return self._xarr.ndim
-
     def __getitem__(self, key):
         # Needed if only one key is passed
         if not isinstance(key, tuple):
@@ -94,15 +86,23 @@ class CellArray():
 
         self._xarr.values[indices] = value
 
+    def __str__(self):
+        return self._xarr.__str__()
+
+    @property
+    def shape(self):
+        return self._xarr.shape
+
+    @property
+    def ndim(self):
+        return self._xarr.ndim
+
     def _getitem_w_idx(self, idx):
         """
         Used by CustomSet to index CustomArray w/o recalculating
         the indices each time
         """
         return self._xarr.values[idx]
-
-    def __str__(self):
-        return self._xarr.__str__()
 
     def _convert_keys_to_index(self, key) -> Tuple[(int, slice)]:
         """
@@ -231,6 +231,7 @@ class PositionArray():
 
     TODO:
         - Add ability to save all Arrays in single file
+        - Will need to pad arrays with different number of cells with np.nan
     """
 
     __slots__ = ('name', 'attrs', 'sites')
@@ -277,6 +278,7 @@ class PositionArray():
                 key = tuple([key])
             indices = tuple(self.sites.values())[0]._convert_keys_to_index(key)
 
+            # TODO: Makes more sense for this to return a dictionary
             return [v._getitem_w_idx(indices) for v in self.sites.values()]
 
     def __len__(self):
