@@ -1,4 +1,5 @@
-from typing import NewType, Collection, Tuple
+import h5py
+from typing import NewType, Collection, Tuple, Callable
 
 import numpy as np
 import xarray as xr
@@ -14,10 +15,10 @@ class CellArray():
 
     TODO:
         - Add ability to save file
-
+        - Add ability to filter cells based on arbitrary criteria.
     """
-    __slots__ = ('_xarr', 'name', 'attrs', 'coords', '_arr_dim', '_dim_idxs',
-                 '_key_dim_pairs', '_key_coord_pairs', '_nan_mask')
+    __slots__ = ('_arr', 'name', 'attrs', 'coords', '_arr_dim', '_dim_idxs',
+                 '_key_dim_pairs', '_key_coord_pairs')
 
     def __init__(self,
                  regions: Collection[str] = ['nuc'],
@@ -30,14 +31,7 @@ class CellArray():
                  **kwargs
                  ) -> None:
         """
-        dims are constant, so they aren't included as an input arg
-
         TODO:
-            - Indexing by str with xr.DataArray is very slow. Might want to
-              move to a system based only on np.ndarray. The only question now
-              is relating to the DataSet structure when all of the np arrays
-              are implemented. The simplest way might just be to index all of them
-              and stack the results. But for now keeping as is
             - Handling of metrics which will have multiple entries (i.e. bbox-0, bbox-1, etc.)
               The simplest might be to just automatically convert the keys when the array is loaded.
               The issue with this is that this would also have to happen in __getitem__, which
@@ -47,26 +41,30 @@ class CellArray():
             - Reorder if-statements for speed in key_coord functions.
             - Add option to return nans, for now default is to not return them
             - Add ability to save time steps
+            - Add ability to expand dimensions
         """
+        # Convert inputs to tuple
+        regions = tuple(regions)
+        channels = tuple(channels)
+        metrics = tuple(metrics)
+        cells = tuple(cells)
+        frames = tuple(frames)
+
         # Save some values
         self.name = name
         self.attrs = attrs
 
-        # Set _arr_dim based on input values
+        # Set _arr_dim based on input values - this can't change
         self._arr_dim = (len(regions), len(channels), len(metrics),
                          len(cells), len(frames))
+
         # Create empty data array
-        arr = np.empty(self._arr_dim)
+        self._arr = np.zeros(self._arr_dim)
 
         # Create coordinate dictionary
-        self.coords = dict(region=regions, channel=channels, metric=metrics,
-                           cell=cells, frame=frames)
+        self.coords = dict(regions=regions, channels=channels, metrics=metrics,
+                           cells=cells, frames=frames)
         self._make_key_coord_pairs(self.coords)
-
-        self._xarr = xr.DataArray(data=arr, coords=self.coords,
-                                  name=name, attrs=attrs)
-        self._nan_mask = np.empty(self._xarr.values.shape).astype(bool)
-        self._nan_mask[:] = True
 
     def __getitem__(self, key):
         # Needed if only one key is passed
@@ -75,8 +73,7 @@ class CellArray():
         # Sort given indices to the appropriate axes
         indices = self._convert_keys_to_index(key)
 
-        # Always return as a numpy array
-        return self._xarr.values[indices]
+        return self._arr[indices]
 
     def __setitem__(self, key, value):
         # Sort given indices to the appropriate axes
@@ -84,25 +81,25 @@ class CellArray():
             key = tuple([key])
         indices = self._convert_keys_to_index(key)
 
-        self._xarr.values[indices] = value
+        self._arr[indices] = value
 
     def __str__(self):
-        return self._xarr.__str__()
+        return self._arr.__str__()
 
     @property
     def shape(self):
-        return self._xarr.shape
+        return self._arr.shape
 
     @property
     def ndim(self):
-        return self._xarr.ndim
+        return self._arr.ndim
 
     def _getitem_w_idx(self, idx):
         """
         Used by CustomSet to index CustomArray w/o recalculating
         the indices each time
         """
-        return self._xarr.values[idx]
+        return self._arr[idx]
 
     def _convert_keys_to_index(self, key) -> Tuple[(int, slice)]:
         """
@@ -126,8 +123,9 @@ class CellArray():
         # Get dimensions for the keys
         # Five dimensions possible
         indices = [slice(None)] * len(self.coords)
-        cell_idx = self._dim_idxs['cell']
-        frame_idx = self._dim_idxs['frame']
+        # TODO: I feel like names shouldn't be hard-coded
+        cell_idx = self._dim_idxs['cells']
+        frame_idx = self._dim_idxs['frames']
         seen_int = 0  # This will be used to separate cells and frames
         # Used to check slice types
         i_type = (int, type(None))
@@ -209,7 +207,7 @@ class CellArray():
         self._dim_idxs = {k: n for n, k in enumerate(coords.keys())}
 
         # Check for duplicate keys (allowed in cell and frame)
-        to_check = ['region', 'channel', 'metric']
+        to_check = ['regions', 'channels', 'metrics']
         all_poss = [sl for l in [coords[t] for t in to_check] for sl in l]
         if len(all_poss) != len(set(all_poss)):
             raise KeyError(f'All coordinates in dimensions {to_check} must be '
@@ -217,11 +215,13 @@ class CellArray():
 
         # Match keys and coordinates
         self._key_dim_pairs = {
-            a: [k for k, v in coords.items() if a in tuple(v)][0] for a in all_poss
+            a: [k for k, v in coords.items() if a in tuple(v)][0]
+            for a in all_poss
         }
-        # NOTE: Not sure I will need this one, could just use xarr internals
+        # NOTE: Not sure I will need this one
         self._key_coord_pairs = {
-            a: [v.index(a) for k, v in coords.items() if a in tuple(v)][0] for a in all_poss
+            a: [v.index(a) for k, v in coords.items() if a in tuple(v)][0]
+            for a in all_poss
         }
 
 
