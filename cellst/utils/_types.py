@@ -237,12 +237,14 @@ class PositionArray():
     __slots__ = ('name', 'attrs', 'sites')
 
     def __init__(self,
-                 arrays: Collection = None,
+                 arrays: Collection[CellArray] = None,
                  name: str = None,
                  attrs: dict = None,
                  **kwargs
                  ) -> None:
         """
+        TODO:
+            - Will input dimensions ever need to be padded?
         """
         # Save some values
         self.name = name
@@ -278,14 +280,61 @@ class PositionArray():
                 key = tuple([key])
             indices = tuple(self.sites.values())[0]._convert_keys_to_index(key)
 
-            # TODO: Makes more sense for this to return a dictionary
-            return [v._getitem_w_idx(indices) for v in self.sites.values()]
+            # TODO: Should this return a dictionary or list/tuple?
+            return {k: v._getitem_w_idx(indices)
+                    for k, v in self.sites.items()}
+            # return [v._getitem_w_idx(indices) for v in self.sites.values()]
 
     def __len__(self):
         return len(self.sites)
 
     def __str__(self):
         return str(self.sites)
+
+    def save(self, path: str) -> None:
+        """
+        Saves all the CellArrays in PositionArray
+        to an hdf5 file.
+
+        TODO:
+            - Add checking for path and overwrite options
+        """
+        f = h5py.File(path, 'w')
+        for key, val in self.sites.items():
+            # Array data stored as a dataset
+            f.create_dataset(key, data=val._arr)
+
+            # Axis names and coords stored as attributes
+            for coord in val.coords:
+                f[key].attrs[coord] = val.coords[coord]
+
+        f.close()
+
+    @classmethod
+    def load(cls, path: str) -> None:
+        """
+        Load a structured arrary and convert to sites dict.
+
+        TODO:
+            - Add a check that path exists
+        """
+        f = h5py.File(path, "r")
+        return cls._build_from_file(f)
+
+    @staticmethod
+    def _build_from_file(f: h5py.File) -> 'PositionArray':
+        """
+        Given an hdf5 file, returns a PositionArray instance
+        """
+        pos = PositionArray()
+        for key in f:
+            # Attrs define the coords and axes
+            _arr = CellArray(**f[key].attrs, name=key)
+            # f[key] holds the actual array data
+            _arr[:] = f[key]
+            pos[key] = _arr
+
+        return pos
 
 
 # Define custom types to make output tracking esier
