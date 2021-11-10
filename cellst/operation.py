@@ -322,6 +322,7 @@ class BaseExtract(Operation):
         kwargs = dict(channels=channels, regions=regions, lineages=lineages,
                       condition=condition)
         # Automatically add extract_data_from_image
+        # Name is always None, because gets saved in Pipeline as output
         self.functions = [tuple([self.extract_data_from_image, Arr, [], kwargs, None])]
         self.func_index = {i: f for i, f in enumerate(self.functions)}
 
@@ -340,7 +341,8 @@ class BaseExtract(Operation):
         """
         kwargs = dict(channels=channels, regions=regions,
                       condition=condition, lineages=lineages)
-        return self.run_operation(images, masks, tracks, [], **kwargs)
+        return self.extract_data_from_image(images, masks, tracks,
+                                            **kwargs)
 
     def add_function_to_operation(self,
                                   func: str,
@@ -367,7 +369,7 @@ class BaseExtract(Operation):
                       masks: Collection[np.ndarray] = [],
                       tracks: Collection[np.ndarray] = [],
                       arrays: Collection[np.ndarray] = [],
-                      *args, **kwargs
+                      **kwargs
                       ) -> (Image, Mask, Track, Arr):
         """
         Extract function is different because it expects to get a list
@@ -378,11 +380,14 @@ class BaseExtract(Operation):
         for arrays, therefore those are not passed, but they must be input
         """
         # Default is to return the input if no function is run
-        inputs = [images, masks, tracks, arrays]
+        inputs = [images, masks, tracks]
         result = arrays
 
+        # Get inputs that were saved during __init__
+        _, expec_type, args, kwargs, name = self.functions[0]
+
         # Arrays are not passed to the function
-        result = self.extract_data_from_image(*inputs[:-1], *args, **kwargs)
+        result = self.extract_data_from_image(*inputs, *args, **kwargs)
         self.save_arrays[self.output] = self.output, result
 
         return result
