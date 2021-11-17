@@ -8,6 +8,8 @@ import SimpleITK as sitk
 
 from cellst.utils._types import Image, Mask, Track, Arr
 
+# TODO: Add label by parent function
+
 
 def remove_small_holes_keep_labels(image: np.ndarray,
                                    size: float
@@ -56,7 +58,8 @@ def track_to_mask(track: Track, idx: np.ndarray = None) -> Mask:
     ind = distance_transform_edt(idx,
                                  return_distances=False,
                                  return_indices=True)
-    return track[tuple(ind)]
+    # Cast to int to simplify indexing
+    return track[tuple(ind)].astype(np.uint16)
 
 
 def parents_from_track(track: Track) -> Dict[int, int]:
@@ -67,14 +70,17 @@ def parents_from_track(track: Track) -> Dict[int, int]:
     div_mask = (track * -1) > 0
     mask = track_to_mask(track, div_mask)
 
-    return dict(zip(mask[div_mask], track[div_mask]))
+    # Ensure all keys and values will be int for indexing
+    if track.dtype not in (np.int16, np.uint16):
+        track = track.astype(np.int16)
+
+    return dict(zip(mask[div_mask], track[div_mask] * -1))
 
 
 def track_to_lineage(track: Track) -> np.ndarray:
     """
     Given a set of track images, reconstruct all the lineages
     """
-
     # Use cells to fill in info in lineage
     cells = np.unique(track[track > 0])
 

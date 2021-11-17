@@ -1,8 +1,12 @@
-from typing import Collection, Tuple
+from typing import Collection, Tuple, Callable
 
 import numpy as np
+from skimage.measure import regionprops_table
 
 from cellst.utils._types import Image, Mask, Track, Arr, INPT_NAME_IDX
+# TODO: For whole project. Probably move towards using modules more.
+#       i.e. import cellst.utils.operation_utils as op
+from cellst.utils.operation_utils import track_to_mask, parents_from_track, lineage_to_track
 
 
 class Operation():
@@ -281,7 +285,7 @@ class BaseExtract(Operation):
                  lineages: Collection[np.ndarray] = [],
                  condition: str = None,
                  output: str = 'data_frame',
-                 save: bool = False,
+                 save: bool = True,
                  _output_id: Tuple[str] = None
                  ) -> None:
         """
@@ -333,16 +337,95 @@ class BaseExtract(Operation):
                  channels: Collection[str] = [],
                  regions: Collection[str] = [],
                  lineages: Collection[np.ndarray] = [],
-                 condition: str = None,
+                 condition: str = None
                  ) -> Arr:
         """
         This directly calls extract_data_from_image
         instead of using run_operation
         """
+
         kwargs = dict(channels=channels, regions=regions,
                       condition=condition, lineages=lineages)
         return self.extract_data_from_image(images, masks, tracks,
                                             **kwargs)
+
+    def _extract_data_with_track(self,
+                                 image: Image,
+                                 track: Track,
+                                 metrics: Collection[str],
+                                 cell_index: dict = None
+                                 ) -> np.ndarray:
+        """
+        Function
+
+        Hard rule: parent must appear sequentially BEFORE daughter.
+                   even the same frame won't work I think. But that
+                   shouldn't be that hard to enforce
+
+        NOTE: Final data structure has frames in last axis. In this
+              function, frames is in first axis for faster np functions.
+              np.moveaxis at the end to get correct structure. This is
+              faster than writing to the last axis.
+        """
+        '''NOTE: cell_index should maybe be required arg. If calculated
+        here, all other tracks in data set have to match or data will
+        get overwritten / raise IndexError.'''
+        if cell_index is None:
+            cells = np.unique(track[track > 0])
+            cell_index = {int(a): i for i, a in enumerate(cells)}
+
+        # TODO: I think metrics and cells can come from props_list
+        out = np.empty((image.shape[0], len(metrics), len(cell_index)))
+        out[:] = np.nan
+
+        # Get information about cell division
+        daughter_to_parent = parents_from_track(track)
+        mask = track_to_mask(track)
+
+        for frame in range(image.shape[0]):
+            # Extract metrics from each region in frame
+            rp = regionprops_table(mask[frame], image[frame],
+                                   properties=metrics)
+            # frame_data.shape is (len(metrics), len(cells))
+            frame_data = np.row_stack(tuple(rp.values()))
+
+            # Label is in the first position
+            for n, lab in enumerate(frame_data[0, :]):
+                # Cast to int for indexing
+                lab = int(lab)
+
+                if lab in daughter_to_parent:
+                    # Get parent label
+                    # NOTE: Could this ever raise a KeyError?
+                    par = daughter_to_parent[lab]
+
+                    # Copy parent trace to location of daughter trace
+                    # Everything after frame is overwritten by daughter trace
+                    # TODO: Need to add saving of division frame and parent ID to array
+                    out[:, :, cell_index[lab]] = out[:, :, cell_index[par]]
+
+                # Save frame data
+                out[frame, :, cell_index[lab]] = frame_data[:, n]
+
+        return np.moveaxis(out, 0, -1)
+
+    def _extract_data_with_mask(self,
+                                image: Image,
+                                mask: Mask,
+                                metrics: Collection[str],
+                                cell_index: dict = None,
+                                lineage: np.ndarray = None,
+                                ) -> np.ndarray:
+        """
+        TODO: Is this function needed at all?
+        """
+        if lineage is None:
+            track = lineage_to_track(mask, lineage)
+        else:
+            track = mask
+
+        return self._extract_data_with_track(image, track,
+                                             metrics, cell_index)
 
     def add_function_to_operation(self,
                                   func: str,
@@ -381,7 +464,6 @@ class BaseExtract(Operation):
         """
         # Default is to return the input if no function is run
         inputs = [images, masks, tracks]
-        result = arrays
 
         # Get inputs that were saved during __init__
         _, expec_type, args, kwargs, name = self.functions[0]
