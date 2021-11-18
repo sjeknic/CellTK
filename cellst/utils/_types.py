@@ -2,7 +2,6 @@ import h5py
 from typing import NewType, Collection, Tuple, Callable
 
 import numpy as np
-import xarray as xr
 
 
 class CellArray():
@@ -26,7 +25,7 @@ class CellArray():
                  metrics: Collection[str] = ['label'],
                  cells: Collection[int] = [0],
                  frames: Collection[int] = [0],
-                 name: str = None,
+                 name: str = 'default',
                  attrs: dict = None,
                  **kwargs
                  ) -> None:
@@ -93,6 +92,50 @@ class CellArray():
     @property
     def ndim(self):
         return self._arr.ndim
+
+    @property
+    def dtype(self):
+        return self._arr.dtype
+
+    def save(self, path: str) -> None:
+        """
+        Saves CellArray to an hdf5 file.
+
+        TODO:
+            - Add checking for path and overwrite options
+        """
+        f = h5py.File(path, 'w')
+        f.create_dataset(self.name, data=self._arr)
+        for coord in self.coords:
+            # Axis names and coords stored as attributes
+            f[self.name].attrs[coord] = self.coords[coord]
+
+        f.close()
+
+    @classmethod
+    def load(cls, path: str) -> None:
+        """
+        Load a structured arrary and convert to sites dict.
+
+        TODO:
+            - Add a check that path exists
+        """
+        f = h5py.File(path, "r")
+        return cls._build_from_file(f)
+
+    @staticmethod
+    def _build_from_file(f: h5py.File) -> 'CellArray':
+        """
+        Given an hdf5 file, returns a CellArray instance
+        """
+        if len(f) != 1:
+            raise TypeError('Did not understand hdf5 file format.')
+
+        for key in f:
+            _arr = CellArray(**f[key].attrs, name=key)
+            _arr[:] = f[key]
+
+        return _arr
 
     def _getitem_w_idx(self, idx):
         """
