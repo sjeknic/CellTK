@@ -1,6 +1,7 @@
-import h5py
-from typing import NewType, Collection, Tuple, Callable
+import warnings
+from typing import NewType, Collection, Tuple, Callable, Dict
 
+import h5py
 import numpy as np
 
 
@@ -17,7 +18,7 @@ class CellArray():
         - Add ability to filter cells based on arbitrary criteria.
     """
     __slots__ = ('_arr', 'name', 'attrs', 'coords', '_arr_dim', '_dim_idxs',
-                 '_key_dim_pairs', '_key_coord_pairs')
+                 '_key_dim_pairs', '_key_coord_pairs', '_nan_mask')
 
     def __init__(self,
                  regions: Collection[str] = ['nuc'],
@@ -38,9 +39,8 @@ class CellArray():
               exist when the CustomArray is made. If they are __getitem__ first has to call a function to
               sort that out, and if not, that function could just be a pass through function.
             - Reorder if-statements for speed in key_coord functions.
-            - Add option to return nans, for now default is to not return them
             - Add ability to save time steps
-            - Add ability to expand dimensions
+            - Add ability to expand dimensions and add new derived metrics
         """
         # Convert inputs to tuple
         regions = tuple(regions)
@@ -52,6 +52,7 @@ class CellArray():
         # Save some values
         self.name = name
         self.attrs = attrs
+        self._nan_mask = {}
 
         # Set _arr_dim based on input values - this can't change
         self._arr_dim = (len(regions), len(channels), len(metrics),
@@ -208,8 +209,8 @@ class CellArray():
                         raise KeyError(f'Some of {k.start, k.stop} were not found '
                                        'in any dimension.')
                     if (start_dim is not None and
-                       stop_dim is not None and
-                       start_dim != stop_dim):
+                        stop_dim is not None and
+                        start_dim != stop_dim):
                         raise IndexError(f"Dimensions don't match: {k.start} is in "
                                          f"{start_dim}, {k.stop} is in {stop_dim}.")
 
@@ -266,6 +267,99 @@ class CellArray():
             a: [v.index(a) for k, v in coords.items() if a in tuple(v)][0]
             for a in all_poss
         }
+
+    def filter_cells(self,
+                     mask: np.ndarray = None,
+                     key: str = None,
+                     delete: bool = True,
+                     *args, **kwargs
+                     ) -> np.ndarray:
+        """
+        Either uses an arbitrary mask or a saved mask (key) to
+        filter the data. If delete, the underlying structure
+        is changed, otherwise, the data are only returned.
+
+        TODO:
+            - Add option to return a new CellArray instead of
+              an np.ndarray
+        """
+        if mask is None and key is not None:
+            mask = self._nan_mask[key]
+        elif mask is None and key is None:
+            warnings.warn('Did not get mask or key. Nothing done.',
+                          UserWarning)
+            return
+
+        # Check that mask is bool/int
+        if mask.dtype != bool and mask.dtype != int:
+            raise TypeError(f'Mask must be bool or int. Got {mask.dtype}')
+
+        # Make sure mask is the correct dimension
+        mask = self.reshape_mask(mask)
+
+        if delete:
+            old_dims = self._arr_dim
+            # Delete items from self._arr and any existing masks
+            self._arr = self._arr[mask]
+            self._arr_dim = self._arr.shape
+            for k, v in self._nan_mask.items():
+                self._nan_mask[k] = v[mask]
+
+            # Warn about indices if any of these changed
+            # TODO: Changed dimensions could be recalculated
+            to_check = ['regions', 'channels', 'metrics']
+            for tc in to_check:
+                dim = self._dim_idxs[tc]
+                if old_dims[dim] != self._arr_dim[dim]:
+                    warnings.warn(f'Reshaped {tc} axis. String indexing '
+                                  'will likely not work.', UserWarning)
+            return self._arr
+
+        return self._arr[mask]
+
+    def reshape_mask(self, mask: np.ndarray) -> np.ndarray:
+        """
+        Takes in a 1D, 2D, or 5D mask and casts to tuple of
+        5 dimensional indices
+
+        Assumes that the only thing being filtered is cells
+        """
+        # new_mask = np.ones(self.shape).astype(bool)
+        if mask.ndim == 1:
+            # Assume it applies to cell axis
+            # new_mask[..., ~mask, :] = False
+            return tuple([Ellipsis, mask, slice(None)])
+        elif mask.ndim == 2:
+            # Assume it applies to cell and frame axes
+            # new_mask[..., ~mask] = False
+            return tuple([Ellipsis, mask])
+        elif mask.ndim == 5:
+            # TODO: Not sure how to handle this or if it
+            #       is even possible to index w/o losing shape
+            return mask
+        else:
+            raise ValueError('Dimensions of mask must be 1, 2, or 5. '
+                             f'Got {mask.ndim}.')
+
+    def remove_parents(self,
+                       parent_daughter: Dict,
+                       cell_index: Dict
+                       ) -> np.ndarray:
+        """
+        Returns 1D boolean mask to remove parent cells
+
+        TODO:
+            - Add option to create cell_index from track
+        """
+        # Find indices of all parents along cell axis
+        parents = np.unique(tuple(parent_daughter.values()))
+        parent_idx = [cell_index[p] for p in parents]
+
+        # Make the mask
+        mask = np.ones(len(cell_index)).astype(bool)
+        mask[parent_idx] = False
+
+        return mask
 
 
 class PositionArray():

@@ -1,4 +1,5 @@
-from typing import Collection, Tuple, Callable
+from typing import Collection, Tuple
+import warnings
 
 import numpy as np
 from skimage.measure import regionprops_table
@@ -272,6 +273,7 @@ class BaseExtract(Operation):
                 # 'equivalent_diameter_area', 'centroid_weighted',
                 'mean_intensity',
                 'orientation', 'perimeter', 'solidity',
+                # TODO: centroid metrics and bbox could probably be included as scalars
                 # 'bbox', 'centroid', 'coords'  # require multiple scalars
                 ]
     _extra_properties = []
@@ -283,7 +285,8 @@ class BaseExtract(Operation):
                  channels: Collection[str] = [],
                  regions: Collection[str] = [],
                  lineages: Collection[np.ndarray] = [],
-                 condition: str = None,
+                 condition: str = '',
+                 remove_parent: bool = True,
                  output: str = 'data_frame',
                  save: bool = True,
                  _output_id: Tuple[str] = None
@@ -323,8 +326,13 @@ class BaseExtract(Operation):
         if len(regions) == 0:
             regions = input_masks
 
+        if condition is None or condition == '':
+            warnings.warn('Name of CellArray cannot be None or empty string.',
+                          UserWarning)
+            condition = 'default'
+
         kwargs = dict(channels=channels, regions=regions, lineages=lineages,
-                      condition=condition)
+                      condition=condition, remove_parent=remove_parent)
         # Automatically add extract_data_from_image
         # Name is always None, because gets saved in Pipeline as output
         self.functions = [tuple([self.extract_data_from_image, Arr, [], kwargs, None])]
@@ -374,13 +382,14 @@ class BaseExtract(Operation):
             cells = np.unique(track[track > 0])
             cell_index = {int(a): i for i, a in enumerate(cells)}
 
-        # TODO: I think metrics and cells can come from props_list
-        out = np.empty((image.shape[0], len(metrics), len(cell_index)))
-        out[:] = np.nan
-
         # Get information about cell division
         daughter_to_parent = parents_from_track(track)
         mask = track_to_mask(track)
+
+        # Build output
+        out = np.empty((image.shape[0], len(metrics), len(cell_index)))
+        # TODO: Add option to use different pad
+        out[:] = np.nan
 
         for frame in range(image.shape[0]):
             # Extract metrics from each region in frame

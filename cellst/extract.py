@@ -5,7 +5,7 @@ import numpy as np
 
 from cellst.operation import BaseExtract
 from cellst.utils._types import Image, Mask, Track, Arr, CellArray
-from cellst.utils.operation_utils import lineage_to_track
+from cellst.utils.operation_utils import lineage_to_track, parents_from_track
 
 
 class Extract(BaseExtract):
@@ -16,7 +16,9 @@ class Extract(BaseExtract):
                                 channels: Collection[str] = [],
                                 regions: Collection[str] = [],
                                 lineages: Collection[np.ndarray] = [],
-                                condition: str = None
+                                condition: str = 'default',
+                                remove_parent: bool = True,
+                                parent_track: int = 0
                                 ) -> Arr:
         """
         ax 0 - cell locations (nuc, cyto, population, etc.)
@@ -24,6 +26,16 @@ class Extract(BaseExtract):
         ax 2 - metrics (median_int, etc.)
         ax 3 - cells
         ax 4 - frames
+
+        Args:
+            - image, masks, tracks = self-explanatory
+            - channels - names associated with images
+            - regions - names associated with tracks
+            - lineages - if masks are provided
+            - condition - name of dataframe
+            - remove_parent - if true, use a track to connect par_daught
+                              and remove parents
+            - parent_track - if remove_parent, track to use for lineage info
 
         NOTE: Extract takes in all inputs, so no need for decorator
         NOTE: Inputs are optional so that __call__ can use either mask
@@ -81,17 +93,28 @@ class Extract(BaseExtract):
         frames = range(max([i.shape[0] for i in images]))
 
         # Initialize data structure
-        data = CellArray(regions, channels, metrics, cells, frames,
-                         name=condition)
+        array = CellArray(regions, channels, metrics, cells, frames,
+                          name=condition)
 
         # Extract data for all channels and regions individually
         for c_idx, cnl in enumerate(channels):
             for r_idx, rgn in enumerate(regions):
-                cnl_rgn_data = self._extract_data_with_track(images[c_idx],
-                                                             tracks[r_idx],
-                                                             metrics,
-                                                             cell_index)
-            data[rgn, cnl, :, :, :] = cnl_rgn_data
+                cr_data = self._extract_data_with_track(images[c_idx],
+                                                        tracks_to_use[r_idx],
+                                                        metrics,
+                                                        cell_index)
+            array[r_idx, c_idx, :, :, :] = cr_data
+
+        if remove_parent:
+            # Get parent information from a single track
+            parent_track = tracks[parent_track]
+            parent_lookup = parents_from_track(parent_track)
+
+            # Build parent mask
+            mask = array.remove_parents(parent_lookup, cell_index)
+
+            # Remove cells
+            array.filter_cells(mask, delete=True)
 
         # Does not need to return type to Extract.run_operation
-        return data
+        return array
