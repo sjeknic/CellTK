@@ -239,6 +239,33 @@ class CellArray():
                     seen_int += 1
                 else:
                     raise ValueError('Max number of integer indices is 2.')
+
+            elif isinstance(k, (tuple, list, np.ndarray)):
+                # Select arbitrary indices in a single axis (i.e. multiple metrics)
+                # Save all values and idxs
+                new = []
+                idx = []
+                for item in k:
+                    # Treat individual items as we would above
+                    if isinstance(item, str):
+                        new.append(self._key_coord_pairs[item])
+                        idx.append(self._dim_idxs[self._key_dim_pairs[item]])
+                    elif isinstance(item, int):
+                        new.append(item)
+                    else:
+                        raise ValueError(f'Did not understand key {item} in {k}.')
+
+                # Check that we aren't trying to index multiple axes
+                idx = np.unique(idx)
+                if len(idx) == 0:
+                    idx = k_idx
+                elif len(idx) > 1:
+                    raise IndexError(f'Indices in {k} map to multiple axes.')
+                else:
+                    idx = idx[0]
+
+                indices[idx] = np.array(new, dtype=int)
+
             else:
                 raise ValueError(f'Indices must be int, str, or slice. Got {type(k)}.')
 
