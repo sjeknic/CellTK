@@ -53,7 +53,7 @@ class Extract(BaseExtract):
             # Uses tracks if provided and skips masks
             tracks_to_use = tracks
         elif len(masks) != 0:
-            tracks_to_use == masks
+            tracks_to_use = masks
             # Check that sufficient lineages are provided
             if len(lineages) == 0:
                 warnings.warn('Got mask but not lineage file. No cell division'
@@ -88,7 +88,7 @@ class Extract(BaseExtract):
             metrics.insert(0, 'label')
 
         # Get unique cell indexes and the number of frames
-        cells = np.unique(np.concatenate([t[t > 0] for t in tracks]))
+        cells = np.unique(np.concatenate([t[t > 0] for t in tracks_to_use]))
         cell_index = {int(a): i for i, a in enumerate(cells)}
         frames = range(max([i.shape[0] for i in images]))
 
@@ -107,7 +107,7 @@ class Extract(BaseExtract):
 
         if remove_parent:
             # Get parent information from a single track
-            parent_track = tracks[parent_track]
+            parent_track = tracks_to_use[parent_track]
             parent_lookup = parents_from_track(parent_track)
 
             # Build parent mask
