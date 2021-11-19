@@ -4,6 +4,8 @@ from typing import NewType, Collection, Tuple, Callable, Dict
 import h5py
 import numpy as np
 
+import cellst.utils.filter_utils as filt
+
 
 class CellArray():
     """
@@ -155,6 +157,10 @@ class CellArray():
 
         Returns:
             tuple(slices)
+
+        NOTE: integer indices are best provided last. If they are
+              provided first, they will possibly get overwritten if
+              too few keys were provided.
 
         TODO:
             - Add handling of Ellipsis in key
@@ -310,6 +316,7 @@ class CellArray():
             - Add option to return a new CellArray instead of
               an np.ndarray
         """
+        # If key is provided, look for saved mask
         if mask is None and key is not None:
             mask = self._nan_mask[key]
         elif mask is None and key is None:
@@ -322,44 +329,45 @@ class CellArray():
             raise TypeError(f'Mask must be bool or int. Got {mask.dtype}')
 
         # Make sure mask is the correct dimension
-        mask = self.reshape_mask(mask)
+        indices = self.reshape_mask(mask)
 
         if delete:
-            old_dims = self._arr_dim
             # Delete items from self._arr and any existing masks
-            self._arr = self._arr[mask]
+            self._arr = self._arr[indices]
             self._arr_dim = self._arr.shape
             for k, v in self._nan_mask.items():
-                self._nan_mask[k] = v[mask]
+                self._nan_mask[k] = v[indices]
 
-            # Warn about indices if any of these changed
-            # TODO: Changed dimensions could be recalculated
-            to_check = ['regions', 'channels', 'metrics']
-            for tc in to_check:
-                dim = self._dim_idxs[tc]
-                if old_dims[dim] != self._arr_dim[dim]:
-                    warnings.warn(f'Reshaped {tc} axis. String indexing '
-                                  'will likely not work.', UserWarning)
+            # Recalculate the cell coords
+            # TODO: Should there be a check that dimensions are equal?
+            if mask.ndim == 2:
+                mask = mask.any(1)
+            self.coords['cells'] = tuple([
+                cell for cell, keep in zip(self.coords['cells'], mask)
+                if keep])
+
             return self._arr
 
         return self._arr[mask]
 
-    def reshape_mask(self, mask: np.ndarray) -> np.ndarray:
+    def reshape_mask(self,
+                     mask: np.ndarray
+                     ) -> Tuple[slice, type(Ellipsis), np.ndarray]:
         """
         Takes in a 1D, 2D, or 5D mask and casts to tuple of
-        5 dimensional indices
+        5 dimensional indices. Use this to apply a 1D mask
+        to self._arr.
 
-        Assumes that the only thing being filtered is cells
+        Assumes that the only thing being filtered is cells.
         """
         # new_mask = np.ones(self.shape).astype(bool)
         if mask.ndim == 1:
             # Assume it applies to cell axis
-            # new_mask[..., ~mask, :] = False
             return tuple([Ellipsis, mask, slice(None)])
         elif mask.ndim == 2:
             # Assume it applies to cell and frame axes
-            # new_mask[..., ~mask] = False
-            return tuple([Ellipsis, mask])
+            # Note sure that this makes sense
+            return tuple([Ellipsis, mask.any(1), slice(None)])
         elif mask.ndim == 5:
             # TODO: Not sure how to handle this or if it
             #       is even possible to index w/o losing shape
@@ -387,6 +395,48 @@ class CellArray():
         mask[parent_idx] = False
 
         return mask
+
+    def generate_mask(self,
+                      function: [Callable, str],
+                      metric: str,
+                      region: [str, int] = 0,
+                      channel: [str, int] = 0,
+                      key: str = None,
+                      *args, **kwargs
+                      ) -> np.ndarray:
+        """
+        I want this function to be able to generate arbitrary
+        masks from some default functions
+        i.e. percentiles, abs_val, etc..
+        """
+        # Format inputs to the correct type
+        if isinstance(region, int):
+            region = self.coords['regions'][region]
+        if isinstance(channel, int):
+            channel = self.coords['channels'][channel]
+
+        # Extract data for a single metric
+        vals = self[region, channel, metric, :, :]
+
+        if isinstance(function, Callable):
+            # Call user function to get mask
+            mask = function(vals, *args, **kwargs)
+        elif isinstance(function, str):
+            # Else mask should come from the filter utils
+            try:
+                mask = getattr(filt, function)(vals, *args, **kwargs)
+            except AttributeError:
+                raise AttributeError('Did not understand filtering '
+                                     f'function {function}.')
+
+        if key is not None:
+            # Save the mask if key is given
+            self._nan_mask[key] = mask
+
+        return mask
+
+    def get_mask(self, key: str) -> np.ndarray:
+        return self._nan_mask[key]
 
 
 class PositionArray():
