@@ -14,10 +14,6 @@ class CellArray():
     ax 2 - metrics (median_int, etc.)
     ax 3 - cells
     ax 4 - frames
-
-    TODO:
-        - Add ability to save file
-        - Add ability to filter cells based on arbitrary criteria.
     """
     __slots__ = ('_arr', 'name', 'attrs', 'coords', '_arr_dim', '_dim_idxs',
                  '_key_dim_pairs', '_key_coord_pairs', '_nan_mask')
@@ -301,6 +297,32 @@ class CellArray():
             for a in all_poss
         }
 
+    def add_metric_slots(self, name: Collection[str]) -> None:
+        """
+        This needs to expand self._arr along the metric axis
+        to make room for an additional metric
+        """
+        # Format inputs
+        if isinstance(name, str):
+            name = [name]
+
+        # Get dimensions and set the metric dimension to 1
+        new_dim = list(self._arr_dim)
+        new_dim[self._dim_idxs['metrics']] = len(name)
+
+        # Concatenate a new array on the metric axis
+        new_arr = np.empty(new_dim).astype(float)
+        new_arr[:] = np.nan
+        self._arr = np.concatenate((self._arr, new_arr),
+                                   axis=self._dim_idxs['metrics'])
+
+        # Update all the necessary attributes
+        self._arr_dim = self._arr.shape
+        self.coords.update(dict(metrics=tuple([*self.coords['metrics'], *name])))
+
+        # Recalculate the coords
+        self._make_key_coord_pairs(self.coords)
+
     def filter_cells(self,
                      mask: np.ndarray = None,
                      key: str = None,
@@ -444,8 +466,7 @@ class PositionArray():
     Add Typing hints when the imports are fixed
 
     TODO:
-        - Add ability to save all Arrays in single file
-        - Will need to pad arrays with different number of cells with np.nan
+        - Add ability to filter all CellArrays
     """
 
     __slots__ = ('name', 'attrs', 'sites')
