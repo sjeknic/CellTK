@@ -1,9 +1,10 @@
-from typing import Collection, Tuple
+from typing import Collection, Tuple, Callable
 import warnings
 
 import numpy as np
 from skimage.measure import regionprops_table
 
+from cellst.utils.utils import unique_name
 from cellst.utils._types import Image, Mask, Track, Arr, INPT_NAME_IDX
 # TODO: For whole project. Probably move towards using modules more.
 #       i.e. import cellst.utils.operation_utils as op
@@ -268,6 +269,24 @@ class BaseExtract(Operation):
     __name__ = 'Extract'
     _input_type = (Image, Mask, Track)
     _output_type = Arr
+    # This is directly from skimage.regionprops
+    _possible_metrics = ('area', 'bbox', 'bbox_area', 'centroid',
+                         'convex_area', 'convex_image', 'coords',
+                         'eccentricity', 'equivalent_diameter',
+                         'euler_number', 'extent',
+                         'feret_diameter_max', 'filled_area',
+                         'filled_image', 'image',
+                         'inertia_tensor', 'inertia_tensor_eigvals',
+                         'intensity_image', 'label', 'local_centroid',
+                         'major_axis_length', 'max_intensity',
+                         'mean_intensity', 'min_intensity',
+                         'minor_axis_length', 'moments',
+                         'moments_central', 'moments_hu',
+                         'moments_normalized', 'orientation', 'perimeter',
+                         'perimeter_crofton', 'slice', 'solidity',
+                         'weighted_centroid', 'weighted_local_centroid',
+                         'weighted_moments', 'weighted_moments_hu',
+                         'weighted_moments_normalized')
     # Label must always be first, even for user supplied metrics
     _metrics = ['label', 'area', 'convex_area',
                 # 'equivalent_diameter_area', 'centroid_weighted',
@@ -276,7 +295,24 @@ class BaseExtract(Operation):
                 # TODO: centroid metrics and bbox could probably be included as scalars
                 # 'bbox', 'centroid', 'coords'  # require multiple scalars
                 ]
-    _extra_properties = []
+    _extra_properties = {}
+
+    class EmptyProperty():
+        """
+        This class is to be used with skimage.regionprops_table.
+        Every extra property passed to regionprops_table must
+        have a unique name, however, I want to use several as a
+        placeholder, so that I can get the right size array, but fill
+        in the values later. So, this assigns a random __name__.
+        """
+        def __init__(self, *args) -> None:
+            rng = np.random.default_rng()
+            # Make it extremely unlikely to get the same int
+            self.__name__ = str(rng.integers(999999))
+
+        @staticmethod
+        def __call__(empty):
+            return np.nan
 
     def __init__(self,
                  input_images: Collection[str] = [],
@@ -296,8 +332,6 @@ class BaseExtract(Operation):
         with the images and masks they correspond to.
         TODO:
             - Clean up this whole function when it's working
-            - metrics needs to always start with label
-            - Raise warning that parent daughter connections will fail if missing
             - Condition should get passed to this function. Pipeline likely cannot because
               the same operation will be used for multiple Pipelines. But Orchestrator should
               be able to.
@@ -323,20 +357,30 @@ class BaseExtract(Operation):
         if len(channels) == 0:
             channels = input_images
 
+        # Prefer tracks for naming
         if len(regions) == 0:
-            regions = input_masks
+            if len(self.input_tracks) > 0:
+                regions = input_tracks
+            else:
+                regions = input_masks
 
+        # Name must be given
         if condition is None or condition == '':
             warnings.warn('Name of CellArray cannot be None or empty string.',
                           UserWarning)
             condition = 'default'
 
+        # These kwargs get passed to self.extract_data_from_image
         kwargs = dict(channels=channels, regions=regions, lineages=lineages,
                       condition=condition, remove_parent=remove_parent)
         # Automatically add extract_data_from_image
         # Name is always None, because gets saved in Pipeline as output
         self.functions = [tuple([self.extract_data_from_image, Arr, [], kwargs, None])]
         self.func_index = {i: f for i, f in enumerate(self.functions)}
+
+        # Add division_frame and parent_id
+        self._extra_properties.update(dict(division_frame=self.EmptyProperty(),
+                                           parent_id=self.EmptyProperty()))
 
     def __call__(self,
                  images: Collection[Image],
@@ -361,6 +405,7 @@ class BaseExtract(Operation):
                                  image: Image,
                                  track: Track,
                                  metrics: Collection[str],
+                                 extra_metrics: Collection[Callable],
                                  cell_index: dict = None
                                  ) -> np.ndarray:
         """
@@ -387,14 +432,16 @@ class BaseExtract(Operation):
         mask = track_to_mask(track)
 
         # Build output
-        out = np.empty((image.shape[0], len(metrics), len(cell_index)))
+        metric_len = len(metrics) + len(extra_metrics)
+        out = np.empty((image.shape[0], metric_len, len(cell_index)))
         # TODO: Add option to use different pad
         out[:] = np.nan
 
         for frame in range(image.shape[0]):
             # Extract metrics from each region in frame
             rp = regionprops_table(mask[frame], image[frame],
-                                   properties=metrics)
+                                   properties=metrics,
+                                   extra_properties=extra_metrics)
             # frame_data.shape is (len(metrics), len(cells))
             frame_data = np.row_stack(tuple(rp.values()))
 
@@ -418,23 +465,33 @@ class BaseExtract(Operation):
 
         return np.moveaxis(out, 0, -1)
 
-    def _extract_data_with_mask(self,
-                                image: Image,
-                                mask: Mask,
-                                metrics: Collection[str],
-                                cell_index: dict = None,
-                                lineage: np.ndarray = None,
-                                ) -> np.ndarray:
-        """
-        TODO: Is this function needed at all?
-        """
-        if lineage is None:
-            track = lineage_to_track(mask, lineage)
-        else:
-            track = mask
 
-        return self._extract_data_with_track(image, track,
-                                             metrics, cell_index)
+    def add_extra_metric(self, name: str, func: Callable = None) -> None:
+        """
+        Allows for adding custom metrics. If function is none, value will just
+        be nan.
+        """
+        if name in self._metrics:
+            warnings.warn(f'Metric {name} already exists.', UserWarning)
+        else:
+            if func is None: func = self.EmptyProperty()
+            self._extra_properties[name] = func
+
+    def set_metric_list(self, metrics: Collection[str]) -> None:
+        """
+        Adds metrics the user wants to pass to regionprops. Label will be made the
+        first argument by default.
+        """
+        # Check that skimage can handle the given metrics
+        allowed = [m for m in metrics if m in self._possible_metrics]
+        not_allowed = [m for m in metrics if m not in self._possible_metrics]
+
+        self._metrics = allowed
+
+        # Raise warning for the rest
+        if len(not_allowed) > 0:
+            warnings.warn(f'Metrics {[not_allowed]} are not supported by skimage. '
+                          'Use CellArray.add_extra_metric to add custom metrics.')
 
     def add_function_to_operation(self,
                                   func: str,

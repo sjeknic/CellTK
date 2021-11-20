@@ -78,14 +78,18 @@ class Extract(BaseExtract):
                           'Using default naming.', UserWarning)
             regions = [f'region{n}' for n in range(len(tracks_to_use))]
 
-        # TODO: Add handling of extra_properties
-        # Label must always be the first metric for easy indexing of cells
+        # Get all of the metrics and functions that will be run
         metrics = self._metrics
-        if 'label' not in metrics:
-            metrics.insert(0, 'label')
+        extra_names = list(self._extra_properties.keys())
+        extra_funcs = list(self._extra_properties.values())
+        all_measures = metrics + extra_names
+
+        # Label must always be the first metric for easy indexing of cells
+        if 'label' not in all_measures:
+            all_measures.insert(0, 'label')
         elif metrics[0] != 'label':
-            metrics.remove('label')
-            metrics.insert(0, 'label')
+            all_measures.remove('label')
+            all_measures.insert(0, 'label')
 
         # Get unique cell indexes and the number of frames
         cells = np.unique(np.concatenate([t[t > 0] for t in tracks_to_use]))
@@ -93,7 +97,7 @@ class Extract(BaseExtract):
         frames = range(max([i.shape[0] for i in images]))
 
         # Initialize data structure
-        array = CellArray(regions, channels, metrics, cells, frames,
+        array = CellArray(regions, channels, all_measures, cells, frames,
                           name=condition)
 
         # Extract data for all channels and regions individually
@@ -102,6 +106,7 @@ class Extract(BaseExtract):
                 cr_data = self._extract_data_with_track(images[c_idx],
                                                         tracks_to_use[r_idx],
                                                         metrics,
+                                                        extra_funcs,
                                                         cell_index)
             array[r_idx, c_idx, :, :, :] = cr_data
 
