@@ -4,11 +4,10 @@ import warnings
 import numpy as np
 from skimage.measure import regionprops_table
 
-from cellst.utils.utils import unique_name
 from cellst.utils._types import Image, Mask, Track, Arr, INPT_NAME_IDX
 # TODO: For whole project. Probably move towards using modules more.
 #       i.e. import cellst.utils.operation_utils as op
-from cellst.utils.operation_utils import track_to_mask, parents_from_track, lineage_to_track
+from cellst.utils.operation_utils import track_to_mask, parents_from_track
 
 
 class Operation():
@@ -431,9 +430,12 @@ class BaseExtract(Operation):
         daughter_to_parent = parents_from_track(track)
         mask = track_to_mask(track)
 
+        # Organize metrics and get indices for custom ones
+        all_metrics = metrics + list(self._extra_properties.keys())
+        metric_idx = {k: i for i, k in enumerate(all_metrics)}
+
         # Build output
-        metric_len = len(metrics) + len(extra_metrics)
-        out = np.empty((image.shape[0], metric_len, len(cell_index)))
+        out = np.empty((image.shape[0], len(all_metrics), len(cell_index)))
         # TODO: Add option to use different pad
         out[:] = np.nan
 
@@ -457,14 +459,23 @@ class BaseExtract(Operation):
 
                     # Copy parent trace to location of daughter trace
                     # Everything after frame is overwritten by daughter trace
-                    # TODO: Need to add saving of division frame and parent ID to array
                     out[:, :, cell_index[lab]] = out[:, :, cell_index[par]]
+
+                    # Add division data to frame_data before saving
+                    try:
+                        frame_data[metric_idx['division_frame'], n] = frame
+                    except KeyError:
+                        pass
+
+                    try:
+                        frame_data[metric_idx['parent_id'], n] = par
+                    except KeyError:
+                        pass
 
                 # Save frame data
                 out[frame, :, cell_index[lab]] = frame_data[:, n]
 
         return np.moveaxis(out, 0, -1)
-
 
     def add_extra_metric(self, name: str, func: Callable = None) -> None:
         """
