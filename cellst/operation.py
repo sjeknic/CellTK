@@ -1,4 +1,4 @@
-from typing import Collection, Tuple, Callable
+from typing import Collection, Tuple, Callable, List
 import warnings
 
 import numpy as np
@@ -269,31 +269,28 @@ class BaseExtract(Operation):
     _input_type = (Image, Mask, Track)
     _output_type = Arr
     # This is directly from skimage.regionprops
+    # Not included yet: convex_image, filled_image, image, inertia_tensor
+    #                   inertia_tensor_eigvals, local_centroid, intensity_image
+    #                   moments, moments_central, moments_hu, coords,
+    #                   moments_normalized, slice, weighted_centroid,
+    #                   weighted_local_centroid, weighted_moments,
+    #                   weighted_moments_hu, weighted_moments_normalized
     _possible_metrics = ('area', 'bbox', 'bbox_area', 'centroid',
-                         'convex_area', 'convex_image', 'coords',
+                         'convex_area',
                          'eccentricity', 'equivalent_diameter',
                          'euler_number', 'extent',
-                         'feret_diameter_max', 'filled_area',
-                         'filled_image', 'image',
-                         'inertia_tensor', 'inertia_tensor_eigvals',
-                         'intensity_image', 'label', 'local_centroid',
+                         'feret_diameter_max', 'filled_area', 'label',
                          'major_axis_length', 'max_intensity',
                          'mean_intensity', 'min_intensity',
-                         'minor_axis_length', 'moments',
-                         'moments_central', 'moments_hu',
-                         'moments_normalized', 'orientation', 'perimeter',
-                         'perimeter_crofton', 'slice', 'solidity',
-                         'weighted_centroid', 'weighted_local_centroid',
-                         'weighted_moments', 'weighted_moments_hu',
-                         'weighted_moments_normalized')
+                         'minor_axis_length', 'major_axis_length',
+                         'orientation', 'perimeter',
+                         'perimeter_crofton', 'solidity')
+
     # Label must always be first, even for user supplied metrics
-    _metrics = ['label', 'area', 'convex_area',
-                # 'equivalent_diameter_area', 'centroid_weighted',
-                'mean_intensity',
-                'orientation', 'perimeter', 'solidity',
-                # TODO: centroid metrics and bbox could probably be included as scalars
-                # 'bbox', 'centroid', 'coords'  # require multiple scalars
-                ]
+    _metrics = ['label', 'area', 'convex_area', 'filled_area', 'bbox',
+                'centroid', 'mean_intensity', 'max_intensity', 'min_intensity',
+                'minor_axis_length', 'major_axis_length',
+                'orientation', 'perimeter', 'solidity']
     _extra_properties = {}
 
     class EmptyProperty():
@@ -402,6 +399,23 @@ class BaseExtract(Operation):
         return self.extract_data_from_image(images, masks, tracks,
                                             **kwargs)
 
+    def _correct_metric_dim(self, met_list: List[str]) -> List[str]:
+        """
+        Adjust all measures for the presence of multi-scalar metrics
+        """
+        new_met_list = []
+        for m in met_list:
+            if m == 'bbox':
+                # bbox becomes bbox-1,...,bbox-4'
+                new_met_list.extend([f'bbox-{n}' for n in range(1, 5)])
+            elif m == 'centroid':
+                # centroid becomes centroid-1, centroid-2
+                new_met_list.extend([f'centroid-{n}' for n in range(1, 3)])
+            else:
+                new_met_list.append(m)
+
+        return new_met_list
+
     def _extract_data_with_track(self,
                                  image: Image,
                                  track: Track,
@@ -434,6 +448,7 @@ class BaseExtract(Operation):
 
         # Organize metrics and get indices for custom ones
         all_metrics = metrics + list(self._extra_properties.keys())
+        all_metrics = self._correct_metric_dim(all_metrics)
         metric_idx = {k: i for i, k in enumerate(all_metrics)}
 
         # Build output

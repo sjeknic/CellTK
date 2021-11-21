@@ -83,7 +83,7 @@ class Extract(BaseExtract):
         metrics = self._metrics
         extra_names = list(self._extra_properties.keys())
         extra_funcs = list(self._extra_properties.values())
-        all_measures = metrics + extra_names
+        all_measures = self._correct_metric_dim(metrics + extra_names)
 
         # Label must always be the first metric for easy indexing of cells
         if 'label' not in all_measures:
