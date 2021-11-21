@@ -469,7 +469,7 @@ class PositionArray():
         - Add ability to filter all CellArrays
     """
 
-    __slots__ = ('name', 'attrs', 'sites')
+    __slots__ = ('name', 'attrs', 'sites', '_all_masks')
 
     def __init__(self,
                  arrays: Collection[CellArray] = None,
@@ -486,8 +486,12 @@ class PositionArray():
         self.attrs = attrs
         self.sites = {}
 
+        # Save arrays if given
         if arrays is not None:
             [self.__setitem__(None, a) for a in arrays]
+
+        # Build dictionary for saving masks
+        self._all_masks = {k: {} for k in self.sites}
 
     def __setitem__(self, key=None, value=None):
 
@@ -555,6 +559,67 @@ class PositionArray():
         """
         f = h5py.File(path, "r")
         return cls._build_from_file(f)
+
+    def generate_mask(self,
+                      function: [Callable, str],
+                      metric: str,
+                      region: [str, int] = 0,
+                      channel: [str, int] = 0,
+                      key: str = None,
+                      *args, **kwargs
+                      ) -> np.ndarray:
+        """
+        Calls generate_mask for each CellArray in self.sites
+        """
+        # Build masks in each CellArray with the function
+        _masks = [v.generate_mask(function, metric, region,
+                                  channel, key, *args, **kwargs)
+                  for v in self.sites.values()]
+
+        # Save if needed
+        if key is not None:
+            self._all_masks[key] = _masks
+
+        return _masks
+
+    def filter_cells(self,
+                     mask: Collection[np.ndarray] = None,
+                     key: str = None,
+                     delete: bool = True,
+                     *args, **kwargs
+                     ) -> np.ndarray:
+        """
+        Either uses an arbitrary mask or a saved mask (key) to
+        filter the data. If delete, the underlying structure
+        is changed, otherwise, the data are only returned.
+
+        TODO:
+            - Add option to return a new CellArray instead of
+              an np.ndarray
+        """
+        # If key is provided, look for saved mask
+        if mask is None and key is not None:
+            mask = self._all_masks[key]
+        elif mask is None and key is None:
+            warnings.warn('Did not get mask or key. Nothing done.',
+                          UserWarning)
+            return
+
+        # Make sure enough lists are available
+        if isinstance(mask, np.ndarray):
+            mask = [mask]
+        # Lengthen mask list if needed
+        if len(mask) == 1:
+            mask = mask * len(self.sites)
+        elif len(mask) != len(self.sites):
+            raise ValueError(f'Have {len(self.sites)} sites and '
+                             f'{len(mask)} masks.')
+
+        # Mask type and dimension will be checked in CellArray
+        out = {site: arr.filter_cells(msk, key, delete, *args, **kwargs)
+               for msk, (site, arr) in zip(mask, self.sites.items())}
+
+        return out
 
     @staticmethod
     def _build_from_file(f: h5py.File) -> 'PositionArray':
