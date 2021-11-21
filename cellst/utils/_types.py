@@ -417,6 +417,22 @@ class Condition():
 
         return mask
 
+    def remove_short_traces(self, min_trace_length: int) -> np.ndarray:
+        """
+        Removes cells with less than min_trace_length non-nan values
+        """
+        mask = np.ones(self.shape[self._dim_idxs['cells']]).astype(bool)
+
+        # Count non-nans in each trace
+        # Label is always first metric
+        nans = ~np.isnan(self._arr[0, 0, 0])
+        counts = np.sum(nans, axis=1)
+
+        # Mask cells with too few values
+        mask[counts < min_trace_length] = False
+
+        return mask
+
     def generate_mask(self,
                       function: [Callable, str],
                       metric: str,

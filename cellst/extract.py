@@ -17,6 +17,7 @@ class Extract(BaseExtract):
                                 regions: Collection[str] = [],
                                 lineages: Collection[np.ndarray] = [],
                                 condition: str = 'default',
+                                min_trace_length: int = 0,
                                 remove_parent: bool = True,
                                 parent_track: int = 0
                                 ) -> Arr:
@@ -120,6 +121,10 @@ class Extract(BaseExtract):
 
             # Remove cells
             array.filter_cells(mask, delete=True)
+
+        # Remove short traces
+        mask = array.remove_short_traces(min_trace_length)
+        array.filter_cells(mask, delete=True)
 
         # Does not need to return type to Extract.run_operation
         return array
