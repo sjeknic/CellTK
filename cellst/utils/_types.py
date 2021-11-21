@@ -498,6 +498,9 @@ class PositionArray():
         # If no value is passed, nothing is done
         if value is None:
             return
+        elif not isinstance(value, CellArray):
+            raise TypeError('All values in PositionArray must be'
+                            f'type CellArray. Got {type(value)}.')
 
         # Get key from array or set increment
         if key is None:
@@ -529,6 +532,18 @@ class PositionArray():
 
     def __str__(self):
         return str(self.sites)
+
+    @property
+    def shape(self):
+        return {k: v.shape for k, v in self.sites.items()}
+
+    @property
+    def ndim(self):
+        return {k: v.ndim for k, v in self.sites.items()}
+
+    @property
+    def dtype(self):
+        return {k: v.dtype for k, v in self.sites.items()}
 
     def save(self, path: str) -> None:
         """
