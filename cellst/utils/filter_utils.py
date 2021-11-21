@@ -8,9 +8,10 @@ def _propagate_mask(mask: np.ndarray) -> np.ndarray:
     """
     For any cell with a single value masked, mask all values
     """
+
     if mask.ndim == 2:
         # If a single False is in a row, mark all False
-        mask[(~mask).any(1), :] = False
+        mask[np.logical_not(mask).any(1), :] = False
 
     return mask
 
@@ -40,7 +41,13 @@ def inside(values: np.ndarray,
     """
     Masks cells with values that fall inside of the specified range
     """
-    return ~outside(values, lo, hi)
+    # Set values that are outside the range to True
+    if allow_equal:
+        ma = np.logical_or(values <= lo, values >= hi)
+    else:
+        ma = np.logical_or(values < lo, values > hi)
+
+    return _propagate_mask(ma)
 
 
 def outside_percentile(values: np.ndarray,
@@ -68,18 +75,22 @@ def inside_percentile(values: np.ndarray,
     Masks cells with values that fall inside of the specified
     percentile range
     """
-    return ~outside_percentile(values, lo, hi)
+    # Compute values of the boundries
+    lo = np.percentile(values, lo)
+    hi = np.percentile(values, hi)
+
+    return inside(values, lo, hi)
 
 
 def any_nan(values: np.ndarray) -> np.ndarray:
     """
     Masks cells that include any np.nan
     """
-    return _propagate_mask(np.isnan(values))
+    return _propagate_mask(~np.isnan(values))
 
 
 def any_negative(values: np.ndarray) -> np.ndarray:
     """
     Masks cells that include any negative values
     """
-    return _propagate_mask(values < 0)
+    return _propagate_mask(~(values < 0))
