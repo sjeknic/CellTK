@@ -4,7 +4,7 @@ import warnings
 import numpy as np
 
 from cellst.operation import BaseExtract
-from cellst.utils._types import Image, Mask, Track, Arr, CellArray
+from cellst.utils._types import Image, Mask, Track, Arr, Condition
 from cellst.utils.operation_utils import lineage_to_track, parents_from_track
 
 
@@ -97,7 +97,7 @@ class Extract(BaseExtract):
         frames = range(max([i.shape[0] for i in images]))
 
         # Initialize data structure
-        array = CellArray(regions, channels, all_measures, cells, frames,
+        array = Condition(regions, channels, all_measures, cells, frames,
                           name=condition)
 
         # Extract data for all channels and regions individually

@@ -7,7 +7,7 @@ import numpy as np
 import cellst.utils.filter_utils as filt
 
 
-class CellArray():
+class Condition():
     """
     ax 0 - cell locations (nuc, cyto, population, etc.)
     ax 1 - channels (TRITC, FITC, etc.)
@@ -16,7 +16,7 @@ class CellArray():
     ax 4 - frames
     """
     __slots__ = ('_arr', 'name', 'attrs', 'coords', '_arr_dim', '_dim_idxs',
-                 '_key_dim_pairs', '_key_coord_pairs', '_nan_mask')
+                 '_key_dim_pairs', '_key_coord_pairs', 'masks')
 
     def __init__(self,
                  regions: Collection[str] = ['nuc'],
@@ -50,7 +50,7 @@ class CellArray():
         # Save some values
         self.name = name
         self.attrs = attrs
-        self._nan_mask = {}
+        self.masks = {}
 
         # Set _arr_dim based on input values - this can't change
         self._arr_dim = (len(regions), len(channels), len(metrics),
@@ -98,7 +98,7 @@ class CellArray():
 
     def save(self, path: str) -> None:
         """
-        Saves CellArray to an hdf5 file.
+        Saves Condition to an hdf5 file.
 
         TODO:
             - Add checking for path and overwrite options
@@ -123,15 +123,15 @@ class CellArray():
         return cls._build_from_file(f)
 
     @staticmethod
-    def _build_from_file(f: h5py.File) -> 'CellArray':
+    def _build_from_file(f: h5py.File) -> 'Condition':
         """
-        Given an hdf5 file, returns a CellArray instance
+        Given an hdf5 file, returns a Condition instance
         """
         if len(f) != 1:
             raise TypeError('Did not understand hdf5 file format.')
 
         for key in f:
-            _arr = CellArray(**f[key].attrs, name=key)
+            _arr = Condition(**f[key].attrs, name=key)
             _arr[:] = f[key]
 
         return _arr
@@ -335,12 +335,12 @@ class CellArray():
         is changed, otherwise, the data are only returned.
 
         TODO:
-            - Add option to return a new CellArray instead of
+            - Add option to return a new Condition instead of
               an np.ndarray
         """
         # If key is provided, look for saved mask
         if mask is None and key is not None:
-            mask = self._nan_mask[key]
+            mask = self.masks[key]
         elif mask is None and key is None:
             warnings.warn('Did not get mask or key. Nothing done.',
                           UserWarning)
@@ -357,8 +357,8 @@ class CellArray():
             # Delete items from self._arr and any existing masks
             self._arr = self._arr[indices]
             self._arr_dim = self._arr.shape
-            for k, v in self._nan_mask.items():
-                self._nan_mask[k] = v[indices]
+            for k, v in self.masks.items():
+                self.masks[k] = v[indices]
 
             # Recalculate the cell coords
             # TODO: Should there be a check that dimensions are equal?
@@ -453,26 +453,26 @@ class CellArray():
 
         if key is not None:
             # Save the mask if key is given
-            self._nan_mask[key] = mask
+            self.masks[key] = mask
 
         return mask
 
     def get_mask(self, key: str) -> np.ndarray:
-        return self._nan_mask[key]
+        return self.masks[key]
 
 
-class PositionArray():
+class Experiment():
     """
     Add Typing hints when the imports are fixed
 
     TODO:
-        - Add ability to filter all CellArrays
+        - Add ability to filter all Conditions
     """
 
-    __slots__ = ('name', 'attrs', 'sites', '_all_masks')
+    __slots__ = ('name', 'attrs', 'sites', 'masks')
 
     def __init__(self,
-                 arrays: Collection[CellArray] = None,
+                 arrays: Collection[Condition] = None,
                  name: str = None,
                  attrs: dict = None,
                  **kwargs
@@ -491,16 +491,16 @@ class PositionArray():
             [self.__setitem__(None, a) for a in arrays]
 
         # Build dictionary for saving masks
-        self._all_masks = {k: {} for k in self.sites}
+        self.masks = {k: {} for k in self.sites}
 
     def __setitem__(self, key=None, value=None):
 
         # If no value is passed, nothing is done
         if value is None:
             return
-        elif not isinstance(value, CellArray):
-            raise TypeError('All values in PositionArray must be'
-                            f'type CellArray. Got {type(value)}.')
+        elif not isinstance(value, Condition):
+            raise TypeError('All values in Experiment must be'
+                            f'type Condition. Got {type(value)}.')
 
         # Get key from array or set increment
         if key is None:
@@ -545,9 +545,13 @@ class PositionArray():
     def dtype(self):
         return {k: v.dtype for k, v in self.sites.items()}
 
+    @property
+    def conditions(self):
+        return {k: v.name for k, v in self.sites.items()}
+
     def save(self, path: str) -> None:
         """
-        Saves all the CellArrays in PositionArray
+        Saves all the Conditions in Experiment
         to an hdf5 file.
 
         TODO:
@@ -584,16 +588,16 @@ class PositionArray():
                       *args, **kwargs
                       ) -> np.ndarray:
         """
-        Calls generate_mask for each CellArray in self.sites
+        Calls generate_mask for each Condition in self.sites
         """
-        # Build masks in each CellArray with the function
+        # Build masks in each Condition with the function
         _masks = [v.generate_mask(function, metric, region,
                                   channel, key, *args, **kwargs)
                   for v in self.sites.values()]
 
         # Save if needed
         if key is not None:
-            self._all_masks[key] = _masks
+            self.masks[key] = _masks
 
         return _masks
 
@@ -609,12 +613,12 @@ class PositionArray():
         is changed, otherwise, the data are only returned.
 
         TODO:
-            - Add option to return a new CellArray instead of
+            - Add option to return a new Condition instead of
               an np.ndarray
         """
         # If key is provided, look for saved mask
         if mask is None and key is not None:
-            mask = self._all_masks[key]
+            mask = self.masks[key]
         elif mask is None and key is None:
             warnings.warn('Did not get mask or key. Nothing done.',
                           UserWarning)
@@ -630,21 +634,21 @@ class PositionArray():
             raise ValueError(f'Have {len(self.sites)} sites and '
                              f'{len(mask)} masks.')
 
-        # Mask type and dimension will be checked in CellArray
+        # Mask type and dimension will be checked in Condition
         out = {site: arr.filter_cells(msk, key, delete, *args, **kwargs)
                for msk, (site, arr) in zip(mask, self.sites.items())}
 
         return out
 
     @staticmethod
-    def _build_from_file(f: h5py.File) -> 'PositionArray':
+    def _build_from_file(f: h5py.File) -> 'Experiment':
         """
-        Given an hdf5 file, returns a PositionArray instance
+        Given an hdf5 file, returns a Experiment instance
         """
-        pos = PositionArray()
+        pos = Experiment()
         for key in f:
             # Attrs define the coords and axes
-            _arr = CellArray(**f[key].attrs, name=key)
+            _arr = Condition(**f[key].attrs, name=key)
             # f[key] holds the actual array data
             _arr[:] = f[key]
             pos[key] = _arr
@@ -656,7 +660,7 @@ class PositionArray():
 Image = NewType('image', np.ndarray)
 Mask = NewType('mask', np.ndarray)
 Track = NewType('track', np.ndarray)
-Arr = NewType('array', CellArray)
+Arr = NewType('array', Condition)
 
 # Save input names and types
 INPT_NAMES = [Image.__name__, Mask.__name__, Track.__name__, Arr.__name__]
