@@ -531,19 +531,19 @@ class Experiment():
 
     @property
     def shape(self):
-        return [v.shape for k, v in self.sites.values()]
+        return [v.shape for v in self.sites.values()]
 
     @property
     def ndim(self):
-        return [v.ndim for k, v in self.sites.values()]
+        return [v.ndim for v in self.sites.values()]
 
     @property
     def dtype(self):
-        return [v.dtype for k, v in self.sites.values()]
+        return [v.dtype for v in self.sites.values()]
 
     @property
     def conditions(self):
-        return [v.name for k, v in self.sites.values()]
+        return [v.name for v in self.sites.values()]
 
     def items(self):
         return self.sites.items()
