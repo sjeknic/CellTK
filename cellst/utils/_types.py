@@ -38,7 +38,6 @@ class Condition():
               sort that out, and if not, that function could just be a pass through function.
             - Reorder if-statements for speed in key_coord functions.
             - Add ability to save time steps
-            - Add ability to expand dimensions and add new derived metrics
         """
         # Convert inputs to tuple
         regions = tuple(regions)
@@ -522,10 +521,7 @@ class Experiment():
                 key = tuple([key])
             indices = tuple(self.sites.values())[0]._convert_keys_to_index(key)
 
-            # TODO: Should this return a dictionary or list/tuple?
-            return {k: v._getitem_w_idx(indices)
-                    for k, v in self.sites.items()}
-            # return [v._getitem_w_idx(indices) for v in self.sites.values()]
+            return [v._getitem_w_idx(indices) for v in self.sites.values()]
 
     def __len__(self):
         return len(self.sites)
@@ -535,19 +531,31 @@ class Experiment():
 
     @property
     def shape(self):
-        return {k: v.shape for k, v in self.sites.items()}
+        return [v.shape for k, v in self.sites.values()]
 
     @property
     def ndim(self):
-        return {k: v.ndim for k, v in self.sites.items()}
+        return [v.ndim for k, v in self.sites.values()]
 
     @property
     def dtype(self):
-        return {k: v.dtype for k, v in self.sites.items()}
+        return [v.dtype for k, v in self.sites.values()]
 
     @property
     def conditions(self):
-        return {k: v.name for k, v in self.sites.items()}
+        return [v.name for k, v in self.sites.values()]
+
+    def items(self):
+        return self.sites.items()
+
+    def values(self):
+        return self.sites.values()
+
+    def keys(self):
+        return self.sites.keys()
+
+    def update(self, *args, **kwargs):
+        return self.sites.update(*args, **kwargs)
 
     def save(self, path: str) -> None:
         """
@@ -635,8 +643,8 @@ class Experiment():
                              f'{len(mask)} masks.')
 
         # Mask type and dimension will be checked in Condition
-        out = {site: arr.filter_cells(msk, key, delete, *args, **kwargs)
-               for msk, (site, arr) in zip(mask, self.sites.items())}
+        out = [arr.filter_cells(msk, key, delete, *args, **kwargs)
+               for msk, arr in zip(mask, self.sites.values())]
 
         return out
 
