@@ -15,7 +15,7 @@ class Condition():
     ax 3 - cells
     ax 4 - frames
     """
-    __slots__ = ('_arr', 'name', 'attrs', 'coords', '_arr_dim', '_dim_idxs',
+    __slots__ = ('_arr', 'name', 'time', 'coords', '_arr_dim', '_dim_idxs',
                  '_key_dim_pairs', '_key_coord_pairs', 'masks')
 
     def __init__(self,
@@ -25,19 +25,11 @@ class Condition():
                  cells: Collection[int] = [0],
                  frames: Collection[int] = [0],
                  name: str = 'default',
-                 attrs: dict = None,
-                 **kwargs
+                 time: [np.ndarray, Tuple] = None
                  ) -> None:
         """
         TODO:
-            - Handling of metrics which will have multiple entries (i.e. bbox-0, bbox-1, etc.)
-              The simplest might be to just automatically convert the keys when the array is loaded.
-              The issue with this is that this would also have to happen in __getitem__, which
-              seems like it would slow things down. One option could be to check if any of those metrics
-              exist when the CustomArray is made. If they are __getitem__ first has to call a function to
-              sort that out, and if not, that function could just be a pass through function.
             - Reorder if-statements for speed in key_coord functions.
-            - Add ability to save time steps
         """
         # Convert inputs to tuple
         regions = tuple(regions)
@@ -48,7 +40,6 @@ class Condition():
 
         # Save some values
         self.name = name
-        self.attrs = attrs
         self.masks = {}
 
         # Set _arr_dim based on input values - this can't change
@@ -62,6 +53,9 @@ class Condition():
         self.coords = dict(regions=regions, channels=channels, metrics=metrics,
                            cells=cells, frames=frames)
         self._make_key_coord_pairs(self.coords)
+
+        # Set time axis
+        self.set_time(time)
 
     def __getitem__(self, key):
         # Needed if only one key is passed
@@ -475,6 +469,27 @@ class Condition():
     def get_mask(self, key: str) -> np.ndarray:
         return self.masks[key]
 
+    def set_time(self, time: [np.ndarray, Tuple]) -> None:
+        """
+        Define the time axis
+        """
+        if time is None:
+            self.time = self.coords['frames']
+        else:
+            if isinstance(time, (int, float)):
+                # if time is a single value, assume it is the total time
+                self.time = np.arange(0, time, len(self.coords['frames']))
+            else:
+                if len(time) == 2:
+                    # Assume it defines the end points
+                    self.time = np.arange(*time, len(self.coords['frames']))
+                elif len(time) == len(self.coords['frames']):
+                    self.time = time,
+                else:
+                    warnings.warn(f'Did not understand time {time}. '
+                                  'Using frames.', UserWarning)
+                    self.time = self.coords['frames']
+
 
 class Experiment():
     """
@@ -489,8 +504,7 @@ class Experiment():
     def __init__(self,
                  arrays: Collection[Condition] = None,
                  name: str = None,
-                 attrs: dict = None,
-                 **kwargs
+                 time: [np.ndarray, Tuple] = None,
                  ) -> None:
         """
         TODO:
@@ -498,7 +512,6 @@ class Experiment():
         """
         # Save some values
         self.name = name
-        self.attrs = attrs
         self.sites = {}
 
         # Save arrays if given
@@ -561,6 +574,10 @@ class Experiment():
     def conditions(self):
         return [v.name for v in self.sites.values()]
 
+    @property
+    def time(self):
+        return [v.time for v in self.sites.values()]
+
     def items(self):
         return self.sites.items()
 
@@ -572,6 +589,13 @@ class Experiment():
 
     def update(self, *args, **kwargs):
         return self.sites.update(*args, **kwargs)
+
+    def set_time(self, time: [np.ndarray, Tuple] = None) -> None:
+        """
+        Define the time axis
+        """
+        for v in self.sites.values():
+            v.set_time(time)
 
     def save(self, path: str) -> None:
         """
