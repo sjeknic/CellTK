@@ -29,7 +29,7 @@ class Pipeline():
                  'parent_folder', 'output_folder',
                  'image_folder', 'mask_folder',
                  'track_folder', 'array_folder',
-                 'operation_index')
+                 'operation_index', 'img_ext')
 
     def __init__(self,
                  parent_folder: str = None,
@@ -39,6 +39,7 @@ class Pipeline():
                  track_folder: str = None,
                  array_folder: str = None,
                  input_yaml: str = None,
+                 file_extension: str = 'tif',
                  overwrite: bool = True
                  ) -> None:
         """
@@ -55,10 +56,9 @@ class Pipeline():
 
         TODO:
             - Should be able to parse args and load a yaml as well
-            - Look at context management: https://stackoverflow.com/a/34325346
-                Here and/or in Orchestrator to ensure image_containers are deleted
         """
         # Define paths to find and save images
+        self.img_ext = file_extension
         self._set_all_paths(parent_folder, output_folder, image_folder,
                             mask_folder, track_folder, array_folder)
         self._make_output_folder(overwrite)
@@ -151,18 +151,12 @@ class Pipeline():
                                key: Tuple[str],
                                ) -> None:
         """
-        TODO:
-            - How to handle if array is not an image stack (say df or something.)
-                Probably just still save it all the same I think.
         """
         if key not in container:
             container[key] = array
         else:
             # TODO: Should there be an option to not overwrite?
             container[key] = array
-
-            '''TODO: Here the function needs to remove any stacks from the image handler
-            that are no longer needed. That should have been defined by the input/output'''
 
         return container
 
@@ -208,7 +202,7 @@ class Pipeline():
         to save and which to remove.
 
         TODO:
-            - If an output that will be used as an input doesn't exist, raise error
+            - Determine after which operation the stack is no longer needed
         """
         req_inputs = []
         req_outputs = []
@@ -220,9 +214,6 @@ class Pipeline():
 
             req_inputs.append([imgs, msks, trks, arrs])
             req_outputs.append(o.output_id)
-
-        # Need to do some thinking here about which inputs/outputs are used
-        # where and what it means for them to be in or missing from one of the lists.
 
         return req_inputs, req_outputs
 
@@ -251,12 +242,18 @@ class Pipeline():
         if subfolder is not None:
             folder = os.path.join(folder, subfolder)
 
-        # TODO: Tiff should not be hardcoded
+        # Function to check if img should be loaded
+        def _confirm_im_match(im, check_name: bool = True) -> bool:
+            name = True if not check_name else match_str in im
+            ext = self.img_ext in im
+            fil = os.path.isfile(os.path.join(folder, im))
+
+            return name * ext * fil
+
         # Find images and sort into list
         im_names = [os.path.join(folder, im)
                     for im in sorted(os.listdir(folder))
-                    if match_str in im if 'tif' in im
-                    and os.path.isfile(os.path.join(folder, im))]
+                    if _confirm_im_match(im)]
 
         # If no images were found, look for a subdirectory
         if len(im_names) == 0:
@@ -271,8 +268,7 @@ class Pipeline():
                 # Load all images, even if match_str doesn't match
                 im_names = [os.path.join(folder, im)
                             for im in sorted(os.listdir(folder))
-                            if 'tif' in im
-                            if os.path.isfile(os.path.join(folder, im))]
+                            if _confirm_im_match(im, check_name=False)]
             except IndexError:
                 # Indidcates that no sub_folders were found
                 # im_names should be [] at this point
@@ -300,8 +296,6 @@ class Pipeline():
         Returns:
 
         TODO:
-            - Potentially move to a utils class so it can be inherited by other classes
-              If so, should no longer be private
             - Not sure if it is finding image metadata. Test with images with metadata.
             - img_dtype should not scale an image up - an 8bit image should stay 8bit
         """
@@ -313,7 +307,6 @@ class Pipeline():
             to_load = list(set(all_requested))
 
             for key in to_load:
-                print(key)
                 pths = self._get_image_paths(fol, key[0])
                 if len(pths) == 0:
                     # If no images are found in the path, check output_folder
@@ -335,21 +328,15 @@ class Pipeline():
                 Slightly faster than imread.'''
                 # Pre-allocate numpy array for speed
                 for n, p in enumerate(pths):
-                    print(p)
-                    # TODO: Is there a better imread function to use here?
-                    # TODO: Include check for image format
                     img = iio.mimread(p)[0]
 
-                    # TODO: This would be faster as a try/except block
-                    if n == 0:
-                        # TODO: Is there a neater way to do this?
-                        '''NOTE: Due to how numpy arrays are stored in memory, writing to the last
-                        axis is faster than writing to the first. Therefore, the time axis is
-                        on the first axis'''
+                    try:
+                        img_stack[n, ...] = img
+                    except (IndexError, UnboundLocalError):
+                        # Initialize img_stack if it doesn't exist
                         img_stack = np.empty(tuple([len(pths), img.shape[0], img.shape[1]]),
                                              dtype=img.dtype)
-
-                    img_stack[n, ...] = img
+                        img_stack[n, ...] = img
 
                 container[key] = img_stack
 
