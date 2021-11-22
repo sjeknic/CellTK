@@ -54,7 +54,10 @@ class Operation():
         if _output_id is not None:
             self.output_id = _output_id
         else:
-            output_type = self._output_type.__name__
+            try:
+                output_type = self._output_type.__name__
+            except AttributeError:
+                output_type = None
             self.output_id = tuple([output, output_type])
 
     def __setattr__(self, name, value) -> None:
@@ -91,6 +94,20 @@ class Operation():
         Each BaseOperation should implement it's own __call__
         """
         return self.run_operation(images, masks, tracks, arrays)
+
+    def __enter__(self) -> None:
+        """
+        Needed to implement __exit__
+        """
+        if not hasattr(self, 'save_arrays'):
+            self.save_arrays = {}
+
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+        """
+        Used to delete arrays in memory
+        """
+        self.save_arrays = None
+        del self.save_arrays
 
     def add_function_to_operation(self,
                                   func: str,

@@ -131,15 +131,17 @@ class Pipeline():
                                e.__str__())
 
             # Save the results in the image container
-            oper_result = oper.run_operation(imgs, msks, trks, arrs)
-            self._image_container = self.update_image_container(
+            with oper:
+                oper_result = oper.run_operation(imgs, msks, trks, arrs)
+                self._image_container = self.update_image_container(
                                             self._image_container,
                                             oper_result,
                                             otpts)
 
-            # Write to disk if needed
-            if oper.save:
-                self.save_images(oper.save_arrays, oper._output_type.__name__)
+                # Write to disk if needed
+                if oper.save:
+                    self.save_images(oper.save_arrays,
+                                     oper._output_type.__name__)
 
         return oper_result
 
