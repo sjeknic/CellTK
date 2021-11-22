@@ -114,7 +114,7 @@ class Pipeline():
         if len(self.operations) == 0:
             warnings.warn('No operations in Pipeline. Returning None.',
                           UserWarning)
-            return None
+            return
 
         # Determine needed inputs and outputs and load to container
         inputs, outputs = self._input_output_handler()
@@ -138,9 +138,8 @@ class Pipeline():
                                             otpts)
 
             # Write to disk if needed
-            # TODO: Don't think this function works for Arr type
             if oper.save:
-                self.save_images(oper.save_arrays)
+                self.save_images(oper.save_arrays, oper._output_type.__name__)
 
         return oper_result
 
@@ -167,34 +166,39 @@ class Pipeline():
 
     def save_images(self,
                     save_arrays: Dict[str, Tuple],
+                    oper_output: str = None,
                     img_dtype: type = None
                     ) -> None:
         """
         New save function to handle multiple saves per operation
 
         TODO:
-            - New output folder needs to be made for each operation
             - Test different iteration strategies for efficiency
             - Should not upscale images
             - Use type instead of str for output (if even needed)
             - Add logging
-            - Allow for non-consecutive indices
+            - Allow for non-consecutive indices (how?)
         """
-
         for name, (otpt_type, arr) in save_arrays.items():
-            img_dtype = arr.dtype if img_dtype is None else img_dtype
-            if arr.ndim != 3:
-                warnings.warn("Expected stack with 3 dimensions."
-                              f"Got {arr.ndim} for {name}", UserWarning)
-
             # Make output directory if needed
             save_folder = os.path.join(self.output_folder, name)
             if not os.path.exists(save_folder):
                 os.makedirs(save_folder)
 
-            for idx in range(arr.shape[0]):
-                name = os.path.join(save_folder, f"{otpt_type}{idx}.tiff")
-                tiff.imsave(name, arr[idx, ...].astype(img_dtype))
+            # Save CellArray separately
+            if oper_output == 'array':
+                name = os.path.join(self.output_folder, f"{otpt_type}.hdf5")
+                arr.save(name)
+            else:
+                img_dtype = arr.dtype if img_dtype is None else img_dtype
+                if arr.ndim != 3:
+                    warnings.warn("Expected stack with 3 dimensions."
+                                  f"Got {arr.ndim} for {name}", UserWarning)
+
+                # Save files as tiff with consecutive idx
+                for idx in range(arr.shape[0]):
+                    name = os.path.join(save_folder, f"{otpt_type}{idx}.tiff")
+                    tiff.imsave(name, arr[idx, ...].astype(img_dtype))
 
     def _input_output_handler(self):
         """
@@ -237,15 +241,19 @@ class Pipeline():
             - Add image selection based on regex
             - Should channels use regex or glob to match name
             - Could be moved to a utils file - staticmethod
+            - Include a check for file type as well!!
+                - Yeah, they are all over the place here. Need to be in _load
+                  as well
         """
         # First check in designated subfolder
         if subfolder is not None:
             folder = os.path.join(folder, subfolder)
 
+        # TODO: Tiff should not be hardcoded
         # Find images and sort into list
         im_names = [os.path.join(folder, im)
                     for im in sorted(os.listdir(folder))
-                    if match_str in im
+                    if match_str in im if 'tif' in im
                     and os.path.isfile(os.path.join(folder, im))]
 
         # If no images were found, look for a subdirectory
@@ -261,6 +269,7 @@ class Pipeline():
                 # Load all images, even if match_str doesn't match
                 im_names = [os.path.join(folder, im)
                             for im in sorted(os.listdir(folder))
+                            if 'tif' in im
                             if os.path.isfile(os.path.join(folder, im))]
             except IndexError:
                 # Indidcates that no sub_folders were found
@@ -302,6 +311,7 @@ class Pipeline():
             to_load = list(set(all_requested))
 
             for key in to_load:
+                print(key)
                 pths = self._get_image_paths(fol, key[0])
                 if len(pths) == 0:
                     # If no images are found in the path, check output_folder
@@ -323,9 +333,12 @@ class Pipeline():
                 Slightly faster than imread.'''
                 # Pre-allocate numpy array for speed
                 for n, p in enumerate(pths):
+                    print(p)
                     # TODO: Is there a better imread function to use here?
+                    # TODO: Include check for image format
                     img = iio.mimread(p)[0]
 
+                    # TODO: This would be faster as a try/except block
                     if n == 0:
                         # TODO: Is there a neater way to do this?
                         '''NOTE: Due to how numpy arrays are stored in memory, writing to the last

@@ -1,8 +1,13 @@
-from typing import Collection, Tuple
+from typing import Collection, Tuple, Callable, List
+import warnings
 
 import numpy as np
+from skimage.measure import regionprops_table
 
 from cellst.utils._types import Image, Mask, Track, Arr, INPT_NAME_IDX
+# TODO: For whole project. Probably move towards using modules more.
+#       i.e. import cellst.utils.operation_utils as op
+from cellst.utils.operation_utils import track_to_mask, parents_from_track
 
 
 class Operation():
@@ -263,14 +268,47 @@ class BaseExtract(Operation):
     __name__ = 'Extract'
     _input_type = (Image, Mask, Track)
     _output_type = Arr
+    # This is directly from skimage.regionprops
+    # Not included yet: convex_image, filled_image, image, inertia_tensor
+    #                   inertia_tensor_eigvals, local_centroid, intensity_image
+    #                   moments, moments_central, moments_hu, coords,
+    #                   moments_normalized, slice, weighted_centroid,
+    #                   weighted_local_centroid, weighted_moments,
+    #                   weighted_moments_hu, weighted_moments_normalized
+    _possible_metrics = ('area', 'bbox', 'bbox_area', 'centroid',
+                         'convex_area',
+                         'eccentricity', 'equivalent_diameter',
+                         'euler_number', 'extent',
+                         'feret_diameter_max', 'filled_area', 'label',
+                         'major_axis_length', 'max_intensity',
+                         'mean_intensity', 'min_intensity',
+                         'minor_axis_length', 'major_axis_length',
+                         'orientation', 'perimeter',
+                         'perimeter_crofton', 'solidity')
+
     # Label must always be first, even for user supplied metrics
-    _metrics = ['label', 'area', 'convex_area',
-                # 'equivalent_diameter_area', 'centroid_weighted',
-                'mean_intensity',
-                'orientation', 'perimeter', 'solidity',
-                # 'bbox', 'centroid', 'coords'  # require multiple scalars
-                ]
-    _extra_properties = []
+    _metrics = ['label', 'area', 'convex_area', 'filled_area', 'bbox',
+                'centroid', 'mean_intensity', 'max_intensity', 'min_intensity',
+                'minor_axis_length', 'major_axis_length',
+                'orientation', 'perimeter', 'solidity']
+    _extra_properties = {}
+
+    class EmptyProperty():
+        """
+        This class is to be used with skimage.regionprops_table.
+        Every extra property passed to regionprops_table must
+        have a unique name, however, I want to use several as a
+        placeholder, so that I can get the right size array, but fill
+        in the values later. So, this assigns a random __name__.
+        """
+        def __init__(self, *args) -> None:
+            rng = np.random.default_rng()
+            # Make it extremely unlikely to get the same int
+            self.__name__ = str(rng.integers(999999))
+
+        @staticmethod
+        def __call__(empty):
+            return np.nan
 
     def __init__(self,
                  input_images: Collection[str] = [],
@@ -279,21 +317,16 @@ class BaseExtract(Operation):
                  channels: Collection[str] = [],
                  regions: Collection[str] = [],
                  lineages: Collection[np.ndarray] = [],
-                 condition: str = None,
+                 condition: str = '',
+                 min_trace_length: int = 0,
+                 remove_parent: bool = True,
                  output: str = 'data_frame',
-                 save: bool = False,
+                 save: bool = True,
                  _output_id: Tuple[str] = None
                  ) -> None:
         """
         channel and region _map should be the names that will get saved in the final df
         with the images and masks they correspond to.
-        TODO:
-            - Clean up this whole function when it's working
-            - metrics needs to always start with label
-            - Raise warning that parent daughter connections will fail if missing
-            - Condition should get passed to this function. Pipeline likely cannot because
-              the same operation will be used for multiple Pipelines. But Orchestrator should
-              be able to.
         """
 
         super().__init__(output, save, _output_id)
@@ -316,14 +349,31 @@ class BaseExtract(Operation):
         if len(channels) == 0:
             channels = input_images
 
+        # Prefer tracks for naming
         if len(regions) == 0:
-            regions = input_masks
+            if len(self.input_tracks) > 0:
+                regions = input_tracks
+            else:
+                regions = input_masks
 
+        # Name must be given
+        if condition is None or condition == '':
+            warnings.warn('Name of CellArray cannot be None or empty string.',
+                          UserWarning)
+            condition = 'default'
+
+        # These kwargs get passed to self.extract_data_from_image
         kwargs = dict(channels=channels, regions=regions, lineages=lineages,
-                      condition=condition)
+                      condition=condition, min_trace_length=min_trace_length,
+                      remove_parent=remove_parent)
         # Automatically add extract_data_from_image
+        # Name is always None, because gets saved in Pipeline as output
         self.functions = [tuple([self.extract_data_from_image, Arr, [], kwargs, None])]
         self.func_index = {i: f for i, f in enumerate(self.functions)}
+
+        # Add division_frame and parent_id
+        self._extra_properties.update(dict(division_frame=self.EmptyProperty(),
+                                           parent_id=self.EmptyProperty()))
 
     def __call__(self,
                  images: Collection[Image],
@@ -332,15 +382,137 @@ class BaseExtract(Operation):
                  channels: Collection[str] = [],
                  regions: Collection[str] = [],
                  lineages: Collection[np.ndarray] = [],
-                 condition: str = None,
+                 condition: str = None
                  ) -> Arr:
         """
         This directly calls extract_data_from_image
         instead of using run_operation
         """
+
         kwargs = dict(channels=channels, regions=regions,
                       condition=condition, lineages=lineages)
-        return self.run_operation(images, masks, tracks, [], **kwargs)
+        return self.extract_data_from_image(images, masks, tracks,
+                                            **kwargs)
+
+    def _correct_metric_dim(self, met_list: List[str]) -> List[str]:
+        """
+        Adjust all measures for the presence of multi-scalar metrics
+        """
+        new_met_list = []
+        for m in met_list:
+            if m == 'bbox':
+                # bbox becomes bbox-1,...,bbox-4'
+                new_met_list.extend([f'bbox-{n}' for n in range(1, 5)])
+            elif m == 'centroid':
+                # centroid becomes centroid-1, centroid-2
+                new_met_list.extend([f'centroid-{n}' for n in range(1, 3)])
+            else:
+                new_met_list.append(m)
+
+        return new_met_list
+
+    def _extract_data_with_track(self,
+                                 image: Image,
+                                 track: Track,
+                                 metrics: Collection[str],
+                                 extra_metrics: Collection[Callable],
+                                 cell_index: dict = None
+                                 ) -> np.ndarray:
+        """
+        Hard rule: parent must appear sequentially BEFORE daughter.
+                   even the same frame won't work I think. But that
+                   shouldn't be that hard to enforce
+
+        NOTE: Final data structure has frames in last axis. In this
+              function, frames is in first axis for faster np functions.
+              np.moveaxis at the end to get correct structure. This is
+              faster than writing to the last axis.
+        """
+        '''NOTE: cell_index should maybe be required arg. If calculated
+        here, all other tracks in data set have to match or data will
+        get overwritten / raise IndexError.'''
+        if cell_index is None:
+            cells = np.unique(track[track > 0])
+            cell_index = {int(a): i for i, a in enumerate(cells)}
+
+        # Get information about cell division
+        daughter_to_parent = parents_from_track(track)
+        mask = track_to_mask(track)
+
+        # Organize metrics and get indices for custom ones
+        all_metrics = metrics + list(self._extra_properties.keys())
+        all_metrics = self._correct_metric_dim(all_metrics)
+        metric_idx = {k: i for i, k in enumerate(all_metrics)}
+
+        # Build output
+        out = np.empty((image.shape[0], len(all_metrics), len(cell_index)))
+        # TODO: Add option to use different pad
+        out[:] = np.nan
+
+        for frame in range(image.shape[0]):
+            # Extract metrics from each region in frame
+            rp = regionprops_table(mask[frame], image[frame],
+                                   properties=metrics,
+                                   extra_properties=extra_metrics)
+            # frame_data.shape is (len(metrics), len(cells))
+            frame_data = np.row_stack(tuple(rp.values()))
+
+            # Label is in the first position
+            for n, lab in enumerate(frame_data[0, :]):
+                # Cast to int for indexing
+                lab = int(lab)
+
+                if lab in daughter_to_parent:
+                    # Get parent label
+                    # NOTE: Could this ever raise a KeyError?
+                    par = daughter_to_parent[lab]
+
+                    # Copy parent trace to location of daughter trace
+                    # Everything after frame is overwritten by daughter trace
+                    out[:, :, cell_index[lab]] = out[:, :, cell_index[par]]
+
+                    # Add division data to frame_data before saving
+                    try:
+                        frame_data[metric_idx['division_frame'], n] = frame
+                    except KeyError:
+                        pass
+
+                    try:
+                        frame_data[metric_idx['parent_id'], n] = par
+                    except KeyError:
+                        pass
+
+                # Save frame data
+                out[frame, :, cell_index[lab]] = frame_data[:, n]
+
+        return np.moveaxis(out, 0, -1)
+
+    def add_extra_metric(self, name: str, func: Callable = None) -> None:
+        """
+        Allows for adding custom metrics. If function is none, value will just
+        be nan.
+        """
+        if name in self._metrics:
+            warnings.warn(f'Metric {name} already exists.', UserWarning)
+        else:
+            if func is None: func = self.EmptyProperty()
+            self._extra_properties[name] = func
+
+    def set_metric_list(self, metrics: Collection[str]) -> None:
+        """
+        Adds metrics the user wants to pass to regionprops. Label will be made the
+        first argument by default.
+        """
+        # Check that skimage can handle the given metrics
+        allowed = [m for m in metrics if m in self._possible_metrics]
+        not_allowed = [m for m in metrics if m not in self._possible_metrics]
+
+        self._metrics = allowed
+
+        # Raise warning for the rest
+        if len(not_allowed) > 0:
+            warnings.warn(f'Metrics {[not_allowed]} are not supported by skimage. '
+                          'Use CellArray.add_extra_metric to add custom metrics.')
 
     def add_function_to_operation(self,
                                   func: str,
@@ -367,7 +539,7 @@ class BaseExtract(Operation):
                       masks: Collection[np.ndarray] = [],
                       tracks: Collection[np.ndarray] = [],
                       arrays: Collection[np.ndarray] = [],
-                      *args, **kwargs
+                      **kwargs
                       ) -> (Image, Mask, Track, Arr):
         """
         Extract function is different because it expects to get a list
@@ -378,11 +550,13 @@ class BaseExtract(Operation):
         for arrays, therefore those are not passed, but they must be input
         """
         # Default is to return the input if no function is run
-        inputs = [images, masks, tracks, arrays]
-        result = arrays
+        inputs = [images, masks, tracks]
+
+        # Get inputs that were saved during __init__
+        _, expec_type, args, kwargs, name = self.functions[0]
 
         # Arrays are not passed to the function
-        result = self.extract_data_from_image(*inputs[:-1], *args, **kwargs)
+        result = self.extract_data_from_image(*inputs, *args, **kwargs)
         self.save_arrays[self.output] = self.output, result
 
         return result

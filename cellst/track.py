@@ -22,7 +22,7 @@ class Track(BaseTrack):
                          delta_t: int = 2,
                          cut_off_distance: Tuple = None,
                          allow_cell_division: bool = True,
-                         postprocessing_key: str = None
+                         postprocessing_key: str = None,
                          ) -> Track:
         """
         See kit_sch_ge/run_tracking.py for reference
@@ -30,7 +30,6 @@ class Track(BaseTrack):
         TODO:
             - Use non-consecutive timesteps (mainly for naming of files)
             - Add saving of lineage file (probably in a separate run_operation function)
-            - Add create Tracks from lineage
         """
 
         assert image.shape == mask.shape, f'Image/Mask mismatch {image.shape} {mask.shape}'

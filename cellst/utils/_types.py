@@ -1,23 +1,22 @@
-from typing import NewType, Collection, Tuple
+import warnings
+from typing import NewType, Collection, Tuple, Callable, Dict
 
+import h5py
 import numpy as np
-import xarray as xr
+
+import cellst.utils.filter_utils as filt
 
 
-class CellArray():
+class Condition():
     """
     ax 0 - cell locations (nuc, cyto, population, etc.)
     ax 1 - channels (TRITC, FITC, etc.)
     ax 2 - metrics (median_int, etc.)
     ax 3 - cells
     ax 4 - frames
-
-    TODO:
-        - Add ability to save file
-
     """
-    __slots__ = ('_xarr', 'name', 'attrs', 'coords', '_arr_dim', '_dim_idxs',
-                 '_key_dim_pairs', '_key_coord_pairs', '_nan_mask')
+    __slots__ = ('_arr', 'name', 'time', 'coords', '_arr_dim', '_dim_idxs',
+                 '_key_dim_pairs', '_key_coord_pairs', 'masks')
 
     def __init__(self,
                  regions: Collection[str] = ['nuc'],
@@ -25,48 +24,38 @@ class CellArray():
                  metrics: Collection[str] = ['label'],
                  cells: Collection[int] = [0],
                  frames: Collection[int] = [0],
-                 name: str = None,
-                 attrs: dict = None,
-                 **kwargs
+                 name: str = 'default',
+                 time: [np.ndarray, Tuple] = None
                  ) -> None:
         """
-        dims are constant, so they aren't included as an input arg
-
         TODO:
-            - Indexing by str with xr.DataArray is very slow. Might want to
-              move to a system based only on np.ndarray. The only question now
-              is relating to the DataSet structure when all of the np arrays
-              are implemented. The simplest way might just be to index all of them
-              and stack the results. But for now keeping as is
-            - Handling of metrics which will have multiple entries (i.e. bbox-0, bbox-1, etc.)
-              The simplest might be to just automatically convert the keys when the array is loaded.
-              The issue with this is that this would also have to happen in __getitem__, which
-              seems like it would slow things down. One option could be to check if any of those metrics
-              exist when the CustomArray is made. If they are __getitem__ first has to call a function to
-              sort that out, and if not, that function could just be a pass through function.
             - Reorder if-statements for speed in key_coord functions.
-            - Add option to return nans, for now default is to not return them
-            - Add ability to save time steps
         """
+        # Convert inputs to tuple
+        regions = tuple(regions)
+        channels = tuple(channels)
+        metrics = tuple(metrics)
+        cells = tuple(cells)
+        frames = tuple(frames)
+
         # Save some values
         self.name = name
-        self.attrs = attrs
+        self.masks = {}
 
-        # Set _arr_dim based on input values
+        # Set _arr_dim based on input values - this can't change
         self._arr_dim = (len(regions), len(channels), len(metrics),
                          len(cells), len(frames))
+
         # Create empty data array
-        arr = np.empty(self._arr_dim)
+        self._arr = np.zeros(self._arr_dim)
 
         # Create coordinate dictionary
-        self.coords = dict(region=regions, channel=channels, metric=metrics,
-                           cell=cells, frame=frames)
+        self.coords = dict(regions=regions, channels=channels, metrics=metrics,
+                           cells=cells, frames=frames)
         self._make_key_coord_pairs(self.coords)
 
-        self._xarr = xr.DataArray(data=arr, coords=self.coords,
-                                  name=name, attrs=attrs)
-        self._nan_mask = np.empty(self._xarr.values.shape).astype(bool)
-        self._nan_mask[:] = True
+        # Set time axis
+        self.set_time(time)
 
     def __getitem__(self, key):
         # Needed if only one key is passed
@@ -75,8 +64,7 @@ class CellArray():
         # Sort given indices to the appropriate axes
         indices = self._convert_keys_to_index(key)
 
-        # Always return as a numpy array
-        return self._xarr.values[indices]
+        return self._arr[indices]
 
     def __setitem__(self, key, value):
         # Sort given indices to the appropriate axes
@@ -84,25 +72,69 @@ class CellArray():
             key = tuple([key])
         indices = self._convert_keys_to_index(key)
 
-        self._xarr.values[indices] = value
+        self._arr[indices] = value
 
     def __str__(self):
-        return self._xarr.__str__()
+        return self._arr.__str__()
 
     @property
     def shape(self):
-        return self._xarr.shape
+        return self._arr.shape
 
     @property
     def ndim(self):
-        return self._xarr.ndim
+        return self._arr.ndim
+
+    @property
+    def dtype(self):
+        return self._arr.dtype
+
+    def save(self, path: str) -> None:
+        """
+        Saves Condition to an hdf5 file.
+
+        TODO:
+            - Add checking for path and overwrite options
+        """
+        f = h5py.File(path, 'w')
+        f.create_dataset(self.name, data=self._arr)
+        for coord in self.coords:
+            # Axis names and coords stored as attributes
+            f[self.name].attrs[coord] = self.coords[coord]
+
+        f.close()
+
+    @classmethod
+    def load(cls, path: str) -> None:
+        """
+        Load a structured arrary and convert to sites dict.
+
+        TODO:
+            - Add a check that path exists
+        """
+        f = h5py.File(path, "r")
+        return cls._build_from_file(f)
+
+    @staticmethod
+    def _build_from_file(f: h5py.File) -> 'Condition':
+        """
+        Given an hdf5 file, returns a Condition instance
+        """
+        if len(f) != 1:
+            raise TypeError('Did not understand hdf5 file format.')
+
+        for key in f:
+            _arr = Condition(**f[key].attrs, name=key)
+            _arr[:] = f[key]
+
+        return _arr
 
     def _getitem_w_idx(self, idx):
         """
         Used by CustomSet to index CustomArray w/o recalculating
         the indices each time
         """
-        return self._xarr.values[idx]
+        return self._arr[idx]
 
     def _convert_keys_to_index(self, key) -> Tuple[(int, slice)]:
         """
@@ -115,6 +147,10 @@ class CellArray():
         Returns:
             tuple(slices)
 
+        NOTE: integer indices are best provided last. If they are
+              provided first, they will possibly get overwritten if
+              too few keys were provided.
+
         TODO:
             - Add handling of Ellipsis in key
         """
@@ -126,8 +162,9 @@ class CellArray():
         # Get dimensions for the keys
         # Five dimensions possible
         indices = [slice(None)] * len(self.coords)
-        cell_idx = self._dim_idxs['cell']
-        frame_idx = self._dim_idxs['frame']
+        # TODO: I feel like names shouldn't be hard-coded
+        cell_idx = self._dim_idxs['cells']
+        frame_idx = self._dim_idxs['frames']
         seen_int = 0  # This will be used to separate cells and frames
         # Used to check slice types
         i_type = (int, type(None))
@@ -167,8 +204,8 @@ class CellArray():
                         raise KeyError(f'Some of {k.start, k.stop} were not found '
                                        'in any dimension.')
                     if (start_dim is not None and
-                       stop_dim is not None and
-                       start_dim != stop_dim):
+                        stop_dim is not None and
+                        start_dim != stop_dim):
                         raise IndexError(f"Dimensions don't match: {k.start} is in "
                                          f"{start_dim}, {k.stop} is in {stop_dim}.")
 
@@ -197,6 +234,33 @@ class CellArray():
                     seen_int += 1
                 else:
                     raise ValueError('Max number of integer indices is 2.')
+
+            elif isinstance(k, (tuple, list, np.ndarray)):
+                # Select arbitrary indices in a single axis (i.e. multiple metrics)
+                # Save all values and idxs
+                new = []
+                idx = []
+                for item in k:
+                    # Treat individual items as we would above
+                    if isinstance(item, str):
+                        new.append(self._key_coord_pairs[item])
+                        idx.append(self._dim_idxs[self._key_dim_pairs[item]])
+                    elif isinstance(item, int):
+                        new.append(item)
+                    else:
+                        raise ValueError(f'Did not understand key {item} in {k}.')
+
+                # Check that we aren't trying to index multiple axes
+                idx = np.unique(idx)
+                if len(idx) == 0:
+                    idx = k_idx
+                elif len(idx) > 1:
+                    raise IndexError(f'Indices in {k} map to multiple axes.')
+                else:
+                    idx = idx[0]
+
+                indices[idx] = np.array(new, dtype=int)
+
             else:
                 raise ValueError(f'Indices must be int, str, or slice. Got {type(k)}.')
 
@@ -209,7 +273,7 @@ class CellArray():
         self._dim_idxs = {k: n for n, k in enumerate(coords.keys())}
 
         # Check for duplicate keys (allowed in cell and frame)
-        to_check = ['region', 'channel', 'metric']
+        to_check = ['regions', 'channels', 'metrics']
         all_poss = [sl for l in [coords[t] for t in to_check] for sl in l]
         if len(all_poss) != len(set(all_poss)):
             raise KeyError(f'All coordinates in dimensions {to_check} must be '
@@ -217,46 +281,254 @@ class CellArray():
 
         # Match keys and coordinates
         self._key_dim_pairs = {
-            a: [k for k, v in coords.items() if a in tuple(v)][0] for a in all_poss
+            a: [k for k, v in coords.items() if a in tuple(v)][0]
+            for a in all_poss
         }
-        # NOTE: Not sure I will need this one, could just use xarr internals
+        # NOTE: Not sure I will need this one
         self._key_coord_pairs = {
-            a: [v.index(a) for k, v in coords.items() if a in tuple(v)][0] for a in all_poss
+            a: [v.index(a) for k, v in coords.items() if a in tuple(v)][0]
+            for a in all_poss
         }
 
+    def add_metric_slots(self, name: Collection[str]) -> None:
+        """
+        This needs to expand self._arr along the metric axis
+        to make room for an additional metric
+        """
+        # Format inputs
+        if isinstance(name, str):
+            name = [name]
 
-class PositionArray():
+        # Get dimensions and set the metric dimension to 1
+        new_dim = list(self._arr_dim)
+        new_dim[self._dim_idxs['metrics']] = len(name)
+
+        # Concatenate a new array on the metric axis
+        new_arr = np.empty(new_dim).astype(float)
+        new_arr[:] = np.nan
+        self._arr = np.concatenate((self._arr, new_arr),
+                                   axis=self._dim_idxs['metrics'])
+
+        # Update all the necessary attributes
+        self._arr_dim = self._arr.shape
+        self.coords.update(dict(metrics=tuple([*self.coords['metrics'], *name])))
+
+        # Recalculate the coords
+        self._make_key_coord_pairs(self.coords)
+
+    def filter_cells(self,
+                     mask: np.ndarray = None,
+                     key: str = None,
+                     delete: bool = True,
+                     *args, **kwargs
+                     ) -> np.ndarray:
+        """
+        Either uses an arbitrary mask or a saved mask (key) to
+        filter the data. If delete, the underlying structure
+        is changed, otherwise, the data are only returned.
+
+        TODO:
+            - Add option to return a new Condition instead of
+              an np.ndarray
+        """
+        # If key is provided, look for saved mask
+        if mask is None and key is not None:
+            mask = self.masks[key]
+        elif mask is None and key is None:
+            warnings.warn('Did not get mask or key. Nothing done.',
+                          UserWarning)
+            return
+
+        # Check that mask is bool/int
+        if mask.dtype != bool and mask.dtype != int:
+            raise TypeError(f'Mask must be bool or int. Got {mask.dtype}')
+
+        # Make sure mask is the correct dimension
+        indices = self.reshape_mask(mask)
+
+        if delete:
+            # Delete items from self._arr and any existing masks
+            self._arr = self._arr[indices]
+            self._arr_dim = self._arr.shape
+            for k, v in self.masks.items():
+                self.masks[k] = v[indices]
+
+            # Recalculate the cell coords
+            # TODO: Should there be a check that dimensions are equal?
+            if mask.ndim == 2:
+                mask = mask.any(1)
+            self.coords['cells'] = tuple([
+                cell for cell, keep in zip(self.coords['cells'], mask)
+                if keep])
+
+            return self._arr
+
+        return self._arr[mask]
+
+    def reshape_mask(self,
+                     mask: np.ndarray
+                     ) -> Tuple[slice, type(Ellipsis), np.ndarray]:
+        """
+        Takes in a 1D, 2D, or 5D mask and casts to tuple of
+        5 dimensional indices. Use this to apply a 1D mask
+        to self._arr.
+
+        Assumes that the only thing being filtered is cells.
+        """
+        # new_mask = np.ones(self.shape).astype(bool)
+        if mask.ndim == 1:
+            # Assume it applies to cell axis
+            return tuple([Ellipsis, mask, slice(None)])
+        elif mask.ndim == 2:
+            # Assume it applies to cell and frame axes
+            # Note sure that this makes sense
+            return tuple([Ellipsis, mask.any(1), slice(None)])
+        elif mask.ndim == 5:
+            # TODO: Not sure how to handle this or if it
+            #       is even possible to index w/o losing shape
+            return mask
+        else:
+            raise ValueError('Dimensions of mask must be 1, 2, or 5. '
+                             f'Got {mask.ndim}.')
+
+    def remove_parents(self,
+                       parent_daughter: Dict,
+                       cell_index: Dict
+                       ) -> np.ndarray:
+        """
+        Returns 1D boolean mask to remove parent cells
+
+        TODO:
+            - Add option to create cell_index from track
+        """
+        # Find indices of all parents along cell axis
+        parents = np.unique(tuple(parent_daughter.values()))
+        parent_idx = [cell_index[p] for p in parents]
+
+        # Make the mask
+        mask = np.ones(len(cell_index)).astype(bool)
+        mask[parent_idx] = False
+
+        return mask
+
+    def remove_short_traces(self, min_trace_length: int) -> np.ndarray:
+        """
+        Removes cells with less than min_trace_length non-nan values
+        """
+        mask = np.ones(self.shape[self._dim_idxs['cells']]).astype(bool)
+
+        # Count non-nans in each trace
+        # Label is always first metric
+        nans = ~np.isnan(self._arr[0, 0, 0])
+        counts = np.sum(nans, axis=1)
+
+        # Mask cells with too few values
+        mask[counts < min_trace_length] = False
+
+        return mask
+
+    def generate_mask(self,
+                      function: [Callable, str],
+                      metric: str,
+                      region: [str, int] = 0,
+                      channel: [str, int] = 0,
+                      key: str = None,
+                      *args, **kwargs
+                      ) -> np.ndarray:
+        """
+        I want this function to be able to generate arbitrary
+        masks from some default functions
+        i.e. percentiles, abs_val, etc..
+        """
+        # Format inputs to the correct type
+        if isinstance(region, int):
+            region = self.coords['regions'][region]
+        if isinstance(channel, int):
+            channel = self.coords['channels'][channel]
+
+        # Extract data for a single metric
+        vals = self[region, channel, metric, :, :]
+
+        if isinstance(function, Callable):
+            # Call user function to get mask
+            mask = function(vals, *args, **kwargs)
+        elif isinstance(function, str):
+            # Else mask should come from the filter utils
+            try:
+                mask = getattr(filt, function)(vals, *args, **kwargs)
+            except AttributeError:
+                raise AttributeError('Did not understand filtering '
+                                     f'function {function}.')
+
+        if key is not None:
+            # Save the mask if key is given
+            self.masks[key] = mask
+
+        return mask
+
+    def get_mask(self, key: str) -> np.ndarray:
+        return self.masks[key]
+
+    def set_time(self, time: [np.ndarray, Tuple]) -> None:
+        """
+        Define the time axis
+        """
+        if time is None:
+            self.time = self.coords['frames']
+        else:
+            if isinstance(time, (int, float)):
+                # if time is a single value, assume it is the total time
+                self.time = np.arange(0, time, len(self.coords['frames']))
+            else:
+                if len(time) == 2:
+                    # Assume it defines the end points
+                    self.time = np.arange(*time, len(self.coords['frames']))
+                elif len(time) == len(self.coords['frames']):
+                    self.time = time,
+                else:
+                    warnings.warn(f'Did not understand time {time}. '
+                                  'Using frames.', UserWarning)
+                    self.time = self.coords['frames']
+
+
+class Experiment():
     """
     Add Typing hints when the imports are fixed
 
     TODO:
-        - Add ability to save all Arrays in single file
-        - Will need to pad arrays with different number of cells with np.nan
+        - Add ability to filter all Conditions
     """
 
-    __slots__ = ('name', 'attrs', 'sites')
+    __slots__ = ('name', 'attrs', 'sites', 'masks')
 
     def __init__(self,
-                 arrays: Collection = None,
+                 arrays: Collection[Condition] = None,
                  name: str = None,
-                 attrs: dict = None,
-                 **kwargs
+                 time: [np.ndarray, Tuple] = None,
                  ) -> None:
         """
+        TODO:
+            - Will input dimensions ever need to be padded?
         """
         # Save some values
         self.name = name
-        self.attrs = attrs
         self.sites = {}
 
+        # Save arrays if given
         if arrays is not None:
             [self.__setitem__(None, a) for a in arrays]
+
+        # Build dictionary for saving masks
+        self.masks = {k: {} for k in self.sites}
 
     def __setitem__(self, key=None, value=None):
 
         # If no value is passed, nothing is done
         if value is None:
             return
+        elif not isinstance(value, Condition):
+            raise TypeError('All values in Experiment must be'
+                            f'type Condition. Got {type(value)}.')
 
         # Get key from array or set increment
         if key is None:
@@ -278,7 +550,6 @@ class PositionArray():
                 key = tuple([key])
             indices = tuple(self.sites.values())[0]._convert_keys_to_index(key)
 
-            # TODO: Makes more sense for this to return a dictionary
             return [v._getitem_w_idx(indices) for v in self.sites.values()]
 
     def __len__(self):
@@ -287,12 +558,157 @@ class PositionArray():
     def __str__(self):
         return str(self.sites)
 
+    @property
+    def shape(self):
+        return [v.shape for v in self.sites.values()]
+
+    @property
+    def ndim(self):
+        return [v.ndim for v in self.sites.values()]
+
+    @property
+    def dtype(self):
+        return [v.dtype for v in self.sites.values()]
+
+    @property
+    def conditions(self):
+        return [v.name for v in self.sites.values()]
+
+    @property
+    def time(self):
+        return [v.time for v in self.sites.values()]
+
+    def items(self):
+        return self.sites.items()
+
+    def values(self):
+        return self.sites.values()
+
+    def keys(self):
+        return self.sites.keys()
+
+    def update(self, *args, **kwargs):
+        return self.sites.update(*args, **kwargs)
+
+    def set_time(self, time: [np.ndarray, Tuple] = None) -> None:
+        """
+        Define the time axis
+        """
+        for v in self.sites.values():
+            v.set_time(time)
+
+    def save(self, path: str) -> None:
+        """
+        Saves all the Conditions in Experiment
+        to an hdf5 file.
+
+        TODO:
+            - Add checking for path and overwrite options
+        """
+        f = h5py.File(path, 'w')
+        for key, val in self.sites.items():
+            # Array data stored as a dataset
+            f.create_dataset(key, data=val._arr)
+
+            # Axis names and coords stored as attributes
+            for coord in val.coords:
+                f[key].attrs[coord] = val.coords[coord]
+
+        f.close()
+
+    @classmethod
+    def load(cls, path: str) -> None:
+        """
+        Load a structured arrary and convert to sites dict.
+
+        TODO:
+            - Add a check that path exists
+        """
+        f = h5py.File(path, "r")
+        return cls._build_from_file(f)
+
+    def generate_mask(self,
+                      function: [Callable, str],
+                      metric: str,
+                      region: [str, int] = 0,
+                      channel: [str, int] = 0,
+                      key: str = None,
+                      *args, **kwargs
+                      ) -> np.ndarray:
+        """
+        Calls generate_mask for each Condition in self.sites
+        """
+        # Build masks in each Condition with the function
+        _masks = [v.generate_mask(function, metric, region,
+                                  channel, key, *args, **kwargs)
+                  for v in self.sites.values()]
+
+        # Save if needed
+        if key is not None:
+            self.masks[key] = _masks
+
+        return _masks
+
+    def filter_cells(self,
+                     mask: Collection[np.ndarray] = None,
+                     key: str = None,
+                     delete: bool = True,
+                     *args, **kwargs
+                     ) -> np.ndarray:
+        """
+        Either uses an arbitrary mask or a saved mask (key) to
+        filter the data. If delete, the underlying structure
+        is changed, otherwise, the data are only returned.
+
+        TODO:
+            - Add option to return a new Condition instead of
+              an np.ndarray
+        """
+        # If key is provided, look for saved mask
+        if mask is None and key is not None:
+            mask = self.masks[key]
+        elif mask is None and key is None:
+            warnings.warn('Did not get mask or key. Nothing done.',
+                          UserWarning)
+            return
+
+        # Make sure enough lists are available
+        if isinstance(mask, np.ndarray):
+            mask = [mask]
+        # Lengthen mask list if needed
+        if len(mask) == 1:
+            mask = mask * len(self.sites)
+        elif len(mask) != len(self.sites):
+            raise ValueError(f'Have {len(self.sites)} sites and '
+                             f'{len(mask)} masks.')
+
+        # Mask type and dimension will be checked in Condition
+        out = [arr.filter_cells(msk, key, delete, *args, **kwargs)
+               for msk, arr in zip(mask, self.sites.values())]
+
+        return out
+
+    @staticmethod
+    def _build_from_file(f: h5py.File) -> 'Experiment':
+        """
+        Given an hdf5 file, returns a Experiment instance
+        """
+        pos = Experiment()
+        for key in f:
+            # Attrs define the coords and axes
+            _arr = Condition(**f[key].attrs, name=key)
+            # f[key] holds the actual array data
+            _arr[:] = f[key]
+            pos[key] = _arr
+
+        return pos
+
 
 # Define custom types to make output tracking esier
 Image = NewType('image', np.ndarray)
 Mask = NewType('mask', np.ndarray)
 Track = NewType('track', np.ndarray)
-Arr = NewType('array', CellArray)
+Arr = NewType('array', Condition)
 
 # Save input names and types
 INPT_NAMES = [Image.__name__, Mask.__name__, Track.__name__, Arr.__name__]
