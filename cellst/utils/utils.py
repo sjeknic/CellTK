@@ -43,6 +43,9 @@ def custom_function(operation):
 class ImageHelper():
     """
     Decorator to help with passing only the correct image stacks to functions
+
+    TODO:
+        - See PEP563, should use typing.get_type_hints
     """
     def __init__(self,
                  by_frame: bool = False,

@@ -141,7 +141,7 @@ class Segment(BaseSegment):
                                    compact: float = 100,
                                    seed_thres: float = 0.975,
                                    seed_min_size: float = 12,
-                                   steps: int = 100,
+                                   steps: int = 50,
                                    connectivity: int = 2
                                    ) -> Mask:
         """

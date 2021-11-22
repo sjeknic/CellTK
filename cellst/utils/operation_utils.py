@@ -47,12 +47,13 @@ def gray_fill_holes_celltk(labels):
 
 def track_to_mask(track: Track, idx: np.ndarray = None) -> Mask:
     """
-    # Gives Track with parent values filled in by closest neighbor
+    Gives Track with parent values filled in by closest neighbor
 
     Args:
         - track
         - idx: locations of parent values to fill in
-    # https://stackoverflow.com/questions/3662361/
+
+    See https://stackoverflow.com/questions/3662361/
     """
     if idx is None: idx = track < 0
     ind = distance_transform_edt(idx,

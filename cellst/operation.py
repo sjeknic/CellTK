@@ -327,11 +327,6 @@ class BaseExtract(Operation):
         """
         channel and region _map should be the names that will get saved in the final df
         with the images and masks they correspond to.
-        TODO:
-            - Clean up this whole function when it's working
-            - Condition should get passed to this function. Pipeline likely cannot because
-              the same operation will be used for multiple Pipelines. But Orchestrator should
-              be able to.
         """
 
         super().__init__(output, save, _output_id)
@@ -424,8 +419,6 @@ class BaseExtract(Operation):
                                  cell_index: dict = None
                                  ) -> np.ndarray:
         """
-        Function
-
         Hard rule: parent must appear sequentially BEFORE daughter.
                    even the same frame won't work I think. But that
                    shouldn't be that hard to enforce
