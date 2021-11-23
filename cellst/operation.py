@@ -1,12 +1,10 @@
-from typing import Collection, Tuple, Callable, List
+from typing import Collection, Tuple, Callable, List, Dict
 import warnings
 
 import numpy as np
 from skimage.measure import regionprops_table
 
 from cellst.utils._types import Image, Mask, Track, Arr, INPT_NAME_IDX
-# TODO: For whole project. Probably move towards using modules more.
-#       i.e. import cellst.utils.operation_utils as op
 from cellst.utils.operation_utils import track_to_mask, parents_from_track
 
 
@@ -175,6 +173,37 @@ class Operation():
 
         return result
 
+    def _operation_to_dict(self, op_slots: Collection[str] = None) -> Dict:
+        """
+        Returns a dictionary that fully defines the operation
+        """
+        # Get attributes to lookup
+        base_slots = ['__name__', 'save', 'output', '_output_id']
+        if op_slots is not None: base_slots.extend(op_slots)
+
+        # Save in dictionary
+        op_defs = {}
+        for att in base_slots:
+            op_defs[att] = getattr(self, att, None)
+
+        # Save function definitions
+        func_defs = {}
+        for func, output_type, args, kwargs, name in self.functions:
+            fname = func.__name__
+
+            # func_defs -> func
+            # key = name of func, attribute of operation
+            # output_type = name of output type, key in TYPE_LOOKUP
+            # inputs = list of [args, kwargs, name]
+            func_defs[fname] = {}
+            func_defs[fname]['output_type'] = output_type.__name__
+            func_defs[fname]['inputs'] = [args, kwargs, name]
+
+        # Save in original dictionary
+        op_defs['FUNCTIONS'] = func_defs
+
+        return op_defs
+
 
 class BaseProcess(Operation):
     __name__ = 'Process'
@@ -204,6 +233,10 @@ class BaseProcess(Operation):
         used independently of Pipeline.
         """
         return self.run_operation(images, [], [], [])
+
+    def _operation_to_dict(self) -> Dict:
+        op_slots = ['input_images']
+        return super()._operation_to_dict(op_slots)
 
 
 class BaseSegment(Operation):
@@ -242,6 +275,10 @@ class BaseSegment(Operation):
         """
         return self.run_operation(images, masks, [], [])
 
+    def _operation_to_dict(self) -> Dict:
+        op_slots = ['input_images', 'input_masks']
+        return super()._operation_to_dict(op_slots)
+
 
 class BaseTrack(Operation):
     __name__ = 'Track'
@@ -253,7 +290,6 @@ class BaseTrack(Operation):
                  input_masks: Collection[str] = [],
                  output: str = 'track',
                  save: bool = False,
-                 track_file: bool = True,
                  _output_id: Tuple[str] = None,
                  ) -> None:
         super().__init__(output, save, _output_id)
@@ -279,6 +315,10 @@ class BaseTrack(Operation):
         used independently of Pipeline.
         """
         return self.run_operation(images, masks, [], [])
+
+    def _operation_to_dict(self) -> Dict:
+        op_slots = ['input_images', 'input_masks']
+        return super()._operation_to_dict(op_slots)
 
 
 class BaseExtract(Operation):
@@ -405,7 +445,6 @@ class BaseExtract(Operation):
         This directly calls extract_data_from_image
         instead of using run_operation
         """
-
         kwargs = dict(channels=channels, regions=regions,
                       condition=condition, lineages=lineages)
         return self.extract_data_from_image(images, masks, tracks,
@@ -504,6 +543,11 @@ class BaseExtract(Operation):
 
         return np.moveaxis(out, 0, -1)
 
+    def _operation_to_dict(self) -> Dict:
+        # TODO: Not sure the best way to handle this Operation
+        op_slots = ['input_images', 'input_masks', 'input_tracks']
+        return super()._operation_to_dict(op_slots)
+
     def add_extra_metric(self, name: str, func: Callable = None) -> None:
         """
         Allows for adding custom metrics. If function is none, value will just
@@ -540,11 +584,7 @@ class BaseExtract(Operation):
                                   ) -> None:
         """
         Extract currently only supports one function due to how
-        extract_data_from_images expects the inputs. Therefore, for
-        now there is no easy way to add a different function.
-
-        TODO:
-            - Implement option for new metrics during extract
+        extract_data_from_images expects the inputs.
         """
         raise NotImplementedError('Adding new functions to Extract is '
                                   'not currently supported. '
@@ -584,6 +624,19 @@ class BaseEvaluate(Operation):
     _input_type = (Arr,)
     _output_type = Arr
 
+    def __init__(self,
+                 input_arrays: Collection[str] = [],
+                 output: str = 'evaluate',
+                 save: bool = False,
+                 _output_id: Tuple[str] = None,
+                 ) -> None:
+        super().__init__(output, save, _output_id)
+
+        if isinstance(input_arrays, str):
+            self.input_arrays = [input_arrays]
+        else:
+            self.input_arrays = input_arrays
+
     def __call__(self,
                  arrs: Collection[Arr]
                  ) -> Arr:
@@ -592,3 +645,7 @@ class BaseEvaluate(Operation):
         used independently of Pipeline.
         """
         return self.run_operation([], [], [], arrs)
+
+    def _operation_to_dict(self) -> Dict:
+        op_slots = ['input_arrays']
+        return super()._operation_to_dict(op_slots)
