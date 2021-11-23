@@ -18,10 +18,6 @@ from cellst.utils._types import INPT, INPT_NAMES, INPT_IDX, INPT_NAME_IDX
 
 
 class Pipeline():
-    """
-    This is the no longer outermost holder class. It will hold all of the Operation classes.
-    """
-
     # TODO: need a better way to define where the path should be...
     file_location = os.path.dirname(os.path.realpath(__file__))
 
@@ -69,8 +65,7 @@ class Pipeline():
 
     def add_operations(self,
                        operation: Collection[Operation],
-                       index: int = -1,
-                       save: (bool, Collection[bool]) = False
+                       index: int = -1
                        ) -> None:
         """
         Adds Operations to the Pipeline and recalculates the index
@@ -80,7 +75,6 @@ class Pipeline():
         Returns:
 
         TODO:
-            - Add option for saving individual results of the output
             - Not sure the index results always make sense, best to add all
               operations at once
         """
@@ -421,18 +415,186 @@ class Pipeline():
 
 
 class Orchestrator():
-    """
-    Not sure if I will include this yet. The idea is that this would be the interface with fireworks
-    or other ambiguous job scheduler. Basically it just needs to create a separate Pipeline for
-    each folder it is given.
-
-    This would also be used for running Pipelines on multiple local cores.
-    """
     file_location = os.path.dirname(os.path.realpath(__file__))
 
-    def __init__(self):
-        # Get the user inputs (path to yaml for now...)
-        self._get_command_line_inputs()
+    __slots__ = ('pipelines', 'operations',
+                 'parent_folder', 'output_folder',
+                 'operation_index', 'img_ext',
+                 'overwrite')
+
+    def __init__(self,
+                 parent_folder: str = None,
+                 output_folder: str = None,
+                 match_str: str = None,
+                 image_folder: str = None,
+                 mask_folder: str = None,
+                 track_folder: str = None,
+                 array_folder: str = None,
+                 input_yaml: str = None,
+                 file_extension: str = 'tif',
+                 overwrite: bool = True
+                 ) -> None:
+        """
+        Args:
+
+        Returns:
+            None
+
+        TODO:
+            - Should be able to parse args and load a yaml as well
+        """
+        # Save some values
+        self.img_ext = file_extension
+        self.overwrite = overwrite
+
+        # Build the Pipelines and input/output paths
+        self.pipelines = {}
+        self._build_pipelines(parent_folder, output_folder, match_str,
+                              image_folder, mask_folder, track_folder,
+                              array_folder)
+        self._make_output_folder(self.overwrite)
+
+        # Prepare for getting operations
+        self.operations = []
+
+    def run(self, ncores: int = 1) -> None:
+        """
+        Run all the Pipelines with all of the operations
+        """
+        # Can skip doing anything if no operations have been added
+        if len(self.operations) == 0 or len(self.pipelines) == 0:
+            warnings.warn('No Operations and/or Pipelines. Returning None.',
+                          UserWarning)
+            return
+
+        # TODO: Operations might need to be copied
+        # TODO: Pipelines might also need to be
+        for fol, kwargs in self.pipelines.items():
+            pipe = Pipeline(**kwargs)
+            pipe.add_operations(self.operations)
+
+    def add_operations(self,
+                       operation: Collection[Operation],
+                       index: int = -1
+                       ) -> None:
+        """
+        Adds Operations to the Orchestrator and recalculates the index
+
+        Args:
+
+        Returns:
+        """
+        if isinstance(operation, Collection):
+            if all([isinstance(o, Operation) for o in operation]):
+                if index == -1:
+                    self.operations.extend(operation)
+                else:
+                    self.operations[index:index] = operation
+            else:
+                raise ValueError('Not all elements of operation are class Operation.')
+        elif isinstance(operation, Operation):
+            if index == -1:
+                self.operations.append(operation)
+            else:
+                self.operations.insert(index, operation)
+        else:
+            raise ValueError(f'Expected type Operation, got {type(operation)}.')
+
+        self.operation_index = {i: o for i, o in enumerate(self.operations)}
+
+    def _build_pipelines(self,
+                         parent_folder: str,
+                         output_folder: str,
+                         match_str: str,
+                         image_folder: str,
+                         mask_folder: str,
+                         track_folder: str,
+                         array_folder: str
+                         ) -> None:
+        """
+        """
+        # Parent folder defaults to folder where Orchestrator was called
+        if parent_folder is None:
+            self.parent_folder = os.path.abspath(sys.argv[0])
+        else:
+            self.parent_folder = parent_folder
+
+        # Output folder defaults to folder in parent_folder
+        if output_folder is None:
+            self.output_folder = os.path.join(self.parent_folder, 'outputs')
+        else:
+            self.output_folder = output_folder
+
+        # Find all folders that will be needed for Pipelines
+        for fol in os.listdir(self.parent_folder):
+            # Check for the match_str
+            if match_str is not None and match_str not in fol:
+                continue
+
+            # Make sure the path is a directory
+            fol_path = os.path.join(self.parent_folder, fol)
+            if os.path.isdir(fol_path) and fol_path != self.output_folder:
+                # First initialize the dictionary
+                self.pipelines[fol] = {}
+
+                # Save parent folder
+                self.pipelines[fol]['parent_folder'] = fol_path
+
+                # Save output folder relative to self.output_folder
+                out_fol = os.path.join(self.output_folder, fol)
+                self.pipelines[fol]['output_folder'] = out_fol
+
+                # Set all of the subfolders
+                self.pipelines[fol].update(dict(
+                        image_folder=self._set_rel_to_par(fol_path,
+                                                          image_folder),
+                        mask_folder=self._set_rel_to_par(fol_path,
+                                                         mask_folder),
+                        track_folder=self._set_rel_to_par(fol_path,
+                                                          track_folder),
+                        array_folder=self._set_rel_to_par(fol_path,
+                                                          array_folder),
+                    ))
+
+                # Add miscellaneous options
+                self.pipelines[fol]['file_extension'] = self.img_ext
+                self.pipelines[fol]['overwrite'] = self.overwrite
+
+    def _make_output_folder(self,
+                            overwrite: bool = True
+                            ) -> None:
+        """
+        This will also be responsible for logging and passing the yaml
+        TODO:
+            - Add logging file
+        """
+        if not os.path.exists(self.output_folder):
+            os.makedirs(self.output_folder)
+            fmode = 'a'
+        elif overwrite:
+            fmode = 'w'
+        elif not overwrite:
+            fmode = 'a'
+            it = 0
+            tempdir = self.output_folder + f'_{it}'
+            while os.path.exists(tempdir):
+                it += 1
+                tempdir = self.output_folder + f'_{it}'
+
+            self.output_folder = tempdir
+            os.makedirs(self.output_folder)
+
+    def _set_rel_to_par(self,
+                        par_path: str,
+                        inpt: str
+                        ) -> str:
+        """
+        """
+        # Parse sub-folder inputs
+        if inpt is not None:
+            inpt = os.path.join(par_path, inpt)
+
+        return inpt
 
     def parse_yaml(self, path: str) -> Dict:
         """
