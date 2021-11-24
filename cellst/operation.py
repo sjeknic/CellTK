@@ -1,17 +1,15 @@
+import sys
 from typing import Collection, Tuple, Callable, List, Dict
 import warnings
 
 import numpy as np
 from skimage.measure import regionprops_table
 
-from cellst.utils._types import Image, Mask, Track, Arr, INPT_NAME_IDX
+from cellst.utils._types import Image, Mask, Track, Arr, INPT_NAME_IDX, TYPE_LOOKUP
 from cellst.utils.operation_utils import track_to_mask, parents_from_track
 
 
 class Operation():
-    """
-    This is the base class for all operations (segmentation, tracking, etc.)
-    """
     __name__ = 'Operation'
     __slots__ = ('save', 'output', 'functions', 'func_index', 'input_images',
                  'input_masks', 'input_tracks', 'input_arrays', 'save_arrays',
@@ -123,10 +121,13 @@ class Operation():
             - Is func_index needed at all?
         """
         try:
-            func = getattr(self, func)
+            # Check that the function exists
+            _ = getattr(self, func)
+
+            # Save func as string for dictionaries
             self.functions.append(tuple([func, output_type, args, kwargs, name]))
-        except NameError:
-            raise NameError(f"Function {func} not found in {self}.")
+        except AttributeError:
+            raise AttributeError(f"Function {func} not found in {self}.")
 
         self.func_index = {i: f for i, f in enumerate(self.functions)}
 
@@ -148,6 +149,7 @@ class Operation():
         result = inputs[INPT_NAME_IDX[self._output_type.__name__]]
 
         for (func, expec_type, args, kwargs, name) in self.functions:
+            func = getattr(self, func)
             output_type, result = func(*inputs, *args, **kwargs)
 
             # The user-defined expected type will overwrite output_type
@@ -189,15 +191,14 @@ class Operation():
         # Save function definitions
         func_defs = {}
         for func, output_type, args, kwargs, name in self.functions:
-            fname = func.__name__
-
-            # func_defs -> func
-            # key = name of func, attribute of operation
-            # output_type = name of output type, key in TYPE_LOOKUP
-            # inputs = list of [args, kwargs, name]
-            func_defs[fname] = {}
-            func_defs[fname]['output_type'] = output_type.__name__
-            func_defs[fname]['inputs'] = [args, kwargs, name]
+            func_defs[func] = {}
+            if output_type is not None:
+                func_defs[func]['output_type'] = output_type.__name__
+            else:
+                func_defs[func]['output_type'] = output_type
+            func_defs[func]['name'] = name
+            func_defs[func]['args'] = args
+            func_defs[func]['kwargs'] = kwargs
 
         # Save in original dictionary
         op_defs['FUNCTIONS'] = func_defs
@@ -382,7 +383,7 @@ class BaseExtract(Operation):
                  _output_id: Tuple[str] = None
                  ) -> None:
         """
-        channel and region _map should be the names that will get saved in the final df
+        channels and regions should be the names that will get saved in the final df
         with the images and masks they correspond to.
         """
 
@@ -425,7 +426,7 @@ class BaseExtract(Operation):
                       remove_parent=remove_parent)
         # Automatically add extract_data_from_image
         # Name is always None, because gets saved in Pipeline as output
-        self.functions = [tuple([self.extract_data_from_image, Arr, [], kwargs, None])]
+        self.functions = [tuple(['extract_data_from_image', Arr, [], kwargs, None])]
         self.func_index = {i: f for i, f in enumerate(self.functions)}
 
         # Add division_frame and parent_id
@@ -544,20 +545,29 @@ class BaseExtract(Operation):
         return np.moveaxis(out, 0, -1)
 
     def _operation_to_dict(self) -> Dict:
-        # TODO: Not sure the best way to handle this Operation
         op_slots = ['input_images', 'input_masks', 'input_tracks']
-        return super()._operation_to_dict(op_slots)
+        op_dict = super()._operation_to_dict(op_slots)
+
+        # Add the kwargs for extract_data_from_image
+        # TODO: Should be a neater way to get these kwargs
+        _, _, _, kwargs, _ = self.functions[0]
+        op_dict.update(kwargs)
+
+        # Add metrics and extra properties
+        # TODO: This is also a bit hackish
+        func = 'extract_data_from_image'
+        op_dict['FUNCTIONS'][func]['metrics'] = self._metrics
+        op_dict['FUNCTIONS'][func]['extra_props'] = self._extra_properties
+
+        return op_dict
 
     def add_extra_metric(self, name: str, func: Callable = None) -> None:
         """
         Allows for adding custom metrics. If function is none, value will just
         be nan.
         """
-        if name in self._metrics:
-            warnings.warn(f'Metric {name} already exists.', UserWarning)
-        else:
-            if func is None: func = self.EmptyProperty()
-            self._extra_properties[name] = func
+        if func is None: func = self.EmptyProperty()
+        self._extra_properties[name] = func
 
     def set_metric_list(self, metrics: Collection[str]) -> None:
         """
@@ -649,3 +659,44 @@ class BaseEvaluate(Operation):
     def _operation_to_dict(self) -> Dict:
         op_slots = ['input_arrays']
         return super()._operation_to_dict(op_slots)
+
+
+'''HELPER FUNCTION'''
+
+
+def dict_to_operation(op_dict: Dict) -> Operation:
+    """
+    """
+    # Get all the values that relate to the Operation
+    to_init = {k: v for k, v in op_dict.items() if k != 'FUNCTIONS'}
+
+    # Get operation class to call
+    operation = to_init.pop('__name__')
+    # Seems messy. Any change to repo structure will break this.
+    operation = getattr(sys.modules[f'cellst.{operation.lower()}'], operation)
+
+    # Initalize the class
+    operation = operation(**to_init)
+
+    # Add the functions to the operation
+    for key, val in op_dict['FUNCTIONS'].items():
+        func = key
+        name, args, kwargs = val['name'], val['args'], val['kwargs']
+
+        # Get the type if custom type
+        exp_type = val['output_type']
+        try:
+            exp_type = TYPE_LOOKUP[exp_type]
+        except (KeyError, AttributeError):
+            pass
+
+        try:
+            operation.add_function_to_operation(func, exp_type, name,
+                                                *args, **kwargs)
+        except NotImplementedError:
+            # Extract already has function added, but needs other info
+            operation.set_metric_list(val['metrics'])
+            for k, v in val['extra_props'].items():
+                operation.add_extra_metric(k, v)
+
+    return operation
