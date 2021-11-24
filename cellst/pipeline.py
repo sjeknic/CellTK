@@ -2,19 +2,17 @@ import os
 import sys
 import argparse
 import yaml
-import multiprocessing
 import warnings
-from typing import Dict, List, Collection, Union, Generator, Tuple
-from glob import glob
-import datetime as dtdt
+from multiprocessing import Pool
+from typing import Dict, List, Collection, Tuple
 
 import numpy as np
 import tifffile as tiff
 import imageio as iio
 
 from cellst.operation import Operation
-from cellst.utils._types import Image, Mask, Track, Arr
-from cellst.utils._types import INPT, INPT_NAMES, INPT_IDX, INPT_NAME_IDX
+from cellst.utils._types import Image, Mask, Track, Arr, INPT_NAMES
+from cellst.utils.process_utils import condense_operations, extract_operations
 
 
 class Pipeline():
@@ -413,6 +411,16 @@ class Pipeline():
 
         # TODO: Add Logging file here
 
+    @classmethod
+    def _run_single_pipe(cls, pipe: Dict, oper: Dict) -> Arr:
+        """
+        Creates a Pipeline object, adds operations, and runs.
+        """
+        pipe = Pipeline(**pipe)
+        opers = extract_operations(oper)
+        pipe.add_operations(opers)
+        return pipe.run()
+
 
 class Orchestrator():
     file_location = os.path.dirname(os.path.realpath(__file__))
@@ -457,7 +465,7 @@ class Orchestrator():
         # Prepare for getting operations
         self.operations = []
 
-    def run(self, ncores: int = 1) -> None:
+    def run(self, n_cores: int = 1) -> None:
         """
         Run all the Pipelines with all of the operations
         """
@@ -467,11 +475,41 @@ class Orchestrator():
                           UserWarning)
             return
 
-        # TODO: Operations might need to be copied
-        # TODO: Pipelines might also need to be
-        for fol, kwargs in self.pipelines.items():
-            pipe = Pipeline(**kwargs)
-            pipe.add_operations(self.operations)
+        # Get a single dictionary that defines all operations
+        operation_dict = condense_operations(self.operations)
+
+        # Run with multiple cores or just a single core
+        if n_cores > 1:
+            results = self.run_multiple_pipelines(self.pipelines,
+                                                  operation_dict,
+                                                  n_cores=n_cores)
+        else:
+            results = []
+            for fol, kwargs in self.pipelines:
+                results.append(Pipeline._run_single_pipe(kwargs,
+                                                         operation_dict))
+
+        return results
+
+    def run_multiple_pipelines(self,
+                               pipeline_dict: Dict,
+                               operation_dict: Dict,
+                               n_cores: int = 1
+                               ) -> Collection[Arr]:
+        """
+        pipeline_dict holds path information for building ALL of the pipelines
+            - key is subfolder, val is to be passed to Pipeline.__init__
+        operation_dict holds the information for building ALL of the operations
+            - key is operation
+        """
+        with Pool(n_cores) as pool:
+            # Set up pool of workers
+            multi = [pool.apply_async(Pipeline._run_single_pipe,
+                                      args=(kwargs, operation_dict))
+                     for kwargs in pipeline_dict.values()]
+
+            # Run pool and return results
+            return [m.get().shape for m in multi]
 
     def add_operations(self,
                        operation: Collection[Operation],
@@ -546,15 +584,15 @@ class Orchestrator():
 
                 # Set all of the subfolders
                 self.pipelines[fol].update(dict(
-                        image_folder=self._set_rel_to_par(fol_path,
-                                                          image_folder),
-                        mask_folder=self._set_rel_to_par(fol_path,
-                                                         mask_folder),
-                        track_folder=self._set_rel_to_par(fol_path,
-                                                          track_folder),
-                        array_folder=self._set_rel_to_par(fol_path,
-                                                          array_folder),
-                    ))
+                    image_folder=self._set_rel_to_par(fol_path,
+                                                      image_folder),
+                    mask_folder=self._set_rel_to_par(fol_path,
+                                                     mask_folder),
+                    track_folder=self._set_rel_to_par(fol_path,
+                                                      track_folder),
+                    array_folder=self._set_rel_to_par(fol_path,
+                                                      array_folder),
+                ))
 
                 # Add miscellaneous options
                 self.pipelines[fol]['file_extension'] = self.img_ext

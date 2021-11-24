@@ -715,3 +715,4 @@ INPT_NAMES = [Image.__name__, Mask.__name__, Track.__name__, Arr.__name__]
 INPT_NAME_IDX = {n: i for i, n in enumerate(INPT_NAMES)}
 INPT = [Image, Mask, Track, Arr]
 INPT_IDX = {n: i for i, n in enumerate(INPT)}
+TYPE_LOOKUP = dict(zip(INPT_NAMES, INPT))
