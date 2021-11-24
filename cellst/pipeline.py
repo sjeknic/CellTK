@@ -61,6 +61,16 @@ class Pipeline():
         self._image_container = {}
         self.operations = []
 
+    def __enter__(self) -> None:
+        """
+        """
+        pass
+
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+        """
+        """
+        self._image_container = {}
+
     def add_operations(self,
                        operation: Collection[Operation],
                        index: int = -1
@@ -108,32 +118,34 @@ class Pipeline():
                           UserWarning)
             return
 
-        # Determine needed inputs and outputs and load to container
-        inputs, outputs = self._input_output_handler()
-        self._load_images_to_container(self._image_container, inputs, outputs)
+        # This will delete images after finished running
+        with self:
+            # Determine needed inputs and outputs and load to container
+            inputs, outputs = self._input_output_handler()
+            self._load_images_to_container(self._image_container, inputs, outputs)
 
-        for inpts, otpts, oper in zip(inputs, outputs, self.operations):
-            # Get images and pass to operation
-            # try/except block is here to raise more helpful messages for user
-            # TODO: Add logging of files and whether they were found
-            try:
-                imgs, msks, trks, arrs = self._get_images_from_container(inpts)
-            except KeyError as e:
-                raise KeyError(f'Failed to find all inputs for {oper} \n',
-                               e.__str__())
+            for inpts, otpts, oper in zip(inputs, outputs, self.operations):
+                # Get images and pass to operation
+                # try/except block is here to raise more helpful messages for user
+                # TODO: Add logging of files and whether they were found
+                try:
+                    imgs, msks, trks, arrs = self._get_images_from_container(inpts)
+                except KeyError as e:
+                    raise KeyError(f'Failed to find all inputs for {oper} \n',
+                                   e.__str__())
 
-            # Save the results in the image container
-            with oper:
-                oper_result = oper.run_operation(imgs, msks, trks, arrs)
-                self._image_container = self.update_image_container(
-                                            self._image_container,
-                                            oper_result,
-                                            otpts)
+                # Save the results in the image container
+                with oper:
+                    oper_result = oper.run_operation(imgs, msks, trks, arrs)
+                    self._image_container = self.update_image_container(
+                                                self._image_container,
+                                                oper_result,
+                                                otpts)
 
-                # Write to disk if needed
-                if oper.save:
-                    self.save_images(oper.save_arrays,
-                                     oper._output_type.__name__)
+                    # Write to disk if needed
+                    if oper.save:
+                        self.save_images(oper.save_arrays,
+                                         oper._output_type.__name__)
 
         return oper_result
 
@@ -415,11 +427,20 @@ class Pipeline():
     def _run_single_pipe(cls, pipe: Dict, oper: Dict) -> Arr:
         """
         Creates a Pipeline object, adds operations, and runs.
+
+        NOTE: This might be overkill, but don't want it to persist
+              in memory.
         """
+        # Initialize pipeline and operations
         pipe = Pipeline(**pipe)
         opers = extract_operations(oper)
-        pipe.add_operations(opers)
-        return pipe.run()
+        with pipe:
+            # Run pipeline, save results, and then del pipeline
+            pipe.add_operations(opers)
+            result = pipe.run()
+            del pipe
+
+        return result
 
 
 class Orchestrator():
