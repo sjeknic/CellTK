@@ -45,7 +45,7 @@ def _dict_to_operation(oper_dict: Dict) -> Operation:
         # Get the type if custom type
         exp_type = val['output_type']
         try:
-            exp_type = TYPE_LOOKUP[exp_type]
+            exp_type = TYPE_LOOKUP[exp_type.__name__]
         except (KeyError, AttributeError):
             pass
 
