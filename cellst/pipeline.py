@@ -6,6 +6,7 @@ import warnings
 from multiprocessing import Pool
 from typing import Dict, List, Collection, Tuple
 from copy import deepcopy
+from glob import glob
 
 import numpy as np
 import tifffile as tiff
@@ -13,6 +14,7 @@ import imageio as iio
 
 from cellst.operation import Operation
 from cellst.utils._types import Image, Mask, Track, Arr, INPT_NAMES
+from cellst.utils._types import Condition, Experiment
 from cellst.utils.process_utils import condense_operations, extract_operations
 from cellst.utils.utils import folder_name
 
@@ -471,7 +473,7 @@ class Orchestrator():
 
     __slots__ = ('pipelines', 'operations',
                  'parent_folder', 'output_folder',
-                 'operation_index', 'img_ext',
+                 'operation_index', 'img_ext', 'name',
                  'overwrite', 'save', 'condition_map')
 
     def __init__(self,
@@ -482,11 +484,11 @@ class Orchestrator():
                  mask_folder: str = None,
                  track_folder: str = None,
                  array_folder: str = None,
-                 condition_folder: dict = None,
+                 condition_map: dict = {},
+                 name: str = 'experiment',
                  file_extension: str = 'tif',
                  overwrite: bool = True,
                  save_master_df: bool = True,
-                 condition_map: dict = {}
                  ) -> None:
         """
         Args:
@@ -498,6 +500,7 @@ class Orchestrator():
             - Should be able to parse args and load a yaml as well
         """
         # Save some values
+        self.name = name
         self.img_ext = file_extension
         self.overwrite = overwrite
         self.save = save_master_df
@@ -604,10 +607,24 @@ class Orchestrator():
 
         self.operation_index = {i: o for i, o in enumerate(self.operations)}
 
-    def build_experiment_file(self) -> None:
+    def build_experiment_file(self, arrays: Collection[Arr] = None) -> None:
         """
+        Search folders in self.pipelines for hdf5 data frames
         """
-        pass
+        # Make Experiment array to hold data
+        out = Experiment(name=self.name)
+
+        # Search for all dfs in all pipeline folders
+        for fol in self.pipelines:
+            otpt_fol = os.path.join(self.output_folder, fol)
+
+            # NOTE: if df.name is already in Experiment, will be overwritten
+            for df in glob(os.path.join(otpt_fol, '*.hdf5')):
+                out.load_condition(df)
+
+        # Save the master df file
+        save_path = os.path.join(self.output_folder, f'{self.name}.hdf5')
+        out.save(save_path)
 
     def _build_pipelines(self,
                          parent_folder: str,

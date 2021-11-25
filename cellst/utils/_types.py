@@ -119,8 +119,8 @@ class Condition():
         f = h5py.File(path, "r")
         return cls._build_from_file(f)
 
-    @staticmethod
-    def _build_from_file(f: h5py.File) -> 'Condition':
+    @classmethod
+    def _build_from_file(cls, f: h5py.File) -> 'Condition':
         """
         Given an hdf5 file, returns a Condition instance
         """
@@ -525,7 +525,7 @@ class Experiment():
         # Build dictionary for saving masks
         self.masks = {k: {} for k in self.sites}
 
-    def __setitem__(self, key, value=None):
+    def __setitem__(self, key, value):
         # All values must be Condition
         if not isinstance(value, Condition):
             raise TypeError('All values in Experiment must be'
@@ -605,6 +605,15 @@ class Experiment():
             # Uses keys that were used for saving the Conditions
             for k, v in self.sites:
                 v.set_condition(k)
+
+    def load_condition(self, path: str, name: str = None) -> None:
+        """
+        Used to add a Condition to experiment directly from an hdf5 file
+        """
+        arr = Condition.load(path)
+        name = arr.name if name is None else name
+
+        self.__setitem__(name, arr)
 
     def save(self, path: str) -> None:
         """
@@ -697,8 +706,8 @@ class Experiment():
 
         return out
 
-    @staticmethod
-    def _build_from_file(f: h5py.File) -> 'Experiment':
+    @classmethod
+    def _build_from_file(cls, f: h5py.File) -> 'Experiment':
         """
         Given an hdf5 file, returns a Experiment instance
         """
