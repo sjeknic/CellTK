@@ -56,12 +56,6 @@ class Operation():
                 output_type = None
             self.output_id = tuple([output, output_type])
 
-    def __setattr__(self, name, value) -> None:
-        '''TODO: Not needed here, but the idea behind a custom __setattr__
-               class is that the inheriting Operation can decide if the function
-               meets the requirements.'''
-        super().__setattr__(name, value)
-
     def __str__(self) -> str:
         """
         Returns printable version of the functions and args in Operation
@@ -93,10 +87,11 @@ class Operation():
 
     def __enter__(self) -> None:
         """
-        Needed to implement __exit__
         """
         if not hasattr(self, 'save_arrays'):
             self.save_arrays = {}
+
+        return self
 
     def __exit__(self, exc_type, exc_val, exc_tb) -> None:
         """
