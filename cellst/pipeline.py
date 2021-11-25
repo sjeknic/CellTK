@@ -5,6 +5,7 @@ import yaml
 import warnings
 from multiprocessing import Pool
 from typing import Dict, List, Collection, Tuple
+from copy import deepcopy
 
 import numpy as np
 import tifffile as tiff
@@ -13,6 +14,7 @@ import imageio as iio
 from cellst.operation import Operation
 from cellst.utils._types import Image, Mask, Track, Arr, INPT_NAMES
 from cellst.utils.process_utils import condense_operations, extract_operations
+from cellst.utils.utils import folder_name
 
 
 class Pipeline():
@@ -32,7 +34,6 @@ class Pipeline():
                  mask_folder: str = None,
                  track_folder: str = None,
                  array_folder: str = None,
-                 input_yaml: str = None,
                  file_extension: str = 'tif',
                  overwrite: bool = True
                  ) -> None:
@@ -64,12 +65,16 @@ class Pipeline():
     def __enter__(self) -> None:
         """
         """
-        pass
+        if not hasattr(self, '_image_container'):
+            self._image_container = {}
+
+        return self
 
     def __exit__(self, exc_type, exc_val, exc_tb) -> None:
         """
         """
-        self._image_container = {}
+        self._image_container = None
+        del self._image_container
 
     def add_operations(self,
                        operation: Collection[Operation],
@@ -424,16 +429,34 @@ class Pipeline():
         # TODO: Add Logging file here
 
     @classmethod
-    def _run_single_pipe(cls, pipe: Dict, oper: Dict) -> Arr:
+    def _run_single_pipe(cls,
+                         pipe: Dict,
+                         oper: Dict,
+                         cond_map: Dict = {}
+                         ) -> Arr:
         """
         Creates a Pipeline object, adds operations, and runs.
 
         NOTE: This might be overkill, but don't want it to persist
               in memory.
+        NOTE: Assumes it is okay to make changes in-place in oper,
+              i.e. that it is a copy of the original dictionary
         """
+        # If Extract has default name, set to name of folder or condition
+        # NOTE: 'FUNCTIONS' key in dict has no effect with Extract
+        fol = folder_name(pipe['parent_folder'])
+        if 'extract' in oper and oper['extract']['condition'] == 'default':
+            try:
+                oper['extract']['condition'] = cond_map[fol]
+            except KeyError:
+                # Means condition map was bad
+                warnings.warn(f'Could not find condition for {fol}. '
+                              'Using default.', UserWarning)
+
         # Initialize pipeline and operations
         pipe = Pipeline(**pipe)
         opers = extract_operations(oper)
+
         with pipe:
             # Run pipeline, save results, and then del pipeline
             pipe.add_operations(opers)
@@ -449,7 +472,7 @@ class Orchestrator():
     __slots__ = ('pipelines', 'operations',
                  'parent_folder', 'output_folder',
                  'operation_index', 'img_ext',
-                 'overwrite')
+                 'overwrite', 'save', 'condition_map')
 
     def __init__(self,
                  parent_folder: str = None,
@@ -459,9 +482,11 @@ class Orchestrator():
                  mask_folder: str = None,
                  track_folder: str = None,
                  array_folder: str = None,
-                 input_yaml: str = None,
+                 condition_folder: dict = None,
                  file_extension: str = 'tif',
-                 overwrite: bool = True
+                 overwrite: bool = True,
+                 save_master_df: bool = True,
+                 condition_map: dict = {}
                  ) -> None:
         """
         Args:
@@ -475,12 +500,14 @@ class Orchestrator():
         # Save some values
         self.img_ext = file_extension
         self.overwrite = overwrite
+        self.save = save_master_df
 
         # Build the Pipelines and input/output paths
         self.pipelines = {}
         self._build_pipelines(parent_folder, output_folder, match_str,
                               image_folder, mask_folder, track_folder,
                               array_folder)
+        self.condition_map = self._update_condition_map(condition_map)
         self._make_output_folder(self.overwrite)
 
         # Prepare for getting operations
@@ -488,7 +515,10 @@ class Orchestrator():
 
     def run(self, n_cores: int = 1) -> None:
         """
-        Run all the Pipelines with all of the operations
+        Run all the Pipelines with all of the operations.
+
+        TODO:
+            - Should results really be saved?
         """
         # Can skip doing anything if no operations have been added
         if len(self.operations) == 0 or len(self.pipelines) == 0:
@@ -506,9 +536,16 @@ class Orchestrator():
                                                   n_cores=n_cores)
         else:
             results = []
-            for fol, kwargs in self.pipelines:
-                results.append(Pipeline._run_single_pipe(kwargs,
-                                                         operation_dict))
+            for fol, kwargs in self.pipelines.items():
+                results.append(
+                    Pipeline._run_single_pipe(kwargs,
+                                              deepcopy(operation_dict),
+                                              self.condition_map)
+                )
+
+        if self.save:
+            # TODO: If results are saved, pass here, otherwise, use files
+            self.build_experiment_file()
 
         return results
 
@@ -522,11 +559,17 @@ class Orchestrator():
             - key is subfolder, val is to be passed to Pipeline.__init__
         operation_dict holds the information for building ALL of the operations
             - key is operation
+
+        TODO:
+            - Not sure a copy of operation_dict has to be made here. It's going
+              to get pickled, I think, so no changes that _run_single_pipe will
+              apply to any other Pipeline. I think...
         """
         with Pool(n_cores) as pool:
             # Set up pool of workers
             multi = [pool.apply_async(Pipeline._run_single_pipe,
-                                      args=(kwargs, operation_dict))
+                                      args=(kwargs, deepcopy(operation_dict),
+                                            self.condition_map))
                      for kwargs in pipeline_dict.values()]
 
             # Run pool and return results
@@ -560,6 +603,11 @@ class Orchestrator():
             raise ValueError(f'Expected type Operation, got {type(operation)}.')
 
         self.operation_index = {i: o for i, o in enumerate(self.operations)}
+
+    def build_experiment_file(self) -> None:
+        """
+        """
+        pass
 
     def _build_pipelines(self,
                          parent_folder: str,
@@ -618,6 +666,15 @@ class Orchestrator():
                 # Add miscellaneous options
                 self.pipelines[fol]['file_extension'] = self.img_ext
                 self.pipelines[fol]['overwrite'] = self.overwrite
+
+    def _update_condition_map(self, condition_map: Dict) -> Dict:
+        """
+        """
+        if len(condition_map) > 0:
+            return condition_map
+        else:
+            # Default is to use folder name (keys in pipeline)
+            return {k: k for k in self.pipelines}
 
     def _make_output_folder(self,
                             overwrite: bool = True

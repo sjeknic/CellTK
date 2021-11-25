@@ -8,18 +8,17 @@ from typing import List, Tuple
 
 import numpy as np
 
-from cellst.utils._types import Image, Mask, Track
-from cellst.utils._types import INPT_NAMES
+from cellst.utils._types import Image, Mask, Track, Arr
+from cellst.utils._types import INPT_NAMES, TYPE_LOOKUP
 
 
-# Useful functions for interpolating nans in the data
-def nan_helper(y):
+def nan_helper(y: np.ndarray) -> np.ndarray:
+    """Linear interpolation of nans in a 1D array."""
     return np.isnan(y), lambda z: z.nonzero()[0]
 
 
-# Interpolates along rows in 2D array
-def nan_helper_2d(arr):
-    #probably can be done faster
+def nan_helper_2d(arr: np.ndarray) -> np.ndarray:
+    """Linear interpolation of nans along rows in 2D array."""
     temp = np.zeros(arr.shape)
     temp[:] = np.nan
     for n, y in enumerate(arr.copy()):
@@ -28,8 +27,14 @@ def nan_helper_2d(arr):
         temp[n, :] = y
 
 
+def folder_name(path: str) -> str:
+    """Returns name of last folder in a path"""
+    return os.path.basename(os.path.normpath(path))
+
+
 # Decorator that end users can use to add custom functions
 # to Operations.
+# TODO: Needs to wrap in ImageHelper
 def custom_function(operation):
     def decorator(func):
         func = types.MethodType(func, operation)
@@ -43,6 +48,7 @@ def custom_function(operation):
     return decorator
 
 
+# Functions to block output to Terminal
 def fileno(file_or_fd):
     fd = getattr(file_or_fd, 'fileno', lambda: file_or_fd)()
     if not isinstance(fd, int):

@@ -89,6 +89,10 @@ class Condition():
     def dtype(self):
         return self._arr.dtype
 
+    @property
+    def condition(self):
+        return self.name
+
     def save(self, path: str) -> None:
         """
         Saves Condition to an hdf5 file.
@@ -490,13 +494,17 @@ class Condition():
                                   'Using frames.', UserWarning)
                     self.time = self.coords['frames']
 
+    def set_condition(self, condition: str) -> None:
+        """
+        Updates name of the Condition array.
+        """
+        self.name = condition
+
 
 class Experiment():
     """
-    Add Typing hints when the imports are fixed
-
     TODO:
-        - Add ability to filter all Conditions
+        - Add Typing hints when the imports are fixed
     """
 
     __slots__ = ('name', 'attrs', 'sites', 'masks')
@@ -506,10 +514,6 @@ class Experiment():
                  name: str = None,
                  time: [np.ndarray, Tuple] = None,
                  ) -> None:
-        """
-        TODO:
-            - Will input dimensions ever need to be padded?
-        """
         # Save some values
         self.name = name
         self.sites = {}
@@ -521,18 +525,11 @@ class Experiment():
         # Build dictionary for saving masks
         self.masks = {k: {} for k in self.sites}
 
-    def __setitem__(self, key=None, value=None):
-
-        # If no value is passed, nothing is done
-        if value is None:
-            return
-        elif not isinstance(value, Condition):
+    def __setitem__(self, key, value=None):
+        # All values must be Condition
+        if not isinstance(value, Condition):
             raise TypeError('All values in Experiment must be'
                             f'type Condition. Got {type(value)}.')
-
-        # Get key from array or set increment
-        if key is None:
-            key = len(self.sites) + 1 if value.name is None else value.name
 
         self.sites[key] = value
 
@@ -596,6 +593,18 @@ class Experiment():
         """
         for v in self.sites.values():
             v.set_time(time)
+
+    def set_conditions(self, condition_map: Dict = {}) -> None:
+        """
+        Updates name of all Condition arrays in Experiment.
+
+        condition_map should map Condition.name to desired condition.
+        NOTE: Each condition needs a unique name for this to work.
+        """
+        if len(condition_map) == 0:
+            # Uses keys that were used for saving the Conditions
+            for k, v in self.sites:
+                v.set_condition(k)
 
     def save(self, path: str) -> None:
         """
