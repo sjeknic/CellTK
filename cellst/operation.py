@@ -7,6 +7,7 @@ from skimage.measure import regionprops_table
 
 from cellst.utils._types import Image, Mask, Track, Arr, INPT_NAME_IDX, TYPE_LOOKUP
 from cellst.utils.operation_utils import track_to_mask, parents_from_track
+import cellst.utils.metric_utils as metric_utils
 
 
 class Operation():
@@ -425,6 +426,7 @@ class BaseExtract(Operation):
         self.func_index = {i: f for i, f in enumerate(self.functions)}
 
         # Add division_frame and parent_id
+        self.add_extra_metric('median_intensity')
         self._extra_properties.update(dict(division_frame=self.EmptyProperty(),
                                            parent_id=self.EmptyProperty()))
 
@@ -561,7 +563,13 @@ class BaseExtract(Operation):
         Allows for adding custom metrics. If function is none, value will just
         be nan.
         """
-        if func is None: func = self.EmptyProperty()
+        if func is None:
+            try:
+                func = getattr(metric_utils, name)
+            except AttributeError:
+                # Function not implemented by me
+                func = self.EmptyProperty()
+
         self._extra_properties[name] = func
 
     def set_metric_list(self, metrics: Collection[str]) -> None:
