@@ -426,9 +426,8 @@ class BaseExtract(Operation):
         self.func_index = {i: f for i, f in enumerate(self.functions)}
 
         # Add division_frame and parent_id
-        self.add_extra_metric('median_intensity')
-        self._extra_properties.update(dict(division_frame=self.EmptyProperty(),
-                                           parent_id=self.EmptyProperty()))
+        for m in ('median_intensity', 'division_frame', 'parent_id'):
+            self.add_extra_metric(m)
 
     def __call__(self,
                  images: Collection[Image],
