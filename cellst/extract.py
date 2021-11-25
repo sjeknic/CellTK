@@ -109,7 +109,7 @@ class Extract(BaseExtract):
                                                         metrics,
                                                         extra_funcs,
                                                         cell_index)
-            array[r_idx, c_idx, :, :, :] = cr_data
+            array[rgn, cnl, :, :, :] = cr_data
 
         if remove_parent:
             # Get parent information from a single track

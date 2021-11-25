@@ -350,6 +350,7 @@ class Pipeline():
                         img_stack[n, ...] = img
 
                 container[key] = img_stack
+                del img_stack
 
         return container
 
