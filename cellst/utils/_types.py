@@ -25,7 +25,7 @@ class Condition():
                  cells: Collection[int] = [0],
                  frames: Collection[int] = [0],
                  name: str = 'default',
-                 time: [np.ndarray, Tuple] = None
+                 time: float = None
                  ) -> None:
         """
         TODO:
@@ -473,26 +473,14 @@ class Condition():
     def get_mask(self, key: str) -> np.ndarray:
         return self.masks[key]
 
-    def set_time(self, time: [np.ndarray, Tuple]) -> None:
+    def set_time(self, time: float) -> None:
         """
-        Define the time axis
+        Define the time axis. Time is the interval between frames
         """
         if time is None:
             self.time = self.coords['frames']
         else:
-            if isinstance(time, (int, float)):
-                # if time is a single value, assume it is the total time
-                self.time = np.arange(0, time, len(self.coords['frames']))
-            else:
-                if len(time) == 2:
-                    # Assume it defines the end points
-                    self.time = np.arange(*time, len(self.coords['frames']))
-                elif len(time) == len(self.coords['frames']):
-                    self.time = time,
-                else:
-                    warnings.warn(f'Did not understand time {time}. '
-                                  'Using frames.', UserWarning)
-                    self.time = self.coords['frames']
+            self.time = np.arange(self.coords['frames']) * time
 
     def set_condition(self, condition: str) -> None:
         """
@@ -512,7 +500,7 @@ class Experiment():
     def __init__(self,
                  arrays: Collection[Condition] = None,
                  name: str = None,
-                 time: [np.ndarray, Tuple] = None,
+                 time: float = None,
                  ) -> None:
         # Save some values
         self.name = name
@@ -587,7 +575,7 @@ class Experiment():
     def update(self, *args, **kwargs):
         return self.sites.update(*args, **kwargs)
 
-    def set_time(self, time: [np.ndarray, Tuple] = None) -> None:
+    def set_time(self, time: float = None) -> None:
         """
         Define the time axis
         """
