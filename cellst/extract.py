@@ -50,22 +50,25 @@ class Extract(BaseExtract):
         # Check that all required inputs are there
         if len(tracks) == 0 and len(masks) == 0:
             raise ValueError('Missing masks and/or tracks.')
+
+        # Collect the tracks to use
+        tracks_to_use = []
         if len(tracks) != 0:
-            # Uses tracks if provided and skips masks
+            # Uses tracks first if provided
             tracks_to_use = tracks
-        elif len(masks) != 0:
-            tracks_to_use = masks
+        if len(masks) != 0:
             # Check that sufficient lineages are provided
             if len(lineages) == 0:
                 warnings.warn('Got mask but not lineage file. No cell division'
                               ' can be tracked.', UserWarning)
+                tracks_to_use.extend(masks)
             elif len(masks) != len(lineages):
                 # TODO: This could probably be a warning and pad lineages
                 raise ValueError(f'Got {len(masks)} masks '
                                  f'and {len(lineages)} lineages.')
             else:
-                tracks_to_use = [lineage_to_track(t, l)
-                                 for t, l in zip(tracks_to_use, lineages)]
+                tracks_to_use.extend([lineage_to_track(t, l)
+                                      for t, l in zip(tracks_to_use, lineages)])
 
         # Confirm sizes of inputs match
         if len(images) != len(channels):
@@ -81,8 +84,8 @@ class Extract(BaseExtract):
 
         # Get all of the metrics and functions that will be run
         metrics = self._metrics
-        extra_names = list(self._extra_properties.keys())
-        extra_funcs = list(self._extra_properties.values())
+        extra_names = list(self._props_to_add.keys())
+        extra_funcs = list(self._props_to_add.values())
         all_measures = self._correct_metric_dim(metrics + extra_names)
 
         # Label must always be the first metric for easy indexing of cells
@@ -109,7 +112,7 @@ class Extract(BaseExtract):
                                                         metrics,
                                                         extra_funcs,
                                                         cell_index)
-            array[r_idx, c_idx, :, :, :] = cr_data
+            array[rgn, cnl, :, :, :] = cr_data
 
         if remove_parent:
             # Get parent information from a single track

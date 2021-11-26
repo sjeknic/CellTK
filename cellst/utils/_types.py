@@ -25,7 +25,7 @@ class Condition():
                  cells: Collection[int] = [0],
                  frames: Collection[int] = [0],
                  name: str = 'default',
-                 time: [np.ndarray, Tuple] = None
+                 time: float = None
                  ) -> None:
         """
         TODO:
@@ -89,6 +89,10 @@ class Condition():
     def dtype(self):
         return self._arr.dtype
 
+    @property
+    def condition(self):
+        return self.name
+
     def save(self, path: str) -> None:
         """
         Saves Condition to an hdf5 file.
@@ -115,8 +119,8 @@ class Condition():
         f = h5py.File(path, "r")
         return cls._build_from_file(f)
 
-    @staticmethod
-    def _build_from_file(f: h5py.File) -> 'Condition':
+    @classmethod
+    def _build_from_file(cls, f: h5py.File) -> 'Condition':
         """
         Given an hdf5 file, returns a Condition instance
         """
@@ -469,34 +473,26 @@ class Condition():
     def get_mask(self, key: str) -> np.ndarray:
         return self.masks[key]
 
-    def set_time(self, time: [np.ndarray, Tuple]) -> None:
+    def set_time(self, time: float) -> None:
         """
-        Define the time axis
+        Define the time axis. Time is the interval between frames
         """
         if time is None:
             self.time = self.coords['frames']
         else:
-            if isinstance(time, (int, float)):
-                # if time is a single value, assume it is the total time
-                self.time = np.arange(0, time, len(self.coords['frames']))
-            else:
-                if len(time) == 2:
-                    # Assume it defines the end points
-                    self.time = np.arange(*time, len(self.coords['frames']))
-                elif len(time) == len(self.coords['frames']):
-                    self.time = time,
-                else:
-                    warnings.warn(f'Did not understand time {time}. '
-                                  'Using frames.', UserWarning)
-                    self.time = self.coords['frames']
+            self.time = np.arange(self.coords['frames']) * time
+
+    def set_condition(self, condition: str) -> None:
+        """
+        Updates name of the Condition array.
+        """
+        self.name = condition
 
 
 class Experiment():
     """
-    Add Typing hints when the imports are fixed
-
     TODO:
-        - Add ability to filter all Conditions
+        - Add Typing hints when the imports are fixed
     """
 
     __slots__ = ('name', 'attrs', 'sites', 'masks')
@@ -504,12 +500,8 @@ class Experiment():
     def __init__(self,
                  arrays: Collection[Condition] = None,
                  name: str = None,
-                 time: [np.ndarray, Tuple] = None,
+                 time: float = None,
                  ) -> None:
-        """
-        TODO:
-            - Will input dimensions ever need to be padded?
-        """
         # Save some values
         self.name = name
         self.sites = {}
@@ -521,18 +513,11 @@ class Experiment():
         # Build dictionary for saving masks
         self.masks = {k: {} for k in self.sites}
 
-    def __setitem__(self, key=None, value=None):
-
-        # If no value is passed, nothing is done
-        if value is None:
-            return
-        elif not isinstance(value, Condition):
+    def __setitem__(self, key, value):
+        # All values must be Condition
+        if not isinstance(value, Condition):
             raise TypeError('All values in Experiment must be'
                             f'type Condition. Got {type(value)}.')
-
-        # Get key from array or set increment
-        if key is None:
-            key = len(self.sites) + 1 if value.name is None else value.name
 
         self.sites[key] = value
 
@@ -590,12 +575,33 @@ class Experiment():
     def update(self, *args, **kwargs):
         return self.sites.update(*args, **kwargs)
 
-    def set_time(self, time: [np.ndarray, Tuple] = None) -> None:
+    def set_time(self, time: float = None) -> None:
         """
         Define the time axis
         """
         for v in self.sites.values():
             v.set_time(time)
+
+    def set_conditions(self, condition_map: Dict = {}) -> None:
+        """
+        Updates name of all Condition arrays in Experiment.
+
+        condition_map should map Condition.name to desired condition.
+        NOTE: Each condition needs a unique name for this to work.
+        """
+        if len(condition_map) == 0:
+            # Uses keys that were used for saving the Conditions
+            for k, v in self.sites:
+                v.set_condition(k)
+
+    def load_condition(self, path: str, name: str = None) -> None:
+        """
+        Used to add a Condition to experiment directly from an hdf5 file
+        """
+        arr = Condition.load(path)
+        name = arr.name if name is None else name
+
+        self.__setitem__(name, arr)
 
     def save(self, path: str) -> None:
         """
@@ -688,8 +694,8 @@ class Experiment():
 
         return out
 
-    @staticmethod
-    def _build_from_file(f: h5py.File) -> 'Experiment':
+    @classmethod
+    def _build_from_file(cls, f: h5py.File) -> 'Experiment':
         """
         Given an hdf5 file, returns a Experiment instance
         """
@@ -715,3 +721,4 @@ INPT_NAMES = [Image.__name__, Mask.__name__, Track.__name__, Arr.__name__]
 INPT_NAME_IDX = {n: i for i, n in enumerate(INPT_NAMES)}
 INPT = [Image, Mask, Track, Arr]
 INPT_IDX = {n: i for i, n in enumerate(INPT)}
+TYPE_LOOKUP = dict(zip(INPT_NAMES, INPT))

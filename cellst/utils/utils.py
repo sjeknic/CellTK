@@ -1,22 +1,24 @@
+import sys
+import os
 import types
 import inspect
 import functools
+import contextlib
 from typing import List, Tuple
 
 import numpy as np
 
-from cellst.utils._types import Image, Mask, Track
-from cellst.utils._types import INPT_NAMES
+from cellst.utils._types import Image, Mask, Track, Arr
+from cellst.utils._types import INPT_NAMES, TYPE_LOOKUP
 
 
-# Useful functions for interpolating nans in the data
-def nan_helper(y):
+def nan_helper(y: np.ndarray) -> np.ndarray:
+    """Linear interpolation of nans in a 1D array."""
     return np.isnan(y), lambda z: z.nonzero()[0]
 
 
-# Interpolates along rows in 2D array
-def nan_helper_2d(arr):
-    #probably can be done faster
+def nan_helper_2d(arr: np.ndarray) -> np.ndarray:
+    """Linear interpolation of nans along rows in 2D array."""
     temp = np.zeros(arr.shape)
     temp[:] = np.nan
     for n, y in enumerate(arr.copy()):
@@ -25,8 +27,14 @@ def nan_helper_2d(arr):
         temp[n, :] = y
 
 
+def folder_name(path: str) -> str:
+    """Returns name of last folder in a path"""
+    return os.path.basename(os.path.normpath(path))
+
+
 # Decorator that end users can use to add custom functions
 # to Operations.
+# TODO: Needs to wrap in ImageHelper
 def custom_function(operation):
     def decorator(func):
         func = types.MethodType(func, operation)
@@ -38,6 +46,40 @@ def custom_function(operation):
 
         return func
     return decorator
+
+
+# Functions to block output to Terminal
+def fileno(file_or_fd):
+    fd = getattr(file_or_fd, 'fileno', lambda: file_or_fd)()
+    if not isinstance(fd, int):
+        raise ValueError("Expected a file (`.fileno()`) or a file descriptor")
+    return fd
+
+
+@contextlib.contextmanager
+def stdout_redirected(to=os.devnull, stdout=None):
+    """
+    https://stackoverflow.com/a/22434262/190597 (J.F. Sebastian)
+    Context manager to redirect outputs from non-CellST funcs to os.devnull
+    """
+    if stdout is None: stdout = sys.stdout
+
+    stdout_fd = fileno(stdout)
+    # copy stdout_fd before it is overwritten
+    with os.fdopen(os.dup(stdout_fd), 'wb') as copied:
+        stdout.flush()  # flush library buffers that dup2 knows nothing about
+        try:
+            os.dup2(fileno(to), stdout_fd)  # $ exec >&to
+        except ValueError:  # filename
+            with open(to, 'wb') as to_file:
+                os.dup2(to_file.fileno(), stdout_fd)  # $ exec > to
+        try:
+            yield stdout  # allow code to be run with the redirected stdout
+        finally:
+            # restore stdout to its previous value
+            # NOTE: dup2 makes stdout_fd inheritable unconditionally
+            stdout.flush()
+            os.dup2(copied.fileno(), stdout_fd)  # $ exec >&copied
 
 
 class ImageHelper():

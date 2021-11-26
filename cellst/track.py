@@ -4,7 +4,7 @@ import numpy as np
 
 from cellst.operation import BaseTrack
 from cellst.utils._types import Image, Mask, Track
-from cellst.utils.utils import ImageHelper
+from cellst.utils.utils import ImageHelper, stdout_redirected
 
 # Needed for Track.kit_sch_ge_track
 from kit_sch_ge.tracker.extract_data import get_indices_pandas
@@ -55,10 +55,15 @@ class Track(BaseTrack):
                                 allow_cell_division=allow_cell_division)
 
         tracker = MultiCellTracker(config)
-        tracks = tracker()
+        # Add context management to supress printing to terminal
+        # TODO: make this optional
+        with stdout_redirected():
+            tracks = tracker()
 
-        exporter = ExportResults(postprocessing_key)
-        mask, lineage = exporter(tracks, img_shape=img_shape, time_steps=list(range(image.shape[0])))
+            exporter = ExportResults(postprocessing_key)
+            mask, lineage = exporter(tracks, img_shape=img_shape,
+                                     time_steps=list(range(image.shape[0])))
+
         track = lineage_to_track(mask, lineage)
 
         return track

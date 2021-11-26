@@ -1,19 +1,16 @@
-from typing import Collection, Tuple, Callable, List
+import sys
+from typing import Collection, Tuple, Callable, List, Dict
 import warnings
 
 import numpy as np
 from skimage.measure import regionprops_table
 
-from cellst.utils._types import Image, Mask, Track, Arr, INPT_NAME_IDX
-# TODO: For whole project. Probably move towards using modules more.
-#       i.e. import cellst.utils.operation_utils as op
+from cellst.utils._types import Image, Mask, Track, Arr, INPT_NAME_IDX, TYPE_LOOKUP
 from cellst.utils.operation_utils import track_to_mask, parents_from_track
+import cellst.utils.metric_utils as metric_utils
 
 
 class Operation():
-    """
-    This is the base class for all operations (segmentation, tracking, etc.)
-    """
     __name__ = 'Operation'
     __slots__ = ('save', 'output', 'functions', 'func_index', 'input_images',
                  'input_masks', 'input_tracks', 'input_arrays', 'save_arrays',
@@ -54,14 +51,11 @@ class Operation():
         if _output_id is not None:
             self.output_id = _output_id
         else:
-            output_type = self._output_type.__name__
+            try:
+                output_type = self._output_type.__name__
+            except AttributeError:
+                output_type = None
             self.output_id = tuple([output, output_type])
-
-    def __setattr__(self, name, value) -> None:
-        '''TODO: Not needed here, but the idea behind a custom __setattr__
-               class is that the inheriting Operation can decide if the function
-               meets the requirements.'''
-        super().__setattr__(name, value)
 
     def __str__(self) -> str:
         """
@@ -92,6 +86,21 @@ class Operation():
         """
         return self.run_operation(images, masks, tracks, arrays)
 
+    def __enter__(self) -> None:
+        """
+        """
+        if not hasattr(self, 'save_arrays'):
+            self.save_arrays = {}
+
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+        """
+        Used to delete arrays in memory
+        """
+        self.save_arrays = None
+        del self.save_arrays
+
     def add_function_to_operation(self,
                                   func: str,
                                   output_type: type = None,
@@ -108,10 +117,13 @@ class Operation():
             - Is func_index needed at all?
         """
         try:
-            func = getattr(self, func)
+            # Check that the function exists
+            _ = getattr(self, func)
+
+            # Save func as string for dictionaries
             self.functions.append(tuple([func, output_type, args, kwargs, name]))
-        except NameError:
-            raise NameError(f"Function {func} not found in {self}.")
+        except AttributeError:
+            raise AttributeError(f"Function {func} not found in {self}.")
 
         self.func_index = {i: f for i, f in enumerate(self.functions)}
 
@@ -133,6 +145,7 @@ class Operation():
         result = inputs[INPT_NAME_IDX[self._output_type.__name__]]
 
         for (func, expec_type, args, kwargs, name) in self.functions:
+            func = getattr(self, func)
             output_type, result = func(*inputs, *args, **kwargs)
 
             # The user-defined expected type will overwrite output_type
@@ -157,6 +170,36 @@ class Operation():
         self.save_arrays[self.output] = self.output, result
 
         return result
+
+    def _operation_to_dict(self, op_slots: Collection[str] = None) -> Dict:
+        """
+        Returns a dictionary that fully defines the operation
+        """
+        # Get attributes to lookup
+        base_slots = ['__name__', 'save', 'output', '_output_id']
+        if op_slots is not None: base_slots.extend(op_slots)
+
+        # Save in dictionary
+        op_defs = {}
+        for att in base_slots:
+            op_defs[att] = getattr(self, att, None)
+
+        # Save function definitions
+        func_defs = {}
+        for func, output_type, args, kwargs, name in self.functions:
+            func_defs[func] = {}
+            if output_type is not None:
+                func_defs[func]['output_type'] = output_type.__name__
+            else:
+                func_defs[func]['output_type'] = output_type
+            func_defs[func]['name'] = name
+            func_defs[func]['args'] = args
+            func_defs[func]['kwargs'] = kwargs
+
+        # Save in original dictionary
+        op_defs['FUNCTIONS'] = func_defs
+
+        return op_defs
 
 
 class BaseProcess(Operation):
@@ -187,6 +230,10 @@ class BaseProcess(Operation):
         used independently of Pipeline.
         """
         return self.run_operation(images, [], [], [])
+
+    def _operation_to_dict(self) -> Dict:
+        op_slots = ['input_images']
+        return super()._operation_to_dict(op_slots)
 
 
 class BaseSegment(Operation):
@@ -225,6 +272,10 @@ class BaseSegment(Operation):
         """
         return self.run_operation(images, masks, [], [])
 
+    def _operation_to_dict(self) -> Dict:
+        op_slots = ['input_images', 'input_masks']
+        return super()._operation_to_dict(op_slots)
+
 
 class BaseTrack(Operation):
     __name__ = 'Track'
@@ -236,7 +287,6 @@ class BaseTrack(Operation):
                  input_masks: Collection[str] = [],
                  output: str = 'track',
                  save: bool = False,
-                 track_file: bool = True,
                  _output_id: Tuple[str] = None,
                  ) -> None:
         super().__init__(output, save, _output_id)
@@ -262,6 +312,10 @@ class BaseTrack(Operation):
         used independently of Pipeline.
         """
         return self.run_operation(images, masks, [], [])
+
+    def _operation_to_dict(self) -> Dict:
+        op_slots = ['input_images', 'input_masks']
+        return super()._operation_to_dict(op_slots)
 
 
 class BaseExtract(Operation):
@@ -291,7 +345,10 @@ class BaseExtract(Operation):
                 'centroid', 'mean_intensity', 'max_intensity', 'min_intensity',
                 'minor_axis_length', 'major_axis_length',
                 'orientation', 'perimeter', 'solidity']
-    _extra_properties = {}
+    _extra_properties = ['division_frame', 'parent_id', 'total_intensity',
+                         'median_intensity']
+    _props_to_add = {}
+
 
     class EmptyProperty():
         """
@@ -325,7 +382,7 @@ class BaseExtract(Operation):
                  _output_id: Tuple[str] = None
                  ) -> None:
         """
-        channel and region _map should be the names that will get saved in the final df
+        channels and regions should be the names that will get saved in the final df
         with the images and masks they correspond to.
         """
 
@@ -368,12 +425,12 @@ class BaseExtract(Operation):
                       remove_parent=remove_parent)
         # Automatically add extract_data_from_image
         # Name is always None, because gets saved in Pipeline as output
-        self.functions = [tuple([self.extract_data_from_image, Arr, [], kwargs, None])]
+        self.functions = [tuple(['extract_data_from_image', Arr, [], kwargs, None])]
         self.func_index = {i: f for i, f in enumerate(self.functions)}
 
         # Add division_frame and parent_id
-        self._extra_properties.update(dict(division_frame=self.EmptyProperty(),
-                                           parent_id=self.EmptyProperty()))
+        for m in self._extra_properties:
+            self.add_extra_metric(m)
 
     def __call__(self,
                  images: Collection[Image],
@@ -388,11 +445,18 @@ class BaseExtract(Operation):
         This directly calls extract_data_from_image
         instead of using run_operation
         """
-
         kwargs = dict(channels=channels, regions=regions,
                       condition=condition, lineages=lineages)
         return self.extract_data_from_image(images, masks, tracks,
                                             **kwargs)
+
+    @property
+    def metrics(self) -> list:
+        return self._metrics + list(self._props_to_add.keys())
+
+    @property
+    def extract_kwargs(self) -> dict:
+        return self.functions[0][3]  # index for kwargs passed to extract_data
 
     def _correct_metric_dim(self, met_list: List[str]) -> List[str]:
         """
@@ -440,7 +504,7 @@ class BaseExtract(Operation):
         mask = track_to_mask(track)
 
         # Organize metrics and get indices for custom ones
-        all_metrics = metrics + list(self._extra_properties.keys())
+        all_metrics = metrics + list(self._props_to_add.keys())
         all_metrics = self._correct_metric_dim(all_metrics)
         metric_idx = {k: i for i, k in enumerate(all_metrics)}
 
@@ -487,16 +551,37 @@ class BaseExtract(Operation):
 
         return np.moveaxis(out, 0, -1)
 
+    def _operation_to_dict(self) -> Dict:
+        op_slots = ['input_images', 'input_masks', 'input_tracks']
+        op_dict = super()._operation_to_dict(op_slots)
+
+        # Add the kwargs for extract_data_from_image
+        op_dict.update(self.extract_kwargs)
+
+        # Add metrics and extra properties
+        # TODO: This is also a bit hackish
+        func = 'extract_data_from_image'
+        op_dict['FUNCTIONS'][func]['metrics'] = self._metrics
+        op_dict['FUNCTIONS'][func]['extra_props'] = self._props_to_add
+
+        return op_dict
+
     def add_extra_metric(self, name: str, func: Callable = None) -> None:
         """
         Allows for adding custom metrics. If function is none, value will just
         be nan.
         """
-        if name in self._metrics:
-            warnings.warn(f'Metric {name} already exists.', UserWarning)
-        else:
-            if func is None: func = self.EmptyProperty()
-            self._extra_properties[name] = func
+        if func is None:
+            if name in self._possible_metrics:
+                self._metrics.append(name)
+            else:
+                try:
+                    func = getattr(metric_utils, name)
+                except AttributeError:
+                    # Function not implemented by me
+                    func = self.EmptyProperty()
+
+        self._props_to_add[name] = func
 
     def set_metric_list(self, metrics: Collection[str]) -> None:
         """
@@ -523,11 +608,7 @@ class BaseExtract(Operation):
                                   ) -> None:
         """
         Extract currently only supports one function due to how
-        extract_data_from_images expects the inputs. Therefore, for
-        now there is no easy way to add a different function.
-
-        TODO:
-            - Implement option for new metrics during extract
+        extract_data_from_images expects the inputs.
         """
         raise NotImplementedError('Adding new functions to Extract is '
                                   'not currently supported. '
@@ -567,6 +648,19 @@ class BaseEvaluate(Operation):
     _input_type = (Arr,)
     _output_type = Arr
 
+    def __init__(self,
+                 input_arrays: Collection[str] = [],
+                 output: str = 'evaluate',
+                 save: bool = False,
+                 _output_id: Tuple[str] = None,
+                 ) -> None:
+        super().__init__(output, save, _output_id)
+
+        if isinstance(input_arrays, str):
+            self.input_arrays = [input_arrays]
+        else:
+            self.input_arrays = input_arrays
+
     def __call__(self,
                  arrs: Collection[Arr]
                  ) -> Arr:
@@ -575,3 +669,7 @@ class BaseEvaluate(Operation):
         used independently of Pipeline.
         """
         return self.run_operation([], [], [], arrs)
+
+    def _operation_to_dict(self) -> Dict:
+        op_slots = ['input_arrays']
+        return super()._operation_to_dict(op_slots)
