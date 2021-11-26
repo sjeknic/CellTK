@@ -81,8 +81,8 @@ class Extract(BaseExtract):
 
         # Get all of the metrics and functions that will be run
         metrics = self._metrics
-        extra_names = list(self._extra_properties.keys())
-        extra_funcs = list(self._extra_properties.values())
+        extra_names = list(self._props_to_add.keys())
+        extra_funcs = list(self._props_to_add.values())
         all_measures = self._correct_metric_dim(metrics + extra_names)
 
         # Label must always be the first metric for easy indexing of cells

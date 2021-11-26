@@ -345,7 +345,10 @@ class BaseExtract(Operation):
                 'centroid', 'mean_intensity', 'max_intensity', 'min_intensity',
                 'minor_axis_length', 'major_axis_length',
                 'orientation', 'perimeter', 'solidity']
-    _extra_properties = {}
+    _extra_properties = ['division_frame', 'parent_id', 'total_intensity',
+                         'median_intensity']
+    _props_to_add = {}
+
 
     class EmptyProperty():
         """
@@ -426,7 +429,7 @@ class BaseExtract(Operation):
         self.func_index = {i: f for i, f in enumerate(self.functions)}
 
         # Add division_frame and parent_id
-        for m in ('median_intensity', 'division_frame', 'parent_id'):
+        for m in self._extra_properties:
             self.add_extra_metric(m)
 
     def __call__(self,
@@ -446,6 +449,10 @@ class BaseExtract(Operation):
                       condition=condition, lineages=lineages)
         return self.extract_data_from_image(images, masks, tracks,
                                             **kwargs)
+
+    @property
+    def metrics(self) -> list:
+        return self._metrics + list(self._props_to_add.keys())
 
     def _correct_metric_dim(self, met_list: List[str]) -> List[str]:
         """
@@ -493,7 +500,7 @@ class BaseExtract(Operation):
         mask = track_to_mask(track)
 
         # Organize metrics and get indices for custom ones
-        all_metrics = metrics + list(self._extra_properties.keys())
+        all_metrics = metrics + list(self._props_to_add.keys())
         all_metrics = self._correct_metric_dim(all_metrics)
         metric_idx = {k: i for i, k in enumerate(all_metrics)}
 
@@ -553,7 +560,7 @@ class BaseExtract(Operation):
         # TODO: This is also a bit hackish
         func = 'extract_data_from_image'
         op_dict['FUNCTIONS'][func]['metrics'] = self._metrics
-        op_dict['FUNCTIONS'][func]['extra_props'] = self._extra_properties
+        op_dict['FUNCTIONS'][func]['extra_props'] = self._props_to_add
 
         return op_dict
 
@@ -563,13 +570,16 @@ class BaseExtract(Operation):
         be nan.
         """
         if func is None:
-            try:
-                func = getattr(metric_utils, name)
-            except AttributeError:
-                # Function not implemented by me
-                func = self.EmptyProperty()
+            if name in self._possible_metrics:
+                self._metrics.append(name)
+            else:
+                try:
+                    func = getattr(metric_utils, name)
+                except AttributeError:
+                    # Function not implemented by me
+                    func = self.EmptyProperty()
 
-        self._extra_properties[name] = func
+        self._props_to_add[name] = func
 
     def set_metric_list(self, metrics: Collection[str]) -> None:
         """
