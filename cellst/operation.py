@@ -454,6 +454,10 @@ class BaseExtract(Operation):
     def metrics(self) -> list:
         return self._metrics + list(self._props_to_add.keys())
 
+    @property
+    def extract_kwargs(self) -> dict:
+        return self.functions[0][3]  # index for kwargs passed to extract_data
+
     def _correct_metric_dim(self, met_list: List[str]) -> List[str]:
         """
         Adjust all measures for the presence of multi-scalar metrics
@@ -552,9 +556,7 @@ class BaseExtract(Operation):
         op_dict = super()._operation_to_dict(op_slots)
 
         # Add the kwargs for extract_data_from_image
-        # TODO: Should be a neater way to get these kwargs
-        _, _, _, kwargs, _ = self.functions[0]
-        op_dict.update(kwargs)
+        op_dict.update(self.extract_kwargs)
 
         # Add metrics and extra properties
         # TODO: This is also a bit hackish
