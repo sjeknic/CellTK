@@ -185,6 +185,7 @@ class Pipeline():
             - Use type instead of str for output (if even needed)
             - Add logging
             - Allow for non-consecutive indices (how?)
+            - There is no way to pass dtype to this function currently
         """
         for name, (otpt_type, arr) in save_arrays.items():
             # Make output directory if needed
@@ -197,7 +198,7 @@ class Pipeline():
                 name = os.path.join(self.output_folder, f"{otpt_type}.hdf5")
                 arr.save(name)
             else:
-                img_dtype = arr.dtype if img_dtype is None else img_dtype
+                save_dtype = arr.dtype if img_dtype is None else img_dtype
                 if arr.ndim != 3:
                     warnings.warn("Expected stack with 3 dimensions."
                                   f"Got {arr.ndim} for {name}", UserWarning)
@@ -207,7 +208,7 @@ class Pipeline():
                 # Save files as tiff with consecutive idx
                 for idx in range(arr.shape[0]):
                     name = os.path.join(save_folder, f"{otpt_type}{idx:0{zrs}}.tiff")
-                    tiff.imsave(name, arr[idx, ...].astype(img_dtype))
+                    tiff.imsave(name, arr[idx, ...].astype(save_dtype))
 
     def _input_output_handler(self):
         """
@@ -310,7 +311,7 @@ class Pipeline():
 
         TODO:
             - Not sure if it is finding image metadata. Test with images with metadata.
-            - img_dtype should not scale an image up - an 8bit image should stay 8bit
+            - No way to pass img_dtype to this function
         """
         for idx, name in enumerate(INPT_NAMES):
             fol = getattr(self, f'{name}_folder')
