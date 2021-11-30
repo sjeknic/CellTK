@@ -330,6 +330,10 @@ class Pipeline():
                         raise ValueError(f'Data {key} cannot be found and is '
                                          'not listed as an output.')
 
+                    # Don't try to load images if none found
+                    continue
+
+
                 # Load the images
                 '''NOTE: Using mimread instead of imread to add the option of limiting
                 the memory of the loaded image. However, mimread still only loads one
@@ -341,16 +345,15 @@ class Pipeline():
                 for n, p in enumerate(pths):
                     img = iio.mimread(p)[0]
 
-                    try:
-                        img_stack[n, ...] = img
-                    except (IndexError, UnboundLocalError):
+                    if n == 0:
                         # Initialize img_stack if it doesn't exist
                         img_stack = np.empty(tuple([len(pths), img.shape[0], img.shape[1]]),
                                              dtype=img.dtype)
-                        img_stack[n, ...] = img
 
+                    img_stack[n, ...] = img
+
+                # TODO: Why is this raising an error? Trying to load images that don't exist
                 container[key] = img_stack
-                del img_stack
 
         return container
 
