@@ -68,7 +68,7 @@ class MultiCellTracker:
 
     def propagate_tracklets(self, time):
         """Propagates object position and features over time."""
-        image = imread(self.config.get_image_file(time))
+        image = imread(self.config.get_image_file(time)).squeeze()
         if self.img_shape is None:
             self.img_shape = image.shape
         segmentation, mask_indices = self.config.get_segmentation_masks(time)
@@ -391,7 +391,7 @@ class TrackingConfig:
         return self.img_files[time_step]
 
     def get_segmentation_masks(self, time_step):
-        segmentation = imread(self.segm_files[time_step])
+        segmentation = imread(self.segm_files[time_step]).squeeze()
         segmentation = np.squeeze(segmentation)
         return segmentation, get_indices_pandas(segmentation)
 
