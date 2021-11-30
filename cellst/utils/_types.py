@@ -93,6 +93,18 @@ class Condition():
     def condition(self):
         return self.name
 
+    @property
+    def regions(self):
+        return self.coords['regions']
+
+    @property
+    def channels(self):
+        return self.coords['channels']
+
+    @property
+    def metrics(self):
+        return self.coords['metrics']
+
     def save(self, path: str) -> None:
         """
         Saves Condition to an hdf5 file.
@@ -558,6 +570,18 @@ class Experiment():
     @property
     def conditions(self):
         return [v.name for v in self.sites.values()]
+
+    @property
+    def regions(self):
+        return [v.regions for v in self.sites.values()]
+
+    @property
+    def channels(self):
+        return [v.channels for v in self.sites.values()]
+
+    @property
+    def metrics(self):
+        return [v.metrics for v in self.sites.values()]
 
     @property
     def time(self):
