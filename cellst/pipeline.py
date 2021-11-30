@@ -202,9 +202,11 @@ class Pipeline():
                     warnings.warn("Expected stack with 3 dimensions."
                                   f"Got {arr.ndim} for {name}", UserWarning)
 
+                # Set length of index based on total number of frames
+                zrs = len(str(arr.shape[0]))
                 # Save files as tiff with consecutive idx
                 for idx in range(arr.shape[0]):
-                    name = os.path.join(save_folder, f"{otpt_type}{idx}.tiff")
+                    name = os.path.join(save_folder, f"{otpt_type}{idx:0{zrs}}.tiff")
                     tiff.imsave(name, arr[idx, ...].astype(img_dtype))
 
     def _input_output_handler(self):
