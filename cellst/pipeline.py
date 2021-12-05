@@ -3,6 +3,7 @@ import sys
 import argparse
 import yaml
 import warnings
+import logging
 from multiprocessing import Pool
 from typing import Dict, List, Collection, Tuple
 from copy import deepcopy
@@ -17,17 +18,19 @@ from cellst.utils._types import Image, Mask, Track, Arr, INPT_NAMES
 from cellst.utils._types import Condition, Experiment
 from cellst.utils.process_utils import condense_operations, extract_operations
 from cellst.utils.utils import folder_name
+from cellst.utils.log_utils import get_logger
 
 
 class Pipeline():
     # TODO: need a better way to define where the path should be...
     file_location = os.path.dirname(os.path.realpath(__file__))
-
+    __name__ = 'Pipeline'
     __slots__ = ('_image_container', 'operations',
                  'parent_folder', 'output_folder',
                  'image_folder', 'mask_folder',
                  'track_folder', 'array_folder',
-                 'operation_index', 'img_ext')
+                 'operation_index', 'img_ext',
+                 'logger')
 
     def __init__(self,
                  parent_folder: str = None,
@@ -59,6 +62,9 @@ class Pipeline():
         self._set_all_paths(parent_folder, output_folder, image_folder,
                             mask_folder, track_folder, array_folder)
         self._make_output_folder(overwrite)
+
+        # Set up logger - defaults to output folder
+        self.logger = get_logger(self.__name__, output_folder, overwrite=overwrite)
 
         # Prepare for getting operations and images
         self._image_container = {}
@@ -143,6 +149,7 @@ class Pipeline():
 
                 # Save the results in the image container
                 with oper:
+                    oper.set_logger(self.logger)
                     oper_result = oper.run_operation(imgs, msks, trks, arrs)
                     self._image_container = self.update_image_container(
                                                 self._image_container,
@@ -218,6 +225,7 @@ class Pipeline():
         TODO:
             - Determine after which operation the stack is no longer needed
         """
+        # Inputs and outputs determined by the args passed to each Operation
         req_inputs = []
         req_outputs = []
         for o in self.operations:
@@ -228,6 +236,10 @@ class Pipeline():
 
             req_inputs.append([imgs, msks, trks, arrs])
             req_outputs.append(o.output_id)
+
+        # Log the inputs and outputs
+        self.logger.info(f'Exected inputs: {req_inputs}')
+        self.logger.info(f'Exected output: {req_outputs}')
 
         return req_inputs, req_outputs
 
@@ -478,10 +490,12 @@ class Pipeline():
 class Orchestrator():
     file_location = os.path.dirname(os.path.realpath(__file__))
 
+    __name__ = 'Orchestrator'
     __slots__ = ('pipelines', 'operations',
                  'parent_folder', 'output_folder',
                  'operation_index', 'img_ext', 'name',
-                 'overwrite', 'save', 'condition_map')
+                 'overwrite', 'save', 'condition_map',
+                 'logger')
 
     def __init__(self,
                  parent_folder: str = None,
@@ -519,6 +533,9 @@ class Orchestrator():
                               array_folder)
         self.condition_map = self._update_condition_map(condition_map)
         self._make_output_folder(self.overwrite)
+
+        # Get logger
+        self.logger = get_logger(self.__name__, output_folder, overwrite=overwrite)
 
         # Prepare for getting operations
         self.operations = []

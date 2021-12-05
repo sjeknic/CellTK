@@ -1,6 +1,7 @@
 import sys
-from typing import Collection, Tuple, Callable, List, Dict
 import warnings
+from typing import Collection, Tuple, Callable, List, Dict
+from logging import Logger
 
 import numpy as np
 from skimage.measure import regionprops_table
@@ -8,13 +9,14 @@ from skimage.measure import regionprops_table
 from cellst.utils._types import Image, Mask, Track, Arr, INPT_NAME_IDX, TYPE_LOOKUP
 from cellst.utils.operation_utils import track_to_mask, parents_from_track
 import cellst.utils.metric_utils as metric_utils
+from cellst.utils.log_utils import get_empty_logger
 
 
 class Operation():
     __name__ = 'Operation'
     __slots__ = ('save', 'output', 'functions', 'func_index', 'input_images',
                  'input_masks', 'input_tracks', 'input_arrays', 'save_arrays',
-                 'output_id', '_input_type', '_output_type')
+                 'output_id', '_input_type', '_output_type', 'logger')
 
     def __init__(self,
                  output: str,
@@ -32,6 +34,9 @@ class Operation():
         """
         self.save = save
         self.output = output
+
+        # Get empty logger, will be overwritten by Pipeline
+        self.logger = get_empty_logger()
 
         # These are used to track what the operation has been asked to do
         self.functions = []
@@ -170,6 +175,11 @@ class Operation():
         self.save_arrays[self.output] = self.output, result
 
         return result
+
+    def set_logger(self, logger: Logger) -> None:
+        """
+        """
+        self.logger = logger
 
     def _operation_to_dict(self, op_slots: Collection[str] = None) -> Dict:
         """
