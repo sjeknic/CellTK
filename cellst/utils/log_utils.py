@@ -54,14 +54,3 @@ def get_console_logger(level: str = 'WARNING') -> logging.Logger:
     # Add handler and return
     logger.addHandler(sh)
     return logger
-
-
-def get_empty_logger() -> logging.Logger:
-    """
-    TODO: Should probably just add more options to the above
-    """
-    # Get logger with name of module
-    logger = logging.getLogger('empty')
-    logger.setLevel(logging.ERROR)
-
-    return logger

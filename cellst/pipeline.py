@@ -18,7 +18,7 @@ from cellst.utils._types import Image, Mask, Track, Arr, INPT_NAMES
 from cellst.utils._types import Condition, Experiment
 from cellst.utils.process_utils import condense_operations, extract_operations
 from cellst.utils.utils import folder_name
-from cellst.utils.log_utils import get_logger
+from cellst.utils.log_utils import get_logger, get_console_logger
 
 
 class Pipeline():
@@ -40,7 +40,8 @@ class Pipeline():
                  track_folder: str = None,
                  array_folder: str = None,
                  file_extension: str = 'tif',
-                 overwrite: bool = True
+                 overwrite: bool = True,
+                 log_file: bool = True
                  ) -> None:
         """
         Pipeline will only handle a folder that has images in it.
@@ -64,7 +65,11 @@ class Pipeline():
         self._make_output_folder(overwrite)
 
         # Set up logger - defaults to output folder
-        self.logger = get_logger(self.__name__, output_folder, overwrite=overwrite)
+        if log_file:
+            self.logger = get_logger(self.__name__, self.output_folder,
+                                     overwrite=overwrite)
+        else:
+            self.logger = get_console_logger()
 
         # Prepare for getting operations and images
         self._image_container = {}
@@ -509,6 +514,7 @@ class Orchestrator():
                  name: str = 'experiment',
                  file_extension: str = 'tif',
                  overwrite: bool = True,
+                 log_file: bool = True,
                  save_master_df: bool = True,
                  ) -> None:
         """
@@ -534,8 +540,12 @@ class Orchestrator():
         self.condition_map = self._update_condition_map(condition_map)
         self._make_output_folder(self.overwrite)
 
-        # Get logger
-        self.logger = get_logger(self.__name__, output_folder, overwrite=overwrite)
+        # Set up logger - defaults to output folder
+        if log_file:
+            self.logger = get_logger(self.__name__, self.output_folder,
+                                     overwrite=overwrite)
+        else:
+            self.logger = get_console_logger()
 
         # Prepare for getting operations
         self.operations = []

@@ -1,7 +1,7 @@
 import sys
 import warnings
 from typing import Collection, Tuple, Callable, List, Dict
-from logging import Logger
+import logging
 
 import numpy as np
 from skimage.measure import regionprops_table
@@ -176,10 +176,14 @@ class Operation():
 
         return result
 
-    def set_logger(self, logger: Logger) -> None:
+    def set_logger(self, logger: logging.Logger) -> None:
         """
         """
-        self.logger = logger
+        # logger is either a Pipeline or Operation logger
+        log_name = logger.name
+
+        # This logs to same file, but records the Operation name
+        self.logger = logging.getLogger(f'{log_name}.{self.__name__}')
 
     def _operation_to_dict(self, op_slots: Collection[str] = None) -> Dict:
         """
