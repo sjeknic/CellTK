@@ -3,7 +3,7 @@ import sys
 import argparse
 import yaml
 import warnings
-import logging
+import time
 from multiprocessing import Pool
 from typing import Dict, List, Collection, Tuple
 from copy import deepcopy
@@ -30,7 +30,7 @@ class Pipeline():
                  'image_folder', 'mask_folder',
                  'track_folder', 'array_folder',
                  'operation_index', 'img_ext',
-                 'logger')
+                 'logger', 'timer')
 
     def __init__(self,
                  parent_folder: str = None,
@@ -75,19 +75,41 @@ class Pipeline():
         self._image_container = {}
         self.operations = []
 
+        # Log relevant information and parameters
+        self.logger.info(f'Pipeline {self} initiated.')
+        self.logger.info(f'Parent folder: {self.parent_folder}')
+        self.logger.info(f'Output folder: {self.output_folder}')
+        self.logger.info(f'Image folder: {self.image_folder}')
+        self.logger.info(f'Mask folder: {self.mask_folder}')
+        self.logger.info(f'Track folder: {self.track_folder}')
+        self.logger.info(f'Array folder: {self.array_folder}')
+
     def __enter__(self) -> None:
         """
         """
+        # Create the image container if needed
         if not hasattr(self, '_image_container'):
             self._image_container = {}
+
+        # Start a timer
+        self.timer = time.time()
 
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb) -> None:
         """
         """
+        # Remove image container from memory
         self._image_container = None
         del self._image_container
+
+        # Log time spent after enter
+        try:
+            self.logger.info(f'Total execution time: {time.time() - self.timer}')
+            self.timer = None
+        except TypeError:
+            # KeyboardInterrupt now won't cause additional exceptions
+            pass
 
     def add_operations(self,
                        operation: Collection[Operation],
@@ -104,6 +126,7 @@ class Pipeline():
             - Not sure the index results always make sense, best to add all
               operations at once
         """
+        # Adds operations to self.operations (Collection[Operation])
         if isinstance(operation, Collection):
             if all([isinstance(o, Operation) for o in operation]):
                 if index == -1:
@@ -119,6 +142,10 @@ class Pipeline():
                 self.operations.insert(index, operation)
         else:
             raise ValueError(f'Expected type Operation, got {type(operation)}.')
+
+        # Log changes to the list of operations
+        self.logger.info(f'Added {operation} at {index}. '
+                         f'Current operation list: {self.operations}.')
 
         self.operation_index = {i: o for i, o in enumerate(self.operations)}
 
@@ -195,7 +222,6 @@ class Pipeline():
             - Test different iteration strategies for efficiency
             - Should not upscale images
             - Use type instead of str for output (if even needed)
-            - Add logging
             - Allow for non-consecutive indices (how?)
             - There is no way to pass dtype to this function currently
         """
@@ -209,6 +235,9 @@ class Pipeline():
             if oper_output == 'array':
                 name = os.path.join(self.output_folder, f"{otpt_type}.hdf5")
                 arr.save(name)
+
+                self.logger.info(f'Saved data frame in {self.output_folder}. '
+                                 f'shape: {arr.shape}, type: {arr.dtype}.')
             else:
                 save_dtype = arr.dtype if img_dtype is None else img_dtype
                 if arr.ndim != 3:
@@ -221,6 +250,8 @@ class Pipeline():
                 for idx in range(arr.shape[0]):
                     name = os.path.join(save_folder, f"{otpt_type}{idx:0{zrs}}.tiff")
                     tiff.imsave(name, arr[idx, ...].astype(save_dtype))
+
+                self.logger.info(f'Saved {arr.shape[0]} images in {save_folder}.')
 
     def _input_output_handler(self):
         """
@@ -243,8 +274,15 @@ class Pipeline():
             req_outputs.append(o.output_id)
 
         # Log the inputs and outputs
-        self.logger.info(f'Exected inputs: {req_inputs}')
-        self.logger.info(f'Exected output: {req_outputs}')
+        self.logger.info('Expected images: '
+                         f'{[i[0] for op in req_inputs for i in op[0]]}')
+        self.logger.info('Expected masks: '
+                         f'{[i[0] for op in req_inputs for i in op[1]]}')
+        self.logger.info('Expected tracks: '
+                         f'{[i[0] for op in req_inputs for i in op[2]]}')
+        self.logger.info('Expected arrays: '
+                         f'{[i[0] for op in req_inputs for i in op[3]]}')
+        self.logger.info(f'Exected outputs: {[r[0] for r in req_outputs]}')
 
         return req_inputs, req_outputs
 
@@ -353,6 +391,9 @@ class Pipeline():
                     # Don't try to load images if none found
                     continue
 
+                # Log the paths
+                self.logger.info(f'Looking for {key[0]} in {fol}. '
+                                 f'Found {len(pths)} files.')
 
                 # Load the images
                 '''NOTE: Using mimread instead of imread to add the option of limiting
@@ -372,8 +413,10 @@ class Pipeline():
 
                     img_stack[n, ...] = img
 
-                # TODO: Why is this raising an error? Trying to load images that don't exist
                 container[key] = img_stack
+
+                self.logger.info(f'Images loaded. shape: {img_stack.shape}, '
+                                 f'type: {img_stack.dtype}.')
 
         return container
 
@@ -452,7 +495,7 @@ class Pipeline():
             self.output_folder = tempdir
             os.makedirs(self.output_folder)
 
-        # TODO: Add Logging file here
+
 
     @classmethod
     def _run_single_pipe(cls,
@@ -484,10 +527,12 @@ class Pipeline():
         opers = extract_operations(oper)
 
         with pipe:
-            # Run pipeline, save results, and then del pipeline
+            # Run pipeline and save results
             pipe.add_operations(opers)
             result = pipe.run()
-            del pipe
+
+        # Remove from memory
+        del pipe
 
         return result
 
