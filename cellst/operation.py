@@ -9,7 +9,7 @@ from skimage.measure import regionprops_table
 from cellst.utils._types import Image, Mask, Track, Arr, INPT_NAME_IDX, TYPE_LOOKUP
 from cellst.utils.operation_utils import track_to_mask, parents_from_track
 import cellst.utils.metric_utils as metric_utils
-from cellst.utils.log_utils import get_empty_logger
+from cellst.utils.log_utils import get_console_logger
 
 
 class Operation():
@@ -36,7 +36,7 @@ class Operation():
         self.output = output
 
         # Get empty logger, will be overwritten by Pipeline
-        self.logger = get_empty_logger()
+        self.logger = get_console_logger()
 
         # These are used to track what the operation has been asked to do
         self.functions = []
