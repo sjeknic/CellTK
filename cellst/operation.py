@@ -6,7 +6,7 @@ import logging
 import numpy as np
 from skimage.measure import regionprops_table
 
-from cellst.utils._types import Image, Mask, Track, Arr, INPT_NAME_IDX, TYPE_LOOKUP
+from cellst.utils._types import Image, Mask, Track, Arr, INPT_NAME_IDX
 from cellst.utils.operation_utils import track_to_mask, parents_from_track
 import cellst.utils.metric_utils as metric_utils
 from cellst.utils.log_utils import get_console_logger
@@ -25,8 +25,6 @@ class Operation():
                  **kwargs
                  ) -> None:
         """
-        by default only the last output can be saved (should this change?)
-
         TODO:
             - Add more name options, like a specific output folder name
             - Outputs are now a required arg for the base class.
@@ -69,13 +67,25 @@ class Operation():
         TODO:
             - Return function name instead of decorator name
         """
-        string = str(super().__str__())
+        op_id = f'{self.__name__} at {hex(id(self))}'
 
-        for k, v in self.func_index.items():
-            string += (f'\nIndex {k}: \n'
-                       f'Function: {v[0]} \n'
-                       f'   args: {v[1]} \n'
-                       f'   kwargs: {v[2]}')
+        # Get the names of the inputs
+        inputs = tuple([f"{name[0]}:{getattr(self, f'input_{name}s')}"
+                        for name in INPT_NAME_IDX.keys()
+                        if getattr(self, f'input_{name}s')])
+
+        # Format each function as a str
+        funcs = []
+        for (func, otpt, args, kwargs, name) in self.functions:
+            funcs.append(self._format_function_string(func, args, kwargs))
+        fstr = ' -> '.join(funcs)
+
+        # Get the name of the output
+        output = f'{self.output_id[1]}:{self.output_id[0]}'
+
+        # Put it all together
+        string = f"{op_id}: {inputs} -> {fstr} -> {output}"
+
         return string
 
     def __call__(self,
@@ -214,6 +224,40 @@ class Operation():
         op_defs['FUNCTIONS'] = func_defs
 
         return op_defs
+
+    def _format_function_string(self,
+                                fname: str,
+                                args: tuple,
+                                kwargs: dict
+                                ) -> str:
+        """
+        Nicely formats the function specifications for the Operation
+
+        TODO: is there a way to neatly include type and save name?
+        """
+        # Format args and kwargs to str
+        if len(args) > 0:
+            str_args = ', '.join(tuple([str(a) for a in args]))
+        else:
+            str_args = ''
+
+        if len(kwargs) > 0:
+            str_kwargs = ', '.join(tuple([f'{k}={v}'
+                                          for k, v in kwargs.items()]))
+        else:
+            str_kwargs = ''
+
+        # Format the arg strings nicely
+        if not str_args and not str_kwargs:
+            passed = ''
+        elif not str_args and str_kwargs:
+            passed = str_kwargs
+        elif str_args and not str_kwargs:
+            passed = str_args
+        else:
+            passed = f'{str_args}, {str_kwargs}'
+
+        return f'{fname}({passed})'
 
 
 class BaseProcess(Operation):
