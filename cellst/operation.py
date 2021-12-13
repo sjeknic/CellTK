@@ -215,7 +215,7 @@ class Operation():
         Returns a dictionary that fully defines the operation
         """
         # Get attributes to lookup
-        base_slots = ['__name__', 'save', 'output', '_output_id']
+        base_slots = ['__name__', '__module__', 'save', 'output', '_output_id']
         if op_slots is not None: base_slots.extend(op_slots)
 
         # Save in dictionary
@@ -236,7 +236,7 @@ class Operation():
             func_defs[func]['kwargs'] = kwargs
 
         # Save in original dictionary
-        op_defs['FUNCTIONS'] = func_defs
+        op_defs['_functions'] = func_defs
 
         return op_defs
 
@@ -633,8 +633,8 @@ class BaseExtract(Operation):
         # Add metrics and extra properties
         # TODO: This is also a bit hackish
         func = 'extract_data_from_image'
-        op_dict['FUNCTIONS'][func]['metrics'] = self._metrics
-        op_dict['FUNCTIONS'][func]['extra_props'] = self._props_to_add
+        op_dict['_functions'][func]['metrics'] = self._metrics
+        op_dict['_functions'][func]['extra_props'] = self._props_to_add
 
         return op_dict
 
