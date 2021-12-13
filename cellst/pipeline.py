@@ -174,18 +174,19 @@ class Pipeline():
             self._load_images_to_container(self._image_container, inputs, outputs)
 
             for inpts, otpts, oper in zip(inputs, outputs, self.operations):
+                # Log the operation
+                self.logger.info(str(oper))
+
                 # Get images and pass to operation
-                # try/except block is here to raise more helpful messages for user
-                # TODO: Add logging of files and whether they were found
                 try:
                     imgs, msks, trks, arrs = self._get_images_from_container(inpts)
                 except KeyError as e:
                     raise KeyError(f'Failed to find all inputs for {oper} \n',
                                    e.__str__())
 
-                # Save the results in the image container
+                # Run the operation and save results
+                oper.set_logger(self.logger)
                 with oper:
-                    oper.set_logger(self.logger)
                     oper_result = oper.run_operation(imgs, msks, trks, arrs)
                     self._image_container = self.update_image_container(
                                                 self._image_container,

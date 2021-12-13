@@ -1,22 +1,22 @@
-import sys
 import warnings
 from typing import Collection, Tuple, Callable, List, Dict
 import logging
+import time
 
 import numpy as np
 from skimage.measure import regionprops_table
 
 from cellst.utils._types import Image, Mask, Track, Arr, INPT_NAME_IDX
 from cellst.utils.operation_utils import track_to_mask, parents_from_track
-import cellst.utils.metric_utils as metric_utils
 from cellst.utils.log_utils import get_console_logger
+import cellst.utils.metric_utils as metric_utils
 
 
 class Operation():
     __name__ = 'Operation'
     __slots__ = ('save', 'output', 'functions', 'func_index', 'input_images',
                  'input_masks', 'input_tracks', 'input_arrays', 'save_arrays',
-                 'output_id', '_input_type', '_output_type', 'logger')
+                 'output_id', '_input_type', '_output_type', 'logger', 'timer')
 
     def __init__(self,
                  output: str,
@@ -25,23 +25,20 @@ class Operation():
                  **kwargs
                  ) -> None:
         """
-        TODO:
-            - Add more name options, like a specific output folder name
-            - Outputs are now a required arg for the base class.
-            - Add name or other easy identifier for error messages
-        """
-        self.save = save
-        self.output = output
 
+        """
         # Get empty logger, will be overwritten by Pipeline
         self.logger = get_console_logger()
+
+        # Save basic params
+        self.save = save
+        self.output = output
 
         # These are used to track what the operation has been asked to do
         self.functions = []
         self.func_index = {}
 
         # Will be overwritten by inheriting class if they are used
-        # Otherwise, these defaults can be used to know if they haven't
         self.input_images = []
         self.input_masks = []
         self.input_tracks = []
@@ -61,12 +58,7 @@ class Operation():
             self.output_id = tuple([output, output_type])
 
     def __str__(self) -> str:
-        """
-        Returns printable version of the functions and args in Operation
-
-        TODO:
-            - Return function name instead of decorator name
-        """
+        """Returns printable version of the functions and args in Operation."""
         op_id = f'{self.__name__} at {hex(id(self))}'
 
         # Get the names of the inputs
@@ -95,9 +87,7 @@ class Operation():
                  arrays: Collection[Arr] = []
                  ) -> (Image, Mask, Track, Arr):
         """
-        Calls run_operation. This is intended to be
-        used independently of Pipeline.
-        Each BaseOperation should implement it's own __call__
+        __call__ runs operation independently of Pipeline class
         """
         return self.run_operation(images, masks, tracks, arrays)
 
@@ -107,14 +97,35 @@ class Operation():
         if not hasattr(self, 'save_arrays'):
             self.save_arrays = {}
 
+        # Start a timer
+        self.timer = time.time()
+
+        # Log relevant information (would not have been logged in init)
+        self.logger.info(f'Operation {self.__name__} at '
+                         f'{hex(id(self))} entered.')
+        # Log requests for each data type
+        for name in INPT_NAME_IDX.keys():
+            if getattr(self, f'input_{name}s'):
+                self.logger.info(f"input_{name}:{getattr(self, f'input_{name}s')}")
+        self.logger.info(f"Output ID: {self.output_id}")
+
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb) -> None:
         """
-        Used to delete arrays in memory
         """
+        # Delete save arrays in memory
         self.save_arrays = None
         del self.save_arrays
+
+        # Log time spent after enter
+        try:
+            self.logger.info(f'{self.__name__} execution time: '
+                             f'{time.time() - self.timer}')
+            self.timer = None
+        except TypeError:
+            # KeyboardInterrupt now won't cause additional exceptions
+            pass
 
     def add_function_to_operation(self,
                                   func: str,
@@ -161,27 +172,31 @@ class Operation():
 
         for (func, expec_type, args, kwargs, name) in self.functions:
             func = getattr(self, func)
+
+            # Run the function
+            self.logger.info(f'Starting function {func.__name__}')
+            self.logger.info(f'Inputs: {[(i.shape, i.dtype) for inpt in inputs for i in inpt]}')
+            exec_timer = time.time()
             output_type, result = func(*inputs, *args, **kwargs)
 
             # The user-defined expected type will overwrite output_type
             output_type = expec_type if expec_type is not None else output_type
+            self.logger.info(f'Output: {output_type.__name__}, {result.shape}, '
+                             f'{result.dtype}')
+            self.logger.info(f'{func.__name__} execution time: '
+                             f'{time.time() - exec_timer}.')
 
-            # Pass the result to the next function
-            # TODO: This will currently raise a KeyError if it gets an unexpected type
+            # Pass the result to next func - raises KeyError on unexpected type
             if isinstance(result, np.ndarray):
                 inputs[INPT_NAME_IDX[output_type.__name__]] = [result]
             else:
                 inputs[INPT_NAME_IDX[output_type.__name__]] = result
 
             # Save the function if needed for Pipeline to write files
-            # By default, intermediate steps are saved in folder name
-            # with file name output_type.__name__
             if name is not None:
                 self.save_arrays[name] = output_type.__name__, result
 
         # Save the final result for saving as well
-        # By default, final result is saved in folder self.output
-        # with file name as self.output
         self.save_arrays[self.output] = self.output, result
 
         return result
@@ -377,6 +392,7 @@ class BaseTrack(Operation):
 
 
 class BaseExtract(Operation):
+    """TODO: Include add_derived_metrics"""
     __name__ = 'Extract'
     _input_type = (Image, Mask, Track)
     _output_type = Arr
@@ -398,7 +414,6 @@ class BaseExtract(Operation):
                          'orientation', 'perimeter',
                          'perimeter_crofton', 'solidity')
 
-    # Label must always be first, even for user supplied metrics
     _metrics = ['label', 'area', 'convex_area', 'filled_area', 'bbox',
                 'centroid', 'mean_intensity', 'max_intensity', 'min_intensity',
                 'minor_axis_length', 'major_axis_length',
@@ -406,7 +421,6 @@ class BaseExtract(Operation):
     _extra_properties = ['division_frame', 'parent_id', 'total_intensity',
                          'median_intensity']
     _props_to_add = {}
-
 
     class EmptyProperty():
         """
@@ -683,20 +697,31 @@ class BaseExtract(Operation):
         """
         Extract function is different because it expects to get a list
         of images, masks, etc. Therefore, can't use @ImageHelper.
-        Instead, run_operation should directly call extract_data_from_image
-        with the lists of inputs and return the result.
-        Only note is that currently extract_data_from_images has no use
-        for arrays, therefore those are not passed, but they must be input
         """
-        # Default is to return the input if no function is run
+        # Arrays are not passed to extract_data_from_image
         inputs = [images, masks, tracks]
 
         # Get inputs that were saved during __init__
         _, expec_type, args, kwargs, name = self.functions[0]
 
-        # Arrays are not passed to the function
+        # Extract needs separate logging here
+        self.logger.info('Starting function extract_data_from_image')
+        self.logger.info(f"Channels: {list(zip(kwargs['channels'], self.input_images))}")
+        self.logger.info(f"Regions: {list(zip(kwargs['regions'], self.input_tracks + self.input_masks))}")
+        self.logger.info(f"Metrics: {self._metrics}")
+        self.logger.info(f"Added metrics: {list(self._props_to_add.keys())}")
+        self.logger.info(f"Condition: {kwargs['condition']}")
+
+        # Run function
+        exec_timer = time.time()
         result = self.extract_data_from_image(*inputs, *args, **kwargs)
         self.save_arrays[self.output] = self.output, result
+
+        # Log results
+        self.logger.info(f'Output: {result.name}, {result.shape}, '
+                         f'{result.dtype}')
+        self.logger.info(f'extract_data_from_image execution time: '
+                         f'{time.time() - exec_timer}.')
 
         return result
 

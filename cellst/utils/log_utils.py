@@ -31,7 +31,6 @@ def get_logger(name: str,
     logger.addHandler(sh)
 
     # Initialize log file and return
-    logger.info('Log initiated')
     return logger
 
 
@@ -48,7 +47,7 @@ def get_console_logger(level: str = 'WARNING') -> logging.Logger:
 
     # Create stream handler to specify standard output
     sh = logging.StreamHandler()
-    sh.setLevel(logging.INFO)
+    sh.setLevel(getattr(logging, level))
     sh.setFormatter(formatter)
 
     # Add handler and return
