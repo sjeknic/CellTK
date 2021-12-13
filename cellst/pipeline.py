@@ -22,7 +22,11 @@ from cellst.utils.log_utils import get_logger, get_console_logger
 
 
 class Pipeline():
-    # TODO: need a better way to define where the path should be...
+    """
+    TODO:
+        - need a better way to define where the file_location is
+        - Add __str__ based on Operation.__str__
+    """
     file_location = os.path.dirname(os.path.realpath(__file__))
     __name__ = 'Pipeline'
     __slots__ = ('_image_container', 'operations',
@@ -369,13 +373,12 @@ class Pipeline():
             - No way to pass img_dtype to this function
         """
         for idx, name in enumerate(INPT_NAMES):
-            fol = getattr(self, f'{name}_folder')
-
             # Get unique list of all inputs requested by operations
             all_requested = [sl for l in [i[idx] for i in inputs] for sl in l]
             to_load = list(set(all_requested))
 
             for key in to_load:
+                fol = getattr(self, f'{name}_folder')
                 pths = self._get_image_paths(fol, key[0])
                 if len(pths) == 0:
                     # If no images are found in the path, check output_folder
@@ -384,12 +387,9 @@ class Pipeline():
                     # If still no images, check the listed outputs
                     if len(pths) == 0 and key not in outputs:
                         # TODO: The order matters. Should raise error if it is made
-                        #       after it is needed.
+                        #       after it is needed, otherwise continue.
                         raise ValueError(f'Data {key} cannot be found and is '
                                          'not listed as an output.')
-
-                    # Don't try to load images if none found
-                    continue
 
                 # Log the paths
                 self.logger.info(f'Looking for {key[0]} in {fol}. '
@@ -457,7 +457,7 @@ class Pipeline():
         """
         # Parent folder defaults to folder where Pipeline was called
         if parent_folder is None:
-            self.parent_folder = os.path.abspath(sys.argv[0])
+            self.parent_folder = os.path.dirname(os.path.abspath(sys.argv[0]))
         else:
             self.parent_folder = parent_folder
 
@@ -467,11 +467,21 @@ class Pipeline():
         else:
             self.output_folder = output_folder
 
-        # All image folders default to output_folder or parent_folder
-        self.image_folder = self.parent_folder if image_folder is None else image_folder
-        self.mask_folder = self.output_folder if mask_folder is None else mask_folder
-        self.track_folder = self.output_folder if track_folder is None else track_folder
-        self.array_folder = self.output_folder if array_folder is None else array_folder
+        # Image folder defaults parent_folder
+        if image_folder is None:
+            self.image_folder = self.parent_folder
+        else:
+            self.image_folder = os.path.abspath(image_folder)
+
+        # All others default to output folder
+        _fols = ['mask', 'track', 'array']
+        self.mask_folder = mask_folder
+        self.track_folder = track_folder
+        self.array_folder = array_folder
+
+        for imtyp in _fols:
+            if getattr(self, f'{imtyp}_folder') is None:
+                setattr(self, f'{imtyp}_folder', self.output_folder)
 
     def _make_output_folder(self,
                             overwrite: bool = True
@@ -494,8 +504,6 @@ class Pipeline():
 
             self.output_folder = tempdir
             os.makedirs(self.output_folder)
-
-
 
     @classmethod
     def _run_single_pipe(cls,
@@ -538,6 +546,10 @@ class Pipeline():
 
 
 class Orchestrator():
+    """
+    TODO:
+        - Add __str__ method
+    """
     file_location = os.path.dirname(os.path.realpath(__file__))
 
     __name__ = 'Orchestrator'
