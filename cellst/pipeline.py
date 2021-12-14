@@ -529,7 +529,8 @@ class Pipeline():
             except KeyError:
                 # Means condition map was bad
                 warnings.warn(f'Could not find condition for {fol}. '
-                              'Using default.', UserWarning)
+                              'Using folder name.', UserWarning)
+                oper['extract']['condition'] = fol
 
         # Initialize pipeline and operations
         pipe = Pipeline(**pipe)
@@ -583,6 +584,7 @@ class Orchestrator():
 
         TODO:
             - Should be able to parse args and load a yaml as well
+            - Should be able to load yaml to define operations
         """
         # Save some values
         self.name = name
@@ -718,6 +720,56 @@ class Orchestrator():
         save_path = os.path.join(self.output_folder, f'{self.name}.hdf5')
         out.save(save_path)
 
+    def save_pipeline_yamls(self, path: str = None) -> None:
+        """
+        Save yaml file that can be loaded as Pipeline
+        """
+        # Set path for saving files - saves in yaml folder
+        path = self.output_folder if path is None else path
+        path = os.path.join(path, 'pipeline_yamls')
+        if not os.path.exists(path):
+            os.makedirs(path)
+
+        # Get operation definitions
+        if self.operations:
+            op_dict = condense_operations(self.operations)
+        else:
+            op_dict = {}
+
+        # Save each pipeline
+        self.logger.info(f"Saving {len(self.pipelines)} yamls in {path}")
+        for pipe, kwargs in self.pipelines.items():
+            # Add operations to the Pipeline definition
+            kwargs.update({'_operations': op_dict})
+            # Save the Pipeline
+            fname = os.path.join(path,
+                                 f"{folder_name(kwargs['parent_folder'])}.yaml")
+
+            with open(fname, 'w') as yaml_file:
+                yaml.dump(kwargs, yaml_file)
+
+    def save_operations(self,
+                        path: str = None,
+                        fname: str = 'operations.yaml'
+                        ) -> None:
+        """
+        Save self.operations as a yaml file.
+        """
+        # Get the path
+        path = self.output_folder if path is None else path
+        if not os.path.exists(path):
+            os.makedirs(path)
+        path = os.path.join(path, fname)
+
+        # Get Operation definitions
+        op_dict = condense_operations(self.operations)
+
+        # Save
+        # TODO: This should call a util
+        self.logger.info(f"Saving Operations at {path}")
+        with open(path, 'w') as yaml_file:
+            yaml.dump(op_dict, yaml_file)
+
     def _build_pipelines(self,
                          parent_folder: str,
                          output_folder: str,
@@ -789,9 +841,6 @@ class Orchestrator():
                             overwrite: bool = True
                             ) -> None:
         """
-        This will also be responsible for logging and passing the yaml
-        TODO:
-            - Add logging file
         """
         if not os.path.exists(self.output_folder):
             os.makedirs(self.output_folder)
