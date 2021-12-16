@@ -169,8 +169,8 @@ class Pipeline():
             raise ValueError(f'Expected type Operation, got {type(operation)}.')
 
         # Log changes to the list of operations
-        self.logger.info(f'Added {operation} at {index}. '
-                         f'Current operation list: {self.operations}.')
+        self.logger.info(f'Added {len(operation)} operations at {index}. '
+                         f'\nCurrent operation list: {self.operations}.')
 
         self.operation_index = {i: o for i, o in enumerate(self.operations)}
 
@@ -532,9 +532,11 @@ class Pipeline():
         self.add_operations(extract_operations(oper_dict))
 
     @classmethod
-    def _build_from_dict(cls, pipe_dict: dict, cond_map: Dict = {}) -> 'Pipeline':
+    def _build_from_dict(cls, pipe_dict: dict) -> 'Pipeline':
         # Save Operations to use later
         op_dict = pipe_dict.pop('_operations')
+        # Save condition to add to Extract operations
+        condition = pipe_dict.pop('condition')
 
         # Load pipeline
         fol = folder_name(pipe_dict['parent_folder'])
@@ -542,15 +544,8 @@ class Pipeline():
 
         # Add folder name if condition isn't specified
         # TODO: This won't work for multiple Extract operations
-        # TODO: This should probably be handled elsewhere
         if 'extract' in op_dict and op_dict['extract']['condition'] == 'default':
-            try:
-                op_dict['extract']['condition'] = cond_map[fol]
-            except KeyError:
-                # Means condition map was bad
-                warnings.warn(f'Could not find condition for {fol}. '
-                              'Using folder name.', UserWarning)
-                op_dict['extract']['condition'] = fol
+            op_dict['extract']['condition'] = condition
 
         # Load the operations
         pipe._load_operations_from_dict(op_dict)
@@ -559,8 +554,7 @@ class Pipeline():
 
     @classmethod
     def _run_single_pipe(cls,
-                         pipe_dict: Dict,
-                         cond_map: Dict = {}
+                         pipe_dict: Dict
                          ) -> Arr:
         """
         Creates a Pipeline object, adds operations, and runs.
@@ -573,7 +567,7 @@ class Pipeline():
         TODO: This should, from now on, only take in Pipe. Everything
               else should be handled externally.
         """
-        pipe = cls._build_from_dict(pipe_dict, cond_map)
+        pipe = cls._build_from_dict(pipe_dict)
         with pipe:
             result = pipe.run()
 
@@ -596,7 +590,7 @@ class Orchestrator():
                  'parent_folder', 'output_folder',
                  'operation_index', 'img_ext', 'name',
                  'overwrite', 'save', 'condition_map',
-                 'logger')
+                 'logger', 'condition_map')
 
     def __init__(self,
                  parent_folder: str = None,
@@ -628,13 +622,13 @@ class Orchestrator():
         self.img_ext = file_extension
         self.overwrite = overwrite
         self.save = save_master_df
+        self.condition_map = condition_map
 
         # Build the Pipelines and input/output paths
         self.pipelines = {}
         self._build_pipelines(parent_folder, output_folder, match_str,
                               image_folder, mask_folder, track_folder,
                               array_folder)
-        self.condition_map = self._update_condition_map(condition_map)
         self._make_output_folder(self.overwrite)
 
         # Set up logger - defaults to output folder
@@ -673,10 +667,7 @@ class Orchestrator():
         else:
             results = []
             for fol, kwargs in self.pipelines.items():
-                results.append(
-                    Pipeline._run_single_pipe(kwargs,
-                                              self.condition_map)
-                )
+                results.append(Pipeline._run_single_pipe(kwargs))
 
         if self.save:
             # TODO: If results are saved, pass here, otherwise, use files
@@ -697,8 +688,7 @@ class Orchestrator():
         # Run asynchronously
         with Pool(n_cores) as pool:
             # Set up pool of workers
-            multi = [pool.apply_async(Pipeline._run_single_pipe,
-                                      args=(kwargs, self.condition_map))
+            multi = [pool.apply_async(Pipeline._run_single_pipe, args=(kwargs))
                      for kwargs in pipeline_dict.values()]
 
             # Run pool and return results
@@ -766,6 +756,15 @@ class Orchestrator():
         for pipe, kwargs in self.pipelines.items():
             # Add operations
             kwargs.update({'_operations': op_dict})
+
+    def update_condition_map(self, condition_map: dict = {}) -> None:
+        """
+        Adds conditions to each of the Pipelines in Orchestrator
+        """
+        for fol, cond in condition_map.items():
+            self.pipelines[fol]['condition'] = cond
+
+        self.condition_map = condition_map
 
     def save_pipeline_yamls(self, path: str = None) -> None:
         """
@@ -867,18 +866,15 @@ class Orchestrator():
                                                       array_folder),
                 ))
 
+                # Add condition
+                try:
+                    self.pipelines[fol]['condition'] = self.condition_map[fol]
+                except KeyError:
+                    self.pipelines[fol]['condition'] = fol
+
                 # Add miscellaneous options
                 self.pipelines[fol]['file_extension'] = self.img_ext
                 self.pipelines[fol]['overwrite'] = self.overwrite
-
-    def _update_condition_map(self, condition_map: Dict) -> Dict:
-        """
-        """
-        if len(condition_map) > 0:
-            return condition_map
-        else:
-            # Default is to use folder name (keys in pipeline)
-            return {k: k for k in self.pipelines}
 
     def _make_output_folder(self,
                             overwrite: bool = True
