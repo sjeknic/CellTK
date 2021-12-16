@@ -20,12 +20,18 @@ from cellst.utils.process_utils import condense_operations, extract_operations
 from cellst.utils.utils import folder_name
 from cellst.utils.log_utils import get_logger, get_console_logger
 
+"""
+TODO: Orchestrator and Pipeline might need to be in separate modules so they can
+be called from the command line easily
+"""
 
 class Pipeline():
     """
     TODO:
         - need a better way to define where the file_location is
         - Add __str__ based on Operation.__str__
+        - Add loading from yaml
+        - Add calling from the command line
     """
     file_location = os.path.dirname(os.path.realpath(__file__))
     __name__ = 'Pipeline'
@@ -258,7 +264,7 @@ class Pipeline():
 
                 self.logger.info(f'Saved {arr.shape[0]} images in {save_folder}.')
 
-    def _input_output_handler(self):
+    def _input_output_handler(self) -> Tuple[str]:
         """
         Iterate through all the operations and figure out which images
         to save and which to remove.
@@ -370,7 +376,7 @@ class Pipeline():
         Returns:
 
         TODO:
-            - Not sure if it is finding image metadata. Test with images with metadata.
+            - Add saving of image metadata
             - No way to pass img_dtype to this function
         """
         for idx, name in enumerate(INPT_NAMES):
@@ -506,10 +512,39 @@ class Pipeline():
             self.output_folder = tempdir
             os.makedirs(self.output_folder)
 
+    def _load_operations_from_dict(self, oper_dict: Dict[str, Operation]) -> None:
+        """Adds operations to self from a dictionary of Operations i.e. yaml"""
+        self.add_operations(extract_operations(oper_dict))
+
+    @classmethod
+    def _build_from_dict(cls, pipe_dict: dict, cond_map: Dict = {}) -> 'Pipeline':
+        # Save Operations to use later
+        op_dict = pipe_dict.pop('_operations')
+
+        # Load pipeline
+        fol = folder_name(pipe_dict['parent_folder'])
+        pipe = cls(**pipe_dict)
+
+        # Add folder name if condition isn't specified
+        # TODO: This won't work for multiple Extract operations
+        # TODO: This should probably be handled elsewhere
+        if 'extract' in op_dict and op_dict['extract']['condition'] == 'default':
+            try:
+                op_dict['extract']['condition'] = cond_map[fol]
+            except KeyError:
+                # Means condition map was bad
+                warnings.warn(f'Could not find condition for {fol}. '
+                              'Using folder name.', UserWarning)
+                op_dict['extract']['condition'] = fol
+
+        # Load the operations
+        pipe._load_operations_from_dict(op_dict)
+
+        return pipe
+
     @classmethod
     def _run_single_pipe(cls,
-                         pipe: Dict,
-                         oper: Dict,
+                         pipe_dict: Dict,
                          cond_map: Dict = {}
                          ) -> Arr:
         """
@@ -519,26 +554,12 @@ class Pipeline():
               in memory.
         NOTE: Assumes it is okay to make changes in-place in oper,
               i.e. that it is a copy of the original dictionary
+
+        TODO: This should, from now on, only take in Pipe. Everything
+              else should be handled externally.
         """
-        # If Extract has default name, set to name of folder or condition
-        # NOTE: 'FUNCTIONS' key in dict has no effect with Extract
-        fol = folder_name(pipe['parent_folder'])
-        if 'extract' in oper and oper['extract']['condition'] == 'default':
-            try:
-                oper['extract']['condition'] = cond_map[fol]
-            except KeyError:
-                # Means condition map was bad
-                warnings.warn(f'Could not find condition for {fol}. '
-                              'Using folder name.', UserWarning)
-                oper['extract']['condition'] = fol
-
-        # Initialize pipeline and operations
-        pipe = Pipeline(**pipe)
-        opers = extract_operations(oper)
-
+        pipe = cls._build_from_dict(pipe_dict, cond_map)
         with pipe:
-            # Run pipeline and save results
-            pipe.add_operations(opers)
             result = pipe.run()
 
         # Remove from memory
@@ -610,6 +631,9 @@ class Orchestrator():
         # Prepare for getting operations
         self.operations = []
 
+    def __len__(self) -> int:
+        return len(self.pipelines)
+
     def run(self, n_cores: int = 1) -> None:
         """
         Run all the Pipelines with all of the operations.
@@ -623,20 +647,18 @@ class Orchestrator():
                           UserWarning)
             return
 
-        # Get a single dictionary that defines all operations
-        operation_dict = condense_operations(self.operations)
+        # Add operations to the pipelines
+        self.add_operations_to_pipelines(self.operations)
 
         # Run with multiple cores or just a single core
         if n_cores > 1:
             results = self.run_multiple_pipelines(self.pipelines,
-                                                  operation_dict,
                                                   n_cores=n_cores)
         else:
             results = []
             for fol, kwargs in self.pipelines.items():
                 results.append(
                     Pipeline._run_single_pipe(kwargs,
-                                              deepcopy(operation_dict),
                                               self.condition_map)
                 )
 
@@ -648,29 +670,23 @@ class Orchestrator():
 
     def run_multiple_pipelines(self,
                                pipeline_dict: Dict,
-                               operation_dict: Dict,
                                n_cores: int = 1
                                ) -> Collection[Arr]:
         """
         pipeline_dict holds path information for building ALL of the pipelines
             - key is subfolder, val is to be passed to Pipeline.__init__
-        operation_dict holds the information for building ALL of the operations
-            - key is operation
 
-        TODO:
-            - Not sure a copy of operation_dict has to be made here. It's going
-              to get pickled, I think, so no changes that _run_single_pipe will
-              apply to any other Pipeline. I think...
+        Assumes that operations are already added to the Pipelines
         """
+        # Run asynchronously
         with Pool(n_cores) as pool:
             # Set up pool of workers
             multi = [pool.apply_async(Pipeline._run_single_pipe,
-                                      args=(kwargs, deepcopy(operation_dict),
-                                            self.condition_map))
+                                      args=(kwargs, self.condition_map))
                      for kwargs in pipeline_dict.values()]
 
             # Run pool and return results
-            return [m.get().shape for m in multi]
+            return [m.get() for m in multi]
 
     def add_operations(self,
                        operation: Collection[Operation],
@@ -720,6 +736,21 @@ class Orchestrator():
         save_path = os.path.join(self.output_folder, f'{self.name}.hdf5')
         out.save(save_path)
 
+    def add_operations_to_pipelines(self,
+                                    operations: Collection[Operation] = []
+                                    ) -> None:
+        """
+        Adds Operations to each Pipeline in Orchestrator
+        """
+        # Collect operations
+        op_dict = condense_operations(operations)
+
+        self.logger.info(f'Adding Operations {operations} '
+                         f'to {len(self)} Pipelines.')
+        for pipe, kwargs in self.pipelines.items():
+            # Add operations
+            kwargs.update({'_operations': op_dict})
+
     def save_pipeline_yamls(self, path: str = None) -> None:
         """
         Save yaml file that can be loaded as Pipeline
@@ -730,21 +761,17 @@ class Orchestrator():
         if not os.path.exists(path):
             os.makedirs(path)
 
-        # Get operation definitions
-        if self.operations:
-            op_dict = condense_operations(self.operations)
-        else:
-            op_dict = {}
+        # Make sure operations are added to pipelines
+        self.add_operations_to_pipelines(self.operations)
 
         # Save each pipeline
         self.logger.info(f"Saving {len(self.pipelines)} yamls in {path}")
         for pipe, kwargs in self.pipelines.items():
-            # Add operations to the Pipeline definition
-            kwargs.update({'_operations': op_dict})
             # Save the Pipeline
             fname = os.path.join(path,
                                  f"{folder_name(kwargs['parent_folder'])}.yaml")
 
+            # TODO: This should call a function in yaml_utils
             with open(fname, 'w') as yaml_file:
                 yaml.dump(kwargs, yaml_file)
 
