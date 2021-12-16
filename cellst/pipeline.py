@@ -28,8 +28,7 @@ be called from the command line easily
 class Pipeline():
     """
     TODO:
-        - need a better way to define where the file_location is
-        - Add __str__ based on Operation.__str__
+        - file_location should be dir that pipeline was called from
         - Add loading from yaml
         - Add calling from the command line
     """
@@ -64,9 +63,6 @@ class Pipeline():
 
         Returns:
             None
-
-        TODO:
-            - Should be able to parse args and load a yaml as well
         """
         # Define paths to find and save images
         self.img_ext = file_extension
@@ -86,7 +82,7 @@ class Pipeline():
         self.operations = []
 
         # Log relevant information and parameters
-        self.logger.info(f'Pipeline {self} initiated.')
+        self.logger.info(f'Pipeline {repr(self)} initiated.')
         self.logger.info(f'Parent folder: {self.parent_folder}')
         self.logger.info(f'Output folder: {self.output_folder}')
         self.logger.info(f'Image folder: {self.image_folder}')
@@ -120,6 +116,25 @@ class Pipeline():
         except TypeError:
             # KeyboardInterrupt now won't cause additional exceptions
             pass
+
+    def __str__(self) -> str:
+        """
+        """
+        # Inputs are printed first
+        string = self.parent_folder
+        _fols = ['image', 'mask', 'track', 'array']
+        for imtyp in _fols:
+            string += (f'\n\t {imtyp}: ' +
+                       folder_name(getattr(self, f'{imtyp}_folder')))
+
+        # Add operations to string
+        for oper in self.operations:
+            string += f'\n {oper}'
+
+        # Outputs last
+        string += f'\n {self.output_folder}'
+
+        return string
 
     def add_operations(self,
                        operation: Collection[Operation],
@@ -572,6 +587,7 @@ class Orchestrator():
     """
     TODO:
         - Add __str__ method
+        - Add function for submitting jobs to SLURM
     """
     file_location = os.path.dirname(os.path.realpath(__file__))
 
@@ -890,6 +906,7 @@ class Orchestrator():
                         inpt: str
                         ) -> str:
         """
+        Makes inpts relative to the parent_folder of that Pipeline
         """
         # Parse sub-folder inputs
         if inpt is not None:
@@ -901,8 +918,8 @@ class Orchestrator():
         """
         Parses the input yaml file
         """
-        with open(path, 'r') as yam:
-            args = yaml.load(yam, Loader=yaml.FullLoader)
+        with open(path, 'r') as yaml_file:
+            args = yaml.load(yaml_file, Loader=yaml.FullLoader)
         return args
 
     def _get_command_line_inputs(self) -> argparse.Namespace:
