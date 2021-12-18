@@ -2,7 +2,6 @@ import yaml
 from typing import Collection, Dict
 
 from cellst.operation import Operation
-# from cellst.pipeline import Pipeline, Orchestrator
 from cellst.utils.process_utils import condense_operations
 
 
@@ -40,3 +39,4 @@ def save_pipeline_yaml(yaml_file: str,
                        ) -> None:
     """Save a Pipeline in a yaml file"""
     save_yaml_file(pipeline, yaml_file, warning=True)
+
