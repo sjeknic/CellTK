@@ -11,8 +11,20 @@ def condense_operations(operations: Collection[Operation]) -> Dict[str, dict]:
     This function receives a list of operations and
     returns a dictionary that can recreate them
     """
-    return {op.__name__.lower(): op._operation_to_dict()
-            for op in operations}
+
+    # Build the dictionary iteratively
+    op_dict = {}
+    for op in operations:
+        # Count used to identify the operations
+        count = 1
+        key = op.__name__.lower()
+        while key in op_dict:
+            key = op.__name__.lower() + f'_{count}'
+            count += 1
+
+        op_dict[key] = op._operation_to_dict()
+
+    return op_dict
 
 
 def extract_operations(oper_dict: Dict) -> Operation:
@@ -27,18 +39,18 @@ def _dict_to_operation(oper_dict: Dict) -> Operation:
     """
     """
     # Get all the values that relate to the Operation
-    to_init = {k: v for k, v in oper_dict.items() if k != 'FUNCTIONS'}
+    to_init = {k: v for k, v in oper_dict.items() if k != '_functions'}
 
     # Get operation class to call
     operation = to_init.pop('__name__')
-    # Seems messy. Any change to repo structure will break this.
-    operation = getattr(sys.modules[f'cellst.{operation.lower()}'], operation)
+    module = to_init.pop('__module__')
+    operation = getattr(sys.modules[module], operation)
 
     # Initalize the class
     operation = operation(**to_init)
 
     # Add the functions to the operation
-    for key, val in oper_dict['FUNCTIONS'].items():
+    for key, val in oper_dict['_functions'].items():
         func = key
         name, args, kwargs = val['name'], val['args'], val['kwargs']
 

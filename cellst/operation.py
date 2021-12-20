@@ -7,7 +7,8 @@ import numpy as np
 from skimage.measure import regionprops_table
 
 from cellst.utils._types import Image, Mask, Track, Arr, INPT_NAME_IDX
-from cellst.utils.operation_utils import track_to_mask, parents_from_track
+from cellst.utils.operation_utils import (track_to_mask, parents_from_track,
+                                          RandomNameProperty)
 from cellst.utils.log_utils import get_console_logger
 import cellst.utils.metric_utils as metric_utils
 
@@ -215,7 +216,7 @@ class Operation():
         Returns a dictionary that fully defines the operation
         """
         # Get attributes to lookup
-        base_slots = ['__name__', 'save', 'output', '_output_id']
+        base_slots = ['__name__', '__module__', 'save', 'output', '_output_id']
         if op_slots is not None: base_slots.extend(op_slots)
 
         # Save in dictionary
@@ -236,7 +237,7 @@ class Operation():
             func_defs[func]['kwargs'] = kwargs
 
         # Save in original dictionary
-        op_defs['FUNCTIONS'] = func_defs
+        op_defs['_functions'] = func_defs
 
         return op_defs
 
@@ -421,23 +422,6 @@ class BaseExtract(Operation):
     _extra_properties = ['division_frame', 'parent_id', 'total_intensity',
                          'median_intensity']
     _props_to_add = {}
-
-    class EmptyProperty():
-        """
-        This class is to be used with skimage.regionprops_table.
-        Every extra property passed to regionprops_table must
-        have a unique name, however, I want to use several as a
-        placeholder, so that I can get the right size array, but fill
-        in the values later. So, this assigns a random __name__.
-        """
-        def __init__(self, *args) -> None:
-            rng = np.random.default_rng()
-            # Make it extremely unlikely to get the same int
-            self.__name__ = str(rng.integers(999999))
-
-        @staticmethod
-        def __call__(empty):
-            return np.nan
 
     def __init__(self,
                  input_images: Collection[str] = [],
@@ -633,8 +617,8 @@ class BaseExtract(Operation):
         # Add metrics and extra properties
         # TODO: This is also a bit hackish
         func = 'extract_data_from_image'
-        op_dict['FUNCTIONS'][func]['metrics'] = self._metrics
-        op_dict['FUNCTIONS'][func]['extra_props'] = self._props_to_add
+        op_dict['_functions'][func]['metrics'] = self._metrics
+        op_dict['_functions'][func]['extra_props'] = self._props_to_add
 
         return op_dict
 
@@ -651,7 +635,7 @@ class BaseExtract(Operation):
                     func = getattr(metric_utils, name)
                 except AttributeError:
                     # Function not implemented by me
-                    func = self.EmptyProperty()
+                    func = RandomNameProperty()
 
         self._props_to_add[name] = func
 

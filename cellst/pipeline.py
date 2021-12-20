@@ -6,7 +6,6 @@ import warnings
 import time
 from multiprocessing import Pool
 from typing import Dict, List, Collection, Tuple
-from copy import deepcopy
 from glob import glob
 
 import numpy as np
@@ -19,13 +18,18 @@ from cellst.utils._types import Condition, Experiment
 from cellst.utils.process_utils import condense_operations, extract_operations
 from cellst.utils.utils import folder_name
 from cellst.utils.log_utils import get_logger, get_console_logger
+from cellst.utils.yaml_utils import save_operation_yaml, save_pipeline_yaml
 
+"""
+TODO: Orchestrator and Pipeline might need to be in separate modules so they can
+be called from the command line easily
+"""
 
 class Pipeline():
     """
     TODO:
-        - need a better way to define where the file_location is
-        - Add __str__ based on Operation.__str__
+        - file_location should be dir that pipeline was called from
+        - Add calling from the command line
     """
     file_location = os.path.dirname(os.path.realpath(__file__))
     __name__ = 'Pipeline'
@@ -33,8 +37,9 @@ class Pipeline():
                  'parent_folder', 'output_folder',
                  'image_folder', 'mask_folder',
                  'track_folder', 'array_folder',
-                 'operation_index', 'img_ext',
-                 'logger', 'timer')
+                 'operation_index', 'file_extension',
+                 'logger', 'timer', 'overwrite',
+                 'name', 'log_file')
 
     def __init__(self,
                  parent_folder: str = None,
@@ -43,6 +48,7 @@ class Pipeline():
                  mask_folder: str = None,
                  track_folder: str = None,
                  array_folder: str = None,
+                 name: str = None,
                  file_extension: str = 'tif',
                  overwrite: bool = True,
                  log_file: bool = True
@@ -58,15 +64,17 @@ class Pipeline():
 
         Returns:
             None
-
-        TODO:
-            - Should be able to parse args and load a yaml as well
         """
+        # Save some values in case Pipeline is written as yaml
+        self.overwrite = overwrite
+        self.log_file = log_file
+
         # Define paths to find and save images
-        self.img_ext = file_extension
+        self.file_extension = file_extension
         self._set_all_paths(parent_folder, output_folder, image_folder,
                             mask_folder, track_folder, array_folder)
         self._make_output_folder(overwrite)
+        self.name = folder_name(self.parent_folder) if name is None else name
 
         # Set up logger - defaults to output folder
         if log_file:
@@ -80,7 +88,7 @@ class Pipeline():
         self.operations = []
 
         # Log relevant information and parameters
-        self.logger.info(f'Pipeline {self} initiated.')
+        self.logger.info(f'Pipeline {repr(self)} initiated.')
         self.logger.info(f'Parent folder: {self.parent_folder}')
         self.logger.info(f'Output folder: {self.output_folder}')
         self.logger.info(f'Image folder: {self.image_folder}')
@@ -115,6 +123,25 @@ class Pipeline():
             # KeyboardInterrupt now won't cause additional exceptions
             pass
 
+    def __str__(self) -> str:
+        """
+        """
+        # Inputs are printed first
+        string = self.parent_folder
+        _fols = ['image', 'mask', 'track', 'array']
+        for imtyp in _fols:
+            string += (f'\n\t {imtyp}: ' +
+                       folder_name(getattr(self, f'{imtyp}_folder')))
+
+        # Add operations to string
+        for oper in self.operations:
+            string += f'\n {oper}'
+
+        # Outputs last
+        string += f'\n {self.output_folder}'
+
+        return string
+
     def add_operations(self,
                        operation: Collection[Operation],
                        index: int = -1
@@ -148,8 +175,8 @@ class Pipeline():
             raise ValueError(f'Expected type Operation, got {type(operation)}.')
 
         # Log changes to the list of operations
-        self.logger.info(f'Added {operation} at {index}. '
-                         f'Current operation list: {self.operations}.')
+        self.logger.info(f'Added {len(operation)} operations at {index}. '
+                         f'\nCurrent operation list: {self.operations}.')
 
         self.operation_index = {i: o for i, o in enumerate(self.operations)}
 
@@ -258,7 +285,53 @@ class Pipeline():
 
                 self.logger.info(f'Saved {arr.shape[0]} images in {save_folder}.')
 
-    def _input_output_handler(self):
+    def save_as_yaml(self,
+                     path: str = None,
+                     fname: str = None
+                     ) -> None:
+        """
+        Should write Pipeline as a yaml file to output dir
+        """
+        # Set path for saving files - saves in output by default
+        path = self.output_folder if path is None else path
+        if fname is None:
+            fname = f'{folder_name(self.parent_folder)}.yaml'
+        if not os.path.exists(path):
+            os.makedirs(path)
+        path = os.path.join(path, fname)
+
+        # Create specification as dictionary
+        pipe_dict = self._pipeline_to_dict()
+
+        self.logger.info(f'Saving Pipeline {repr(self)} in {path}.')
+        save_pipeline_yaml(path, pipe_dict)
+
+    def save_operations_as_yaml(self,
+                                path: str = None,
+                                fname: str = 'operations.yaml'
+                                ) -> None:
+        """
+        Save operations as a stand-alone yaml file.
+        """
+        # Get the path
+        path = self.output_folder if path is None else path
+        if not os.path.exists(path):
+            os.makedirs(path)
+        path = os.path.join(path, fname)
+
+        # Save using yaml_utils
+        self.logger.info(f"Saving Operations at {path}")
+        save_operation_yaml(path, self.operations)
+
+    @classmethod
+    def load_from_yaml(cls, path: str) -> 'Pipeline':
+        """Builds Pipeline class from specifications in yaml file"""
+        with open(path, 'r') as yf:
+            pipe_dict = yaml.load(yf, Loader=yaml.FullLoader)
+
+        return cls._build_from_dict(pipe_dict)
+
+    def _input_output_handler(self) -> Tuple[str]:
         """
         Iterate through all the operations and figure out which images
         to save and which to remove.
@@ -319,7 +392,7 @@ class Pipeline():
         # Function to check if img should be loaded
         def _confirm_im_match(im, check_name: bool = True) -> bool:
             name = True if not check_name else match_str in im
-            ext = self.img_ext in im
+            ext = self.file_extension in im
             fil = os.path.isfile(os.path.join(folder, im))
 
             return name * ext * fil
@@ -370,7 +443,7 @@ class Pipeline():
         Returns:
 
         TODO:
-            - Not sure if it is finding image metadata. Test with images with metadata.
+            - Add saving of image metadata
             - No way to pass img_dtype to this function
         """
         for idx, name in enumerate(INPT_NAMES):
@@ -506,11 +579,54 @@ class Pipeline():
             self.output_folder = tempdir
             os.makedirs(self.output_folder)
 
+    def _pipeline_to_dict(self) -> Dict:
+        """
+        Saves the Pipeline as a dictionary to put into yaml file
+        """
+        # Save basic parameters
+        init_params = ('parent_folder', 'output_folder', 'image_folder',
+                       'mask_folder', 'track_folder', 'array_folder',
+                       'overwrite', 'file_extension', 'log_file', 'name')
+        pipe_dict = {att: getattr(self, att) for att in init_params}
+
+        # Add Operations to dict
+        if self.operations:
+            pipe_dict['_operations'] = condense_operations(self.operations)
+
+        return pipe_dict
+
+    def _load_operations_from_dict(self,
+                                   oper_dict: Dict[str, Operation]
+                                   ) -> None:
+        """Adds operations to self from a dictionary of Operations i.e. yaml"""
+        self.add_operations(extract_operations(oper_dict))
+
+    @classmethod
+    def _build_from_dict(cls, pipe_dict: dict) -> 'Pipeline':
+        # Save Operations to use later
+        try:
+            op_dict = pipe_dict.pop('_operations')
+        except KeyError:
+            # Means no Operations
+            op_dict = {}
+
+        # Load pipeline
+        pipe = cls(**pipe_dict)
+
+        # Save condition to add to Extract operations
+        # TODO: This won't work for multiple Extract operations
+        condition = pipe_dict['name']
+        if 'extract' in op_dict and op_dict['extract']['condition'] == 'default':
+            op_dict['extract']['condition'] = condition
+
+        # Load the operations
+        pipe._load_operations_from_dict(op_dict)
+
+        return pipe
+
     @classmethod
     def _run_single_pipe(cls,
-                         pipe: Dict,
-                         oper: Dict,
-                         cond_map: Dict = {}
+                         pipe_dict: Dict
                          ) -> Arr:
         """
         Creates a Pipeline object, adds operations, and runs.
@@ -519,25 +635,12 @@ class Pipeline():
               in memory.
         NOTE: Assumes it is okay to make changes in-place in oper,
               i.e. that it is a copy of the original dictionary
+
+        TODO: This should, from now on, only take in Pipe. Everything
+              else should be handled externally.
         """
-        # If Extract has default name, set to name of folder or condition
-        # NOTE: 'FUNCTIONS' key in dict has no effect with Extract
-        fol = folder_name(pipe['parent_folder'])
-        if 'extract' in oper and oper['extract']['condition'] == 'default':
-            try:
-                oper['extract']['condition'] = cond_map[fol]
-            except KeyError:
-                # Means condition map was bad
-                warnings.warn(f'Could not find condition for {fol}. '
-                              'Using default.', UserWarning)
-
-        # Initialize pipeline and operations
-        pipe = Pipeline(**pipe)
-        opers = extract_operations(oper)
-
+        pipe = cls._build_from_dict(pipe_dict)
         with pipe:
-            # Run pipeline and save results
-            pipe.add_operations(opers)
             result = pipe.run()
 
         # Remove from memory
@@ -550,17 +653,19 @@ class Orchestrator():
     """
     TODO:
         - Add __str__ method
+        - Add function for submitting jobs to SLURM
     """
     file_location = os.path.dirname(os.path.realpath(__file__))
 
     __name__ = 'Orchestrator'
-    __slots__ = ('pipelines', 'operations',
+    __slots__ = ('pipelines', 'operations', 'yaml_folder',
                  'parent_folder', 'output_folder',
-                 'operation_index', 'img_ext', 'name',
+                 'operation_index', 'file_extension', 'name',
                  'overwrite', 'save', 'condition_map',
                  'logger')
 
     def __init__(self,
+                 yaml_folder: str = None,
                  parent_folder: str = None,
                  output_folder: str = None,
                  match_str: str = None,
@@ -583,30 +688,34 @@ class Orchestrator():
 
         TODO:
             - Should be able to parse args and load a yaml as well
+            - Should be able to load yaml to define operations
         """
         # Save some values
         self.name = name
-        self.img_ext = file_extension
+        self.file_extension = file_extension
         self.overwrite = overwrite
         self.save = save_master_df
+        self.condition_map = condition_map
 
-        # Build the Pipelines and input/output paths
-        self.pipelines = {}
-        self._build_pipelines(parent_folder, output_folder, match_str,
-                              image_folder, mask_folder, track_folder,
-                              array_folder)
-        self.condition_map = self._update_condition_map(condition_map)
-        self._make_output_folder(self.overwrite)
-
-        # Set up logger - defaults to output folder
+        # Set paths and start logging
+        self._set_all_paths(yaml_folder, parent_folder, output_folder)
         if log_file:
             self.logger = get_logger(self.__name__, self.output_folder,
                                      overwrite=overwrite)
         else:
             self.logger = get_console_logger()
 
+        # Build the Pipelines and input/output paths
+        self.pipelines = {}
+        self._build_pipelines(match_str, image_folder, mask_folder,
+                              track_folder, array_folder)
+        self._make_output_folder(self.overwrite)
+
         # Prepare for getting operations
         self.operations = []
+
+    def __len__(self) -> int:
+        return len(self.pipelines)
 
     def run(self, n_cores: int = 1) -> None:
         """
@@ -621,22 +730,17 @@ class Orchestrator():
                           UserWarning)
             return
 
-        # Get a single dictionary that defines all operations
-        operation_dict = condense_operations(self.operations)
+        # Add operations to the pipelines
+        self.add_operations_to_pipelines(self.operations)
 
         # Run with multiple cores or just a single core
         if n_cores > 1:
             results = self.run_multiple_pipelines(self.pipelines,
-                                                  operation_dict,
                                                   n_cores=n_cores)
         else:
             results = []
             for fol, kwargs in self.pipelines.items():
-                results.append(
-                    Pipeline._run_single_pipe(kwargs,
-                                              deepcopy(operation_dict),
-                                              self.condition_map)
-                )
+                results.append(Pipeline._run_single_pipe(kwargs))
 
         if self.save:
             # TODO: If results are saved, pass here, otherwise, use files
@@ -646,29 +750,22 @@ class Orchestrator():
 
     def run_multiple_pipelines(self,
                                pipeline_dict: Dict,
-                               operation_dict: Dict,
                                n_cores: int = 1
                                ) -> Collection[Arr]:
         """
         pipeline_dict holds path information for building ALL of the pipelines
             - key is subfolder, val is to be passed to Pipeline.__init__
-        operation_dict holds the information for building ALL of the operations
-            - key is operation
 
-        TODO:
-            - Not sure a copy of operation_dict has to be made here. It's going
-              to get pickled, I think, so no changes that _run_single_pipe will
-              apply to any other Pipeline. I think...
+        Assumes that operations are already added to the Pipelines
         """
+        # Run asynchronously
         with Pool(n_cores) as pool:
             # Set up pool of workers
-            multi = [pool.apply_async(Pipeline._run_single_pipe,
-                                      args=(kwargs, deepcopy(operation_dict),
-                                            self.condition_map))
+            multi = [pool.apply_async(Pipeline._run_single_pipe, args=(kwargs))
                      for kwargs in pipeline_dict.values()]
 
             # Run pool and return results
-            return [m.get().shape for m in multi]
+            return [m.get() for m in multi]
 
     def add_operations(self,
                        operation: Collection[Operation],
@@ -688,14 +785,14 @@ class Orchestrator():
                 else:
                     self.operations[index:index] = operation
             else:
-                raise ValueError('Not all elements of operation are class Operation.')
+                raise ValueError('Not all items in operation are Operations.')
         elif isinstance(operation, Operation):
             if index == -1:
                 self.operations.append(operation)
             else:
                 self.operations.insert(index, operation)
         else:
-            raise ValueError(f'Expected type Operation, got {type(operation)}.')
+            raise ValueError(f'Expected Operation, got {type(operation)}.')
 
         self.operation_index = {i: o for i, o in enumerate(self.operations)}
 
@@ -718,9 +815,72 @@ class Orchestrator():
         save_path = os.path.join(self.output_folder, f'{self.name}.hdf5')
         out.save(save_path)
 
+    def add_operations_to_pipelines(self,
+                                    operations: Collection[Operation] = []
+                                    ) -> None:
+        """
+        Adds Operations to each Pipeline in Orchestrator
+        """
+        # Collect operations
+        op_dict = condense_operations(operations)
+
+        self.logger.info(f'Adding Operations {operations} '
+                         f'to {len(self)} Pipelines.')
+        for pipe, kwargs in self.pipelines.items():
+            # First try to append operations before overwriting
+            try:
+                kwargs['_operations'].update(op_dict)
+            except KeyError:
+                kwargs.update({'_operations': op_dict})
+
+    def update_condition_map(self, condition_map: dict = {}) -> None:
+        """
+        Adds conditions to each of the Pipelines in Orchestrator
+        """
+        for fol, cond in condition_map.items():
+            self.pipelines[fol]['name'] = cond
+
+        self.condition_map = condition_map
+
+    def save_pipelines_as_yamls(self, path: str = None) -> None:
+        """
+        Save yaml file that can be loaded as Pipeline
+        """
+        # Set path for saving files - saves in yaml folder
+        path = self.output_folder if path is None else path
+        path = os.path.join(path, 'pipeline_yamls')
+        if not os.path.exists(path):
+            os.makedirs(path)
+
+        # Make sure operations are added to pipelines
+        self.add_operations_to_pipelines(self.operations)
+
+        # Save each pipeline
+        self.logger.info(f"Saving {len(self.pipelines)} yamls in {path}")
+        for pipe, kwargs in self.pipelines.items():
+            # Save the Pipeline
+            fname = os.path.join(path,
+                                 f"{folder_name(kwargs['parent_folder'])}.yaml")
+            save_pipeline_yaml(fname, kwargs)
+
+    def save_operations_as_yaml(self,
+                                path: str = None,
+                                fname: str = 'operations.yaml'
+                                ) -> None:
+        """
+        Save self.operations as a yaml file.
+        """
+        # Get the path
+        path = self.output_folder if path is None else path
+        if not os.path.exists(path):
+            os.makedirs(path)
+        path = os.path.join(path, fname)
+
+        # Save using yaml_utils
+        self.logger.info(f"Saving Operations at {path}")
+        save_operation_yaml(path, self.operations)
+
     def _build_pipelines(self,
-                         parent_folder: str,
-                         output_folder: str,
                          match_str: str,
                          image_folder: str,
                          mask_folder: str,
@@ -729,6 +889,74 @@ class Orchestrator():
                          ) -> None:
         """
         """
+        # If yamls are provided, use those to make the Pipelines
+        if self.yaml_folder is not None:
+            files = [os.path.join(self.yaml_folder, f)
+                     for f in os.listdir(self.yaml_folder)
+                     if f.endswith('.yaml')]
+            self.logger.info(f'Found {len(files)} possible pipelines '
+                             f'in {self.yaml_folder}')
+            # Load all yamls as dictionaries
+            for f in files:
+                with open(f, 'r') as yf:
+                    pipe = yaml.load(yf, Loader=yaml.FullLoader)
+                    try:
+                        fol = folder_name(pipe['parent_folder'])
+                        self.pipelines[fol] = pipe
+                    except KeyError:
+                        # Indicates yaml file was not a Pipeline yaml
+                        pass
+        else:
+            # Find all folders that will be needed for Pipelines
+            self.logger.info(f'Found {len(os.listdir(self.parent_folder))} '
+                             f'possible pipelines in {self.parent_folder}')
+            for fol in os.listdir(self.parent_folder):
+                # Check for the match_str
+                if match_str is not None and match_str not in fol:
+                    continue
+
+                # Make sure the path is a directory
+                fol_path = os.path.join(self.parent_folder, fol)
+                if os.path.isdir(fol_path) and fol_path != self.output_folder:
+                    # First initialize the dictionary
+                    self.pipelines[fol] = {}
+
+                    # Save parent folder
+                    self.pipelines[fol]['parent_folder'] = fol_path
+
+                    # Save output folder relative to self.output_folder
+                    out_fol = os.path.join(self.output_folder, fol)
+                    self.pipelines[fol]['output_folder'] = out_fol
+
+                    # Set all of the subfolders
+                    self.pipelines[fol].update(dict(
+                        image_folder=self._set_rel_to_par(fol_path,
+                                                          image_folder),
+                        mask_folder=self._set_rel_to_par(fol_path,
+                                                         mask_folder),
+                        track_folder=self._set_rel_to_par(fol_path,
+                                                          track_folder),
+                        array_folder=self._set_rel_to_par(fol_path,
+                                                          array_folder),
+                    ))
+
+                    # Add condition
+                    try:
+                        self.pipelines[fol]['name'] = self.condition_map[fol]
+                    except KeyError:
+                        self.pipelines[fol]['name'] = fol
+
+                    # Add miscellaneous options
+                    self.pipelines[fol]['file_extension'] = self.file_extension
+                    self.pipelines[fol]['overwrite'] = self.overwrite
+
+        self.logger.info(f'Loaded {len(self)} pipelines')
+
+    def _set_all_paths(self,
+                       yaml_folder: str,
+                       parent_folder: str,
+                       output_folder: str
+                       ) -> None:
         # Parent folder defaults to folder where Orchestrator was called
         if parent_folder is None:
             self.parent_folder = os.path.abspath(sys.argv[0])
@@ -741,57 +969,13 @@ class Orchestrator():
         else:
             self.output_folder = output_folder
 
-        # Find all folders that will be needed for Pipelines
-        for fol in os.listdir(self.parent_folder):
-            # Check for the match_str
-            if match_str is not None and match_str not in fol:
-                continue
-
-            # Make sure the path is a directory
-            fol_path = os.path.join(self.parent_folder, fol)
-            if os.path.isdir(fol_path) and fol_path != self.output_folder:
-                # First initialize the dictionary
-                self.pipelines[fol] = {}
-
-                # Save parent folder
-                self.pipelines[fol]['parent_folder'] = fol_path
-
-                # Save output folder relative to self.output_folder
-                out_fol = os.path.join(self.output_folder, fol)
-                self.pipelines[fol]['output_folder'] = out_fol
-
-                # Set all of the subfolders
-                self.pipelines[fol].update(dict(
-                    image_folder=self._set_rel_to_par(fol_path,
-                                                      image_folder),
-                    mask_folder=self._set_rel_to_par(fol_path,
-                                                     mask_folder),
-                    track_folder=self._set_rel_to_par(fol_path,
-                                                      track_folder),
-                    array_folder=self._set_rel_to_par(fol_path,
-                                                      array_folder),
-                ))
-
-                # Add miscellaneous options
-                self.pipelines[fol]['file_extension'] = self.img_ext
-                self.pipelines[fol]['overwrite'] = self.overwrite
-
-    def _update_condition_map(self, condition_map: Dict) -> Dict:
-        """
-        """
-        if len(condition_map) > 0:
-            return condition_map
-        else:
-            # Default is to use folder name (keys in pipeline)
-            return {k: k for k in self.pipelines}
+        # YAML folder can remain None
+        self.yaml_folder = yaml_folder
 
     def _make_output_folder(self,
                             overwrite: bool = True
                             ) -> None:
         """
-        This will also be responsible for logging and passing the yaml
-        TODO:
-            - Add logging file
         """
         if not os.path.exists(self.output_folder):
             os.makedirs(self.output_folder)
@@ -814,6 +998,7 @@ class Orchestrator():
                         inpt: str
                         ) -> str:
         """
+        Makes inpts relative to the parent_folder of that Pipeline
         """
         # Parse sub-folder inputs
         if inpt is not None:
@@ -825,8 +1010,8 @@ class Orchestrator():
         """
         Parses the input yaml file
         """
-        with open(path, 'r') as yam:
-            args = yaml.load(yam, Loader=yaml.FullLoader)
+        with open(path, 'r') as yaml_file:
+            args = yaml.load(yaml_file, Loader=yaml.FullLoader)
         return args
 
     def _get_command_line_inputs(self) -> argparse.Namespace:
