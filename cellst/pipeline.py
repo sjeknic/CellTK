@@ -644,3 +644,39 @@ class Pipeline():
         del pipe
 
         return result
+
+    @classmethod
+    def _get_command_line_inputs(cls) -> argparse.Namespace:
+
+        parser = argparse.ArgumentParser(conflict_handler='resolve')
+
+        # Input file is easiest way to pass arguments
+        parser.add_argument(
+            '--yaml', '-y',
+            default=None,
+            type=str,
+            help='YAML file containing input parameters'
+        )
+
+        # Consider whether to add these
+        parser.add_argument(
+            '--output',
+            type=str,
+            default='output',
+            help='Name of output directory. Default is output.'
+        )
+        parser.add_argument(
+            '--overwrite',
+            action='store_true',
+            help='If set, will overwrite contents of output folder. Otherwise makes new folder.'
+        )
+
+        return parser.parse_arg()
+
+
+if __name__ == '__main__':
+    args = Pipeline._get_command_line_inputs()
+
+    yaml_path = args.yaml
+    pipe = Pipeline.load_from_yaml(yaml_path)
+    pipe.run()
