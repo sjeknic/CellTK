@@ -36,9 +36,10 @@ class SlurmController():
         """
         def _add_line(string: str,
                       add: str,
-                      header: str = '#SBATCH'
+                      header: str = '#SBATCH',
+                      div: str = ' '
                       ) -> str:
-            string += f'\n{header} {add}'
+            string += f'\n{header}{div}{add}'
             return string
 
         # Get the options for the script
@@ -52,5 +53,13 @@ class SlurmController():
             to_add = f'--{pname}={val}'
             string = _add_line(string, to_add)
 
+        string = _add_line(string, '', '', '')
+
         # TODO: Add the real python command here
+        mods = 'module load cellst376'
+        string = _add_line(string, mods, '', '')
+
         command = 'python -m cellst.pipeline -y /home/users/sjeknic/CellST/test_out_orch/pipeline_yamls/F3-Site_3.yaml'
+        string = _add_line(string, command, '', '')
+
+        subprocess.run([string], shell=True)
