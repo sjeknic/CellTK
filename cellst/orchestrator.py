@@ -66,6 +66,7 @@ class Orchestrator():
 
         # Set paths and start logging
         self._set_all_paths(yaml_folder, parent_folder, output_folder)
+        self._make_output_folder(self.overwrite)
         if log_file:
             self.logger = get_logger(self.__name__, self.output_folder,
                                      overwrite=overwrite)
@@ -76,7 +77,6 @@ class Orchestrator():
         self.pipelines = {}
         self._build_pipelines(match_str, image_folder, mask_folder,
                               track_folder, array_folder)
-        self._make_output_folder(self.overwrite)
 
         # Prepare for getting operations
         self.operations = []
