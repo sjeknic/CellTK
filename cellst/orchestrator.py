@@ -8,12 +8,16 @@ from typing import Dict, Collection
 from glob import glob
 
 from cellst.operation import Operation
+from cellst.pipeline import Pipeline
 from cellst.utils._types import Arr
 from cellst.utils._types import Experiment
-from cellst.utils.process_utils import condense_operations
+from cellst.utils.process_utils import condense_operations, extract_operations
 from cellst.utils.utils import folder_name
 from cellst.utils.log_utils import get_logger, get_console_logger
-from cellst.utils.yaml_utils import save_operation_yaml, save_pipeline_yaml
+from cellst.utils.yaml_utils import (save_operation_yaml, save_pipeline_yaml,
+                                     save_yaml_file)
+from cellst.utils.slurm_utils import JobController
+from cellst.utils.cli_utils import CLIParser
 
 
 class Orchestrator():
@@ -29,7 +33,7 @@ class Orchestrator():
                  'parent_folder', 'output_folder',
                  'operation_index', 'file_extension', 'name',
                  'overwrite', 'save', 'condition_map',
-                 'logger')
+                 'logger', 'controller')
 
     def __init__(self,
                  yaml_folder: str = None,
@@ -46,6 +50,7 @@ class Orchestrator():
                  overwrite: bool = True,
                  log_file: bool = True,
                  save_master_df: bool = True,
+                 job_controller: JobController = None
                  ) -> None:
         """
         Args:
@@ -63,6 +68,7 @@ class Orchestrator():
         self.overwrite = overwrite
         self.save = save_master_df
         self.condition_map = condition_map
+        self.controller = job_controller
 
         # Set paths and start logging
         self._set_all_paths(yaml_folder, parent_folder, output_folder)
@@ -101,6 +107,9 @@ class Orchestrator():
         self.add_operations_to_pipelines(self.operations)
 
         # Run with multiple cores or just a single core
+        if self.controller is not None:
+            self.controller.add_logger()
+            self.controller.run(self.pipelines)
         if n_cores > 1:
             results = self.run_multiple_pipelines(self.pipelines,
                                                   n_cores=n_cores)
@@ -163,6 +172,17 @@ class Orchestrator():
 
         self.operation_index = {i: o for i, o in enumerate(self.operations)}
 
+    def load_operations_from_yaml(self, path: str) -> None:
+        with open(path, 'r') as yf:
+            op_dict = yaml.load(yf, Loader=yaml.Loader)
+
+        try:
+            op_dict = op_dict['_operations']
+            opers = extract_operations(op_dict)
+            self.add_operations(opers)
+        except KeyError:
+            raise KeyError(f'Failed to find Operations in {path}.')
+
     def build_experiment_file(self, arrays: Collection[Arr] = None) -> None:
         """
         Search folders in self.pipelines for hdf5 data frames
@@ -200,10 +220,20 @@ class Orchestrator():
             except KeyError:
                 kwargs.update({'_operations': op_dict})
 
-    def update_condition_map(self, condition_map: dict = {}) -> None:
+    def update_condition_map(self,
+                             condition_map: dict = {},
+                             path: str = None,
+                             ) -> None:
         """
         Adds conditions to each of the Pipelines in Orchestrator
+
+        NOTE: path will overwrite anything in condition_map
         """
+        # Load condition map YAML if available
+        if path is not None:
+            _cond_map = self._load_cond_map_from_yaml(path)
+            condition_map.update(_cond_map)
+
         for fol, cond in condition_map.items():
             self.pipelines[fol]['name'] = cond
 
@@ -214,8 +244,8 @@ class Orchestrator():
         Save yaml file that can be loaded as Pipeline
         """
         # Set path for saving files - saves in yaml folder
-        path = self.output_folder if path is None else path
-        path = os.path.join(path, 'pipeline_yamls')
+        if path is None:
+            path = os.path.join(self.output_folder, 'pipeline_yamls')
         if not os.path.exists(path):
             os.makedirs(path)
 
@@ -246,6 +276,22 @@ class Orchestrator():
         # Save using yaml_utils
         self.logger.info(f"Saving Operations at {path}")
         save_operation_yaml(path, self.operations)
+
+    def save_condition_map_as_yaml(self, path: str = None) -> None:
+        # Get the path
+        path = self.output_folder if path is None else path
+        if not os.path.exists(path):
+            os.makedirs(path)
+
+        # Save using yaml_utils
+        self.logger.info(f"Saving condition_map at {path}")
+        save_yaml_file(self.condition_map, path, warning=False)
+
+    def _load_cond_map_from_yaml(self, path: str) -> dict:
+        with open(path, 'r') as yf:
+            cond_map = yaml.load(yf, Loader=yaml.Loader)
+
+        return cond_map
 
     def _build_pipelines(self,
                          match_str: str,
@@ -373,37 +419,50 @@ class Orchestrator():
 
         return inpt
 
-    def parse_yaml(self, path: str) -> Dict:
-        """
-        Parses the input yaml file
-        """
-        with open(path, 'r') as yaml_file:
-            args = yaml.load(yaml_file, Loader=yaml.FullLoader)
-        return args
-
-    def _get_command_line_inputs(self) -> argparse.Namespace:
-
-        self.parser = argparse.ArgumentParser(conflict_handler='resolve')
-
-        # Input file is easiest way to pass arguments
-        self.parser.add_argument(
-            '--yaml', '-y',
-            default=None,
-            type=str,
-            help='YAML file containing input parameters'
+    @classmethod
+    def _build_from_cli(cls, args: argparse.Namespace) -> 'Orchestrator':
+        print(args)
+        # Build the Orchestrator
+        input_args = dict(
+            yaml_folder=args.pipelines,
+            parent_folder=args.parent,
+            output_folder=args.output,
+            match_str=args.match_str,
+            image_folder=args.image,
+            mask_folder=args.mask,
+            track_folder=args.track,
+            array_folder=args.array,
+            file_extension=args.extension,
+            name=args.name,
+            overwrite=args.overwrite,
+            log_file=not args.no_log,
+            save_master_df=not args.no_save_master_df,
         )
+        orch = Orchestrator(**input_args)
 
-        # Consider whether to add these
-        self.parser.add_argument(
-            '--output',
-            type=str,
-            default='output',
-            help='Name of output directory. Default is output.'
-        )
-        self.parser.add_argument(
-            '--overwrite',
-            action='store_true',
-            help='If set, will overwrite contents of output folder. Otherwise makes new folder.'
-        )
+        # Add operations
+        if args.operations is not None:
+            orch.load_operations_from_yaml(args.operations)
 
-        return self.parser.parse_arg()
+        # Try building a Controller
+        try:
+            controller_args = dict(
+                partition=args.partition,
+                user=args.user,
+                time=args.time,
+                cpu=args.cpu,
+                mem=args.mem,
+                name=args.job_name,
+                modules=args.modules
+            )
+
+        except AttributeError:
+            raise AttributeError()
+
+
+if __name__ == '__main__':
+    parser = CLIParser('orchestrator')
+    args = parser.get_command_line_inputs()
+    print(args)
+    orch = Orchestrator._build_from_cli(args)
+    orch.run()
