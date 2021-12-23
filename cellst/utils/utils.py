@@ -101,6 +101,9 @@ class ImageHelper():
         overlap: int(amount of frames to overlap between passing)
             e.g. overlap = 1: [0, 1], [1, 2], [2, 3], [3, 4]
                  overlap = 2: [0, 1, 2], [1, 2, 3], [2, 3, 4]
+
+        NOTE: Overlaps get passed as a stack, not as separate args.
+              i.e. if overlap = 1, image.shape = (2, h, w)
         """
         self.by_frame = by_frame
         self.overlap = overlap
@@ -159,7 +162,7 @@ class ImageHelper():
         # Check which inputs the function is expecting and only pass those
         expected_types = [i.annotation.__name__
                           for i in inspect.signature(self.func).parameters.values()
-                          if hasattr(i, __name__)]
+                          if hasattr(i.annotation, '__name__')]
         expected_names = [i.name
                           for i in inspect.signature(self.func).parameters.values()]
 
