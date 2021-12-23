@@ -4,12 +4,14 @@ import types
 import inspect
 import functools
 import contextlib
+import warnings
 from typing import List, Tuple
 
 import numpy as np
+from numpy.lib.stride_tricks import sliding_window_view
 
 from cellst.utils._types import Image, Mask, Track, Arr
-from cellst.utils._types import INPT_NAMES, TYPE_LOOKUP
+from cellst.utils._types import INPT_NAMES
 
 
 def nan_helper(y: np.ndarray) -> np.ndarray:
@@ -91,19 +93,27 @@ class ImageHelper():
     """
     def __init__(self,
                  by_frame: bool = False,
+                 overlap: int = 0,
                  dtype: type = None,
+                 copy_to_output: type = None
                  ) -> None:
         """
-        TOOD:
-            - For now by_frame will be boolean option. The issue with passing
-              multiple frames to a function is that it will change the size
-              of the stack. This isn't an issue, but I don't see it being
-              useful right now.
-            - add option to all overlapping the frames passed to functions
+        overlap: int(amount of frames to overlap between passing)
+            e.g. overlap = 1: [0, 1], [1, 2], [2, 3], [3, 4]
+                 overlap = 2: [0, 1, 2], [1, 2, 3], [2, 3, 4]
         """
-        # if frame is not None, will be used to pass successive frames to func
         self.by_frame = by_frame
+        self.overlap = overlap
         self.dtype = dtype
+
+        # Get copy_to_output as str
+        if isinstance(copy_to_output, str) or copy_to_output is None:
+            self.copy_to_output = copy_to_output
+        else:
+            try:
+                self.copy_to_output = copy_to_output.__name__
+            except AttributeError:
+                raise ValueError('Did not understand copy_to_output type.')
 
     def __call__(self, func):
         # Get expected type from function annotation
@@ -150,8 +160,8 @@ class ImageHelper():
         expected_types = [i.annotation.__name__
                           for i in inspect.signature(self.func).parameters.values()
                           if hasattr(i, __name__)]
-        expected_names = [p.name
-                          for p in inspect.signature(self.func).parameters.values()]
+        expected_names = [i.name
+                          for i in inspect.signature(self.func).parameters.values()]
 
         # Check for what the function expects. Include plurals for the name
         inpt_bools = [(i in expected_types)
@@ -160,13 +170,33 @@ class ImageHelper():
         pass_to_func = [i for b, inpt in zip(inpt_bools, [imgs, msks, trks, arrs])
                         for i in inpt if b]
 
+        # Save input types for future use
+        self.input_type_idx = [i for b, i, count
+                               in zip(inpt_bools,
+                                      INPT_NAMES,
+                                      [imgs, msks, trks, arrs])
+                               for c in count if b]
+
+
         return pass_to_func, args, kwargs
 
-    def _pass_by_frames(self,
-                        pass_to_func: List,
-                        nonarr_inputs: Tuple,
-                        *args, **kwargs
-                        ) -> List:
+    def _guess_input_from_output(self, output_type: type) -> type:
+        """
+        Uses simply heuristics to guess the input type
+        """
+        if output_type == 'image':
+            # For image, assume image
+            return 'image'
+        elif output_type == 'mask' or output_type == 'track':
+            # For track or mask, I think mask is best
+            return 'mask'
+        elif output_type == 'array':
+            # Not sure this would ever happen
+            return 'array'
+
+    def _get_output_array(self, pass_to_func: List[np.ndarray]) -> np.ndarray:
+        """
+        """
         # Use the output type to set the value of the array
         if self.dtype is not None:
             dtype = self.dtype
@@ -182,14 +212,60 @@ class ImageHelper():
             raise TypeError('Was unable to determine type for '
                             f'output of {self.func}.')
 
-        # Initialize output array
+        # Make output array
         # NOTE: This assumes that output is the same shape as input
         #       and that all the inputs have the same shape
         out = np.empty(pass_to_func[0].shape).astype(dtype)
-        for fr in range(out.shape[0]):
-            # Pass each frame individually for all inputs
-            out[fr, ...] = self.func(*nonarr_inputs,
-                                     *[p[fr, ...] for p in pass_to_func],
-                                     *args, **kwargs)
+
+        '''If overlap > 0, frames need to be copied to the output array.
+        If user hasn't specified which input to copy, then guess based
+        on output.'''
+        if self.overlap > 0:
+            if self.copy_to_output is None:
+                # If only one input, then obviously it has to be used
+                if len(pass_to_func) == 1:
+                    copy_idx = 0
+                else:
+                    warnings.warn('If overlap is greater than 0, specify '
+                                  'copy_to_output. Trying to guess based on '
+                                  'output type.', UserWarning)
+                    copy_type = self._guess_output_from_input()
+                    try:
+                        copy_idx = self.input_type_idx.index(copy_type)
+                    except ValueError:
+                        raise ValueError(f'Did not find type {copy_type} '
+                                         'to add to output array. '
+                                         'Set self.copy_to_output.')
+            else:
+                copy_idx = self.input_type_idx.index(self.copy_to_output)
+
+            # Copy number of frames from the correct input
+            frames = pass_to_func[copy_idx][:self.overlap]
+            out[:self.overlap, ...] = frames
+
+        return out
+
+    def _window_generator(self, arr: np.ndarray, shape: tuple):
+        # Create a generator for each array in pass_to_func
+        yield from [np.squeeze(s) for s in sliding_window_view(arr, shape)]
+
+    def _pass_by_frames(self,
+                        pass_to_func: List,
+                        nonarr_inputs: Tuple,
+                        *args, **kwargs
+                        ) -> np.ndarray:
+        # Initialize output array - with frames copied if needed
+        out = self._get_output_array(pass_to_func)
+
+        # Get shape of window, slides along frame axis (axis 0)
+        window_shape = (self.overlap + 1, *pass_to_func[0].shape[1:])
+        windows = [self._window_generator(p, window_shape)
+                   for p in pass_to_func]
+
+        for fr, win in enumerate(zip(*windows)):
+            # Pass each generator and save in index + overlap
+            idx = fr + self.overlap
+            out[idx, ...] = self.func(*nonarr_inputs,
+                                      *win, *args, **kwargs)
 
         return out
