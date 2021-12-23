@@ -12,6 +12,7 @@ from numpy.lib.stride_tricks import sliding_window_view
 
 from cellst.utils._types import Image, Mask, Track, Arr
 from cellst.utils._types import INPT_NAMES
+from cellst.utils.operation_utils import sliding_window_generator
 
 
 def nan_helper(y: np.ndarray) -> np.ndarray:
@@ -248,10 +249,6 @@ class ImageHelper():
 
         return out
 
-    def _window_generator(self, arr: np.ndarray, shape: tuple):
-        # Create a generator for each array in pass_to_func
-        yield from [np.squeeze(s) for s in sliding_window_view(arr, shape)]
-
     def _pass_by_frames(self,
                         pass_to_func: List,
                         nonarr_inputs: Tuple,
@@ -262,7 +259,7 @@ class ImageHelper():
 
         # Get shape of window, slides along frame axis (axis 0)
         window_shape = (self.overlap + 1, *pass_to_func[0].shape[1:])
-        windows = [self._window_generator(p, window_shape)
+        windows = [sliding_window_generator(p, window_shape)
                    for p in pass_to_func]
 
         for fr, win in enumerate(zip(*windows)):

@@ -1,6 +1,7 @@
-from typing import Dict
+from typing import Dict, Generator
 
 import numpy as np
+from numpy.lib.stride_tricks import sliding_window_view
 from skimage.morphology import dilation, remove_small_holes
 from skimage.measure import label
 from scipy.ndimage import (binary_dilation, distance_transform_edt)
@@ -124,6 +125,16 @@ def lineage_to_track(mask: Mask,
 
     return out
 
+
+def sliding_window_generator(arr: np.ndarray, shape: tuple) -> Generator:
+    """
+    NOTE: If memory is an issue here, can probably manually count the indices
+          and make a generator that way, but it will probably be much slower.
+
+    TODO: Add low mem option
+    """
+    # Create a generator for each array in pass_to_func
+    yield from [np.squeeze(s) for s in sliding_window_view(arr, shape)]
 
 class RandomNameProperty():
     """
