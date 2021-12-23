@@ -126,14 +126,18 @@ def lineage_to_track(mask: Mask,
     return out
 
 
-def sliding_window_generator(arr: np.ndarray, shape: tuple) -> Generator:
+def sliding_window_generator(arr: np.ndarray, overlap: int = 0) -> Generator:
     """
     NOTE: If memory is an issue here, can probably manually count the indices
           and make a generator that way, but it will probably be much slower.
 
-    TODO: Add low mem option
+    TODO:
+        - Add low mem option (see above)
+        - Add option to slide over different axis
     """
-    # Create a generator for each array in pass_to_func
+    # Shapes are all the same
+    shape = (overlap + 1, *arr.shape[1:])
+    # Create a generator, returns each cut of the array
     yield from [np.squeeze(s) for s in sliding_window_view(arr, shape)]
 
 class RandomNameProperty():

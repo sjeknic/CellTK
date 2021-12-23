@@ -257,9 +257,8 @@ class ImageHelper():
         # Initialize output array - with frames copied if needed
         out = self._get_output_array(pass_to_func)
 
-        # Get shape of window, slides along frame axis (axis 0)
-        window_shape = (self.overlap + 1, *pass_to_func[0].shape[1:])
-        windows = [sliding_window_generator(p, window_shape)
+        # Get generators for each array in pass_to_func
+        windows = [sliding_window_generator(p, self.overlap)
                    for p in pass_to_func]
 
         for fr, win in enumerate(zip(*windows)):
