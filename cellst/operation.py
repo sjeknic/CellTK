@@ -26,7 +26,6 @@ class Operation():
                  **kwargs
                  ) -> None:
         """
-
         """
         # Get empty logger, will be overwritten by Pipeline
         self.logger = get_console_logger()
@@ -143,13 +142,10 @@ class Operation():
             - Add option for func to be a Callable
             - Is func_index needed at all?
         """
-        try:
-            # Check that the function exists
-            _ = getattr(self, func)
-
+        if hasattr(self, func):
             # Save func as string for dictionaries
             self.functions.append(tuple([func, output_type, args, kwargs, name]))
-        except AttributeError:
+        else:
             raise AttributeError(f"Function {func} not found in {self}.")
 
         self.func_index = {i: f for i, f in enumerate(self.functions)}
