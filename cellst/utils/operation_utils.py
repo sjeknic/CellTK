@@ -1,6 +1,7 @@
 from typing import Dict, Generator
 
 import numpy as np
+import numba
 from numpy.lib.stride_tricks import sliding_window_view
 from skimage.morphology import dilation, remove_small_holes
 from skimage.measure import label
@@ -139,6 +140,51 @@ def sliding_window_generator(arr: np.ndarray, overlap: int = 0) -> Generator:
     shape = (overlap + 1, *arr.shape[1:])
     # Create a generator, returns each cut of the array
     yield from [np.squeeze(s) for s in sliding_window_view(arr, shape)]
+
+
+@numba.njit
+def shift_array(array: np.ndarray,
+                shift: tuple,
+                fill: float = np.nan,
+                crop_vals: tuple = None
+                ) -> np.ndarray:
+    """
+    Shifts an array and fills in the values or crops to size
+
+    See: https://stackoverflow.com/questions/30399534/shift-elements-in-a-numpy-array
+    """
+    result = np.empty_like(array)
+
+    # Shift is along two axes
+    y, x = shift
+
+    # TODO: This seems unesseccarily verbose
+    if y == 0 and x == 0:
+        result[:] = array
+    elif y > 0 and x > 0:
+        result[:y, :x] = fill
+        result[y:, x:] = array[:-y, :-x]
+    elif y > 0 and x < 0:
+        result[:y, x:] = fill
+        result[y:, :x] = array[:-y, -x:]
+    elif y > 0 and x == 0:
+        result[:y, :] = fill
+        result[y:, :] = array[:-y, :]
+    elif y < 0 and x > 0:
+        result[y:, :x] = fill
+        result[:y, x:] = array[-y:, :-x]
+    elif y < 0 and x < 0:
+        result[y:, x:] = fill
+        result[:y, :x] = array[-y:, -x:]
+    elif y < 0 and x == 0:
+        result[y:, :] = fill
+        result[:y, :] = array[-y:, :]
+
+    if crop_vals is not None:
+        y, x = crop_vals
+
+    return result
+
 
 class RandomNameProperty():
     """
