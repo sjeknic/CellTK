@@ -1,7 +1,8 @@
 import numpy as np
 from skimage.measure import label
 from skimage.segmentation import (clear_border, random_walker,
-                                  relabel_sequential, watershed)
+                                  relabel_sequential, watershed,
+                                  find_boundaries)
 from skimage.morphology import remove_small_objects, opening
 from skimage.filters import threshold_otsu
 from scipy.ndimage import gaussian_filter, watershed_ift
@@ -208,6 +209,20 @@ class Segment(BaseSegment):
         out[out < 0] = 0
 
         return out
+
+    @ImageHelper(by_frame=True)
+    def find_boundaries(self,
+                        mask: Mask,
+                        connectivity: int = 2,
+                        mode: str = 'inner'
+                        ) -> Mask:
+        """
+        TODO:
+            - Still needs to be tested
+        """
+        boundaries = find_boundaries(mask, connectivity=connectivity,
+                                     mode=mode)
+        return np.where(boundaries, mask, 0)
 
     @ImageHelper(by_frame=False)
     def unet_predict(self,

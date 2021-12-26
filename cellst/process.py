@@ -1,5 +1,8 @@
 import numpy as np
 from skimage.registration import phase_cross_correlation
+from skimage.restoration import rolling_ball
+from skimage.filters import gaussian
+from scipy.ndimage import gaussian_laplace
 
 from cellst.operation import BaseProcess
 from cellst.utils._types import Image, Mask, Track, Arr
@@ -53,3 +56,47 @@ class Process(BaseProcess):
             out[idx + 1, ...] = shift_array(frame, cumul, 0, crop_vals)
 
         return Image, out
+
+    @ImageHelper(by_frame=False)
+    def gaussian_filter(self,
+                        image: Image,
+                        sigma: float = 2.5
+                        ) -> Image:
+        """
+        Multidimensional Gaussian filter
+
+        TODO:
+            - Test applying to a stack with sigma = (s1, s1, 0)
+            - SimpleITK implementation should be faseter
+        """
+        return gaussian(image, sigma)
+
+    @ImageHelper(by_frame=True)
+    def gaussian_laplace_filter(self,
+                                image: Image,
+                                sigma: float = 2.5,
+                                ) -> Image:
+        """
+        Multidimensional Laplace filter using Gaussian second derivatives.
+
+        TODO:
+            - Test applying to a stack with sigma = (s1, s1, 0)
+            - SimpleITK implementation should be faseter
+        """
+        return gaussian_laplace(image, sigma)
+
+    @ImageHelper(by_frame=True)
+    def rolling_ball_background_subtraction(self,
+                                            image: Image,
+                                            radius: float = 100,
+                                            kernel: np.ndarray = None,
+                                            nansafe: bool = False
+                                            ) -> Image:
+        """
+        Estimate background intensity by rolling/translating a kernel.
+
+        TODO:
+            - Check CellTK, this function did a lot more for some reason
+        """
+        bg = rolling_ball(image, radius=radius, kernel=kernel, nansafe=nansafe)
+        return image - bg
