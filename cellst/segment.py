@@ -3,14 +3,15 @@ from skimage.measure import label
 from skimage.segmentation import (clear_border, random_walker,
                                   relabel_sequential, watershed,
                                   find_boundaries)
-from skimage.morphology import remove_small_objects, opening
+from skimage.morphology import remove_small_objects, opening, binary_erosion
 from skimage.filters import threshold_otsu
 from scipy.ndimage import gaussian_filter, watershed_ift
 
 from cellst.operation import BaseSegment
 from cellst.utils._types import Image, Mask
 from cellst.utils.utils import ImageHelper
-from cellst.utils.operation_utils import remove_small_holes_keep_labels
+from cellst.utils.operation_utils import (remove_small_holes_keep_labels,
+                                          dilate_sitk)
 
 
 class Segment(BaseSegment):
@@ -137,6 +138,7 @@ class Segment(BaseSegment):
     @ImageHelper(by_frame=True)
     def agglomeration_segmentation(self,
                                    image: Image,
+                                   seeds: Mask = None,
                                    agglom_min: float = 0.7,
                                    agglom_max: float = None,
                                    compact: float = 100,
@@ -162,7 +164,9 @@ class Segment(BaseSegment):
         percs = np.linspace(agglom_max, agglom_min, steps)
 
         # Generate seeds based on constant threshold
-        seeds = image >= seed_thres
+        if seeds is None:
+            seeds = image >= seed_thres
+
         if seed_min_size is not None:
             seeds = remove_small_objects(seeds, seed_min_size, connectivity=2)
 
@@ -223,6 +227,81 @@ class Segment(BaseSegment):
         boundaries = find_boundaries(mask, connectivity=connectivity,
                                      mode=mode)
         return np.where(boundaries, mask, 0)
+
+    @ImageHelper(by_frame=True)
+    def dilate_to_cytoring(self,
+                           mask: Mask,
+                           ringwidth: int = 1,
+                           margin: int = 1
+                           ) -> Mask:
+        """
+        Copied directly from CellTK. Should dilate out from nuclear mask
+        to create cytoplasmic ring.
+
+        NOTE:
+            - I think this is done in greyscale, so labels should be preserved.
+            - I think ringwidth is the amount to expand the labels
+            - I think margin is dist. between the nuclear mask and the cytoring
+            - No clue why multiple rounds of dilation are used.
+
+        TODO:
+            - Re-write this function. Needs to be consistent
+            - There is another function in CellTK that uses Voronoi expansion
+              to set a buffer between adjacent cytorings. Copy that functionality
+              here.
+            - Add cytoring_above_thres, cytoring_above_adaptive_thres,
+              cytoring_above_buffer
+        """
+        dilated_nuc = dilate_sitk(mask.astype(np.int32), ringwidth)
+
+        # TODO: Replace with np.where(mask == 0, 0, comp_dilated_nuc)??
+        comp_dilated_nuc = 1e4 - mask
+        comp_dilated_nuc[comp_dilated_nuc == 1e4] = 0
+
+        #  TODO: Why is the dilation done twice?
+        comp_dilated_nuc = dilate_sitk(comp_dilated_nuc.astype(np.int32), ringwidth)
+        # TODO: See replacement above.
+        comp_dilated_nuc = 1e4 - comp_dilated_nuc
+        comp_dilated_nuc[comp_dilated_nuc == 1e4] = 0
+        # TODO: Not sure what this is for
+        dilated_nuc[comp_dilated_nuc != dilated_nuc] = 0
+
+        # TODO: This is for adding the margin. Why is the if/else needed?
+        if margin == 0:
+            antinucmask = mask
+        else:
+            antinucmask = dilate_sitk(np.int32(mask), margin)
+        dilated_nuc[antinucmask.astype(bool)] = 0
+
+        return dilated_nuc.astype(np.uint16)
+
+    @ImageHelper(by_frame=True)
+    def remove_nuc_from_cyto(self,
+                             nuc_mask: Mask,
+                             cyto_mask: Mask,
+                             val_match: bool = False,
+                             erosion: bool = False
+                             ) -> Mask:
+        """
+        Taken from CellTK. Removes nuclei mask from cytoplasmic mask
+
+        TODO:
+            - This has probaby been coming for a while, but there should
+              be a way to directly specify an image as an input, w/o having
+              to make a new Operation class, as it is currently required. There
+              is no other way to pass channel or name specs to the function
+        """
+        if val_match:
+            new_cyto_mask = np.where(cyto_mask == nuc_mask, 0, cyto_mask)
+        else:
+            new_cyto_mask = np.where(nuc_mask > 0, 0, cyto_mask)
+
+        if erosion:
+            binary_img = new_cyto_mask.astype(bool)
+            eroded_img = binary_erosion(binary_img)
+            new_cyto_mask = np.where(eroded_img, new_cyto_mask, 0)
+
+        return new_cyto_mask
 
     @ImageHelper(by_frame=False)
     def unet_predict(self,

@@ -1,7 +1,6 @@
 from typing import Dict, Generator
 
 import numpy as np
-import numba
 from numpy.lib.stride_tricks import sliding_window_view
 from skimage.morphology import dilation, remove_small_holes
 from skimage.measure import label
@@ -45,6 +44,20 @@ def gray_fill_holes_celltk(labels):
         if len(uniq) == 1:
             labels[hole > 0] = uniq[0]
     return labels
+
+
+def dilate_sitk(labels: Mask, radius: int) -> np.ndarray:
+    """
+    Direct copy from CellTK. Should dilate images
+
+
+    TODO:
+        - Update function (or ata least understand the function)
+    """
+    slabels = sitk.GetImageFromArray(labels)
+    gd = sitk.GrayscaleDilateImageFilter()
+    gd.SetKernelRadius(radius)
+    return sitk.GetArrayFromImage(gd.Execute(slabels))
 
 
 def track_to_mask(track: Track, idx: np.ndarray = None) -> Mask:
@@ -142,7 +155,7 @@ def sliding_window_generator(arr: np.ndarray, overlap: int = 0) -> Generator:
     yield from [np.squeeze(s) for s in sliding_window_view(arr, shape)]
 
 
-@numba.njit
+# TODO: Test including @numba.njit here
 def shift_array(array: np.ndarray,
                 shift: tuple,
                 fill: float = np.nan,
@@ -156,7 +169,7 @@ def shift_array(array: np.ndarray,
     result = np.empty_like(array)
 
     # Shift is along two axes
-    y, x = shift
+    y, x = int(shift[0]), int(shift[1])
 
     # TODO: This seems unesseccarily verbose
     if y == 0 and x == 0:
