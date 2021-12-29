@@ -10,7 +10,7 @@ from typing import List, Tuple
 import numpy as np
 from numpy.lib.stride_tricks import sliding_window_view
 
-from cellst.utils._types import Image, Mask, Track, Arr
+from cellst.utils._types import Image, Mask, Track, Arr, ImageContainer
 from cellst.utils._types import INPT_NAMES
 from cellst.utils.operation_utils import sliding_window_generator
 
@@ -91,10 +91,12 @@ class ImageHelper():
 
     TODO:
         - See PEP563, should use typing.get_type_hints
+        - Add logger
     """
     def __init__(self,
                  by_frame: bool = False,
                  overlap: int = 0,
+                 as_tuple: bool = False,
                  dtype: type = None,
                  copy_to_output: type = None
                  ) -> None:
@@ -106,9 +108,11 @@ class ImageHelper():
         NOTE: Overlaps get passed as a stack, not as separate args.
               i.e. if overlap = 1, image.shape = (2, h, w)
         """
+        # Save inputs
         self.by_frame = by_frame
         self.overlap = overlap
         self.dtype = dtype
+        self.as_tuple = as_tuple
 
         # Get copy_to_output as str
         if isinstance(copy_to_output, str) or copy_to_output is None:
@@ -121,72 +125,169 @@ class ImageHelper():
 
     def __call__(self, func):
         # Get expected type from function annotation
-        self.output_type = inspect.signature(func).return_annotation
         self.func = func
+        self.output_type = inspect.signature(self.func).return_annotation
+
+        func_params = inspect.signature(self.func).parameters.values()
+        self.expected_types = [i.annotation.__name__
+                               for i in func_params
+                               if hasattr(i.annotation, '__name__')]
+        self.expected_names = [i.name for i in func_params]
 
         @functools.wraps(self.func)
         def wrapper(*args, **kwargs):
-            # Find all of the non-image related inputs (e.g. class, self, etc.)
-            # Save the nonarr_inputs and pass others to _type_helper
-            nonarr_idx = 0
-            while True:
-                if not isinstance(args[nonarr_idx], (list, np.ndarray)):
-                    nonarr_idx += 1
-                else:
-                    break
-            nonarr_inputs = args[:nonarr_idx]
-            args = args[nonarr_idx:]
+            # Sort args and kwargs into the respective values
+            if isinstance(args[0], ImageContainer):
+                # If first value is not self or class, then staticmethod
+                img_container = args[0]
+                pre_input = []
+                args = args[1:]
+            else:
+                pre_input = [args[0]]
+                img_container = args[1]
+                args = args[2:]
 
             # Sort the inputs and keep only those that are relevant
-            pass_to_func, nargs, nkwargs = self._type_helper(*args, **kwargs)
+            keys, pass_to_func, nkwargs = self._type_helper(img_container,
+                                                            **kwargs)
 
             # Function expects and returns a stack.
             if not self.by_frame or len(pass_to_func) == 0:
-                stack = self.func(*nonarr_inputs, *pass_to_func,
-                                  *nargs, **nkwargs)
+                # Pass all inputs together
+                stack = self.func(*pre_input, *pass_to_func,
+                                  *args, **nkwargs)
             else:
-                stack = self._pass_by_frames(pass_to_func, nonarr_inputs,
-                                             *nargs, **kwargs)
+                # Pass inputs individually
+                stack = self._pass_by_frames(pass_to_func, pre_input,
+                                             *args, **nkwargs)
 
-            # NOTE: won't work for 1D arrays. Does that matter?
-            while stack.ndim < 3 and self.output_type in (Image, Mask, Track):
-                stack = np.expand_dims(stack, axis=-1)
+            # Get the correct outputs and keys before returning
+            stack = self._correct_stack_dims(stack, keys)
+            keys = self._get_output_keys(stack, keys)
 
-            return self.output_type, stack
+            return keys, stack
         return wrapper
 
-    def _type_helper(self, imgs, msks, trks, arrs, *args, **kwargs):
+    def _type_helper(self, img_container, **kwargs):
         """
         This func is for sorting the input types and selecting the correct
         types that should get passed to the function.
         """
-        # Check which inputs the function is expecting and only pass those
-        expected_types = [i.annotation.__name__
-                          for i in inspect.signature(self.func).parameters.values()
-                          if hasattr(i.annotation, '__name__')]
-        expected_names = [i.name
-                          for i in inspect.signature(self.func).parameters.values()]
+        # First check if user specified names
+        img_container, kwargs = self._name_helper(img_container, **kwargs)
 
+        # TODO: Should names continue to be allowed to be used as the input?
+        # TODO: I'm not sure inpt_bools is even necessary after _name_helper
         # Check for what the function expects. Include plurals for the name
-        inpt_bools = [(i in expected_types)
-                      or (i in expected_names) or (i + 's' in expected_names)
+        inpt_bools = [(i in self.expected_types)
+                      or (i in self.expected_names)
+                      or (i + 's' in self.expected_names)
                       for i in INPT_NAMES]
-        pass_to_func = [i for b, inpt in zip(inpt_bools, [imgs, msks, trks, arrs])
-                        for i in inpt if b]
 
-        # Save input types for future use
+        imgs, msks, trks, arrs = ([(k, v) for k, v in img_container.items()
+                                   if k[1] == i]
+                                  for i in INPT_NAMES)
+
+        # Check that everything here works
+        if self.as_tuple:
+            # If input doesn't exist, nothing is appended
+            keys, pass_to_func = zip(*[zip(*inpt) for b, inpt
+                                       in zip(inpt_bools,
+                                              [imgs, msks, trks, arrs])
+                                       if b and len(inpt) > 0])
+        else:
+            keys, pass_to_func = zip(*[i for b, inpt
+                                       in zip(inpt_bools,
+                                              [imgs, msks, trks, arrs])
+                                       for i in inpt if b])
+
         self.input_type_idx = [i for b, i, count
                                in zip(inpt_bools,
                                       INPT_NAMES,
                                       [imgs, msks, trks, arrs])
                                for c in count if b]
 
+        # Flatten keys, as outputs must be flat
+        keys = tuple([k for sk in keys for k in sk])
 
-        return pass_to_func, args, kwargs
+        return keys, pass_to_func, kwargs
+
+    def _name_helper(self, img_container, **kwargs):
+        """
+        Finds images the user specified using kwargs
+        """
+        new_container = ImageContainer()
+
+        for exp_name, exp_typ in zip(self.expected_names, self.expected_types):
+            # First check if user provided the inputs
+            if (exp_name in kwargs) and (exp_typ in INPT_NAMES):
+                # Then check if they provided one name or multiple
+                names = kwargs[exp_name]
+                if isinstance(names, str):
+                    # Append the expected type to the name
+                    names = [(names, exp_typ)]
+                else:
+                    names = [(nm, exp_typ) for nm in names]
+
+                # Remove from kwargs
+                del kwargs[exp_name]
+
+            else:
+                # If user did not provide name, load all images of exp_typ
+                names = [k for k in img_container if k[1] == exp_typ]
+
+            # Load image stack for each name
+            for nm in names:
+                try:
+                    new_container[nm] = img_container[nm]
+                except KeyError:
+                    # TODO: Add a strict_type option. If False, check for nm
+                    #       of different types.
+                    raise KeyError(f'Could not find input {nm[0]} of '
+                                   f'type {nm[1]} in the inputs to '
+                                   f'function {self.func}')
+
+        return new_container, kwargs
+
+    def _correct_stack_dims(self, stack, keys):
+        """
+        TODO: Figure out why I needed this in the first place
+        TOOD: Shouldn't the expansion be happening on axis 0??
+
+        Always returns stack as a list, even if only one value returned
+        """
+        if isinstance(stack, np.ndarray):
+            stack = [stack]
+
+        for n, (k, st) in enumerate(zip(keys, stack)):
+            while st.ndim < 3 and any([i in k for i in (Image, Mask, Track)]):
+                st = np.expand_dims(st, axis=-1)
+            stack[n] = st
+
+        return stack
+
+    def _get_output_keys(self, stack, keys):
+        """
+        Each key is always (name, type). Always returns list of keys.
+        """
+        if isinstance(keys[0], str):
+            # Indicates keys not yet in list
+            # Output type defined by function
+            keys = (keys[0], self.output_type.__name__)
+            keys = [keys]
+
+        # Check that length matches
+        if len(stack) == len(keys):
+            # Output type defined by the input type
+            return keys
+        else:
+            # TODO: Is there a use-case for this or is error fine?
+            raise ValueError(f'Length of outputs ({len(stack)}) does not '
+                             f'match length of keys ({len(keys)}).')
 
     def _guess_input_from_output(self, output_type: type) -> type:
         """
-        Uses simply heuristics to guess the input type
+        Uses simple heuristics to guess the input type
         """
         if output_type == 'image':
             # For image, assume image
@@ -198,15 +299,18 @@ class ImageHelper():
             # Not sure this would ever happen
             return 'array'
 
-    def _get_output_array(self, pass_to_func: List[np.ndarray]) -> np.ndarray:
+    def _get_output_array(self, ex_arr: np.ndarray) -> np.ndarray:
         """
+        TODO: Update to expect an array as input, not a list.
+        TODO: copy_to_output is probably dumb and I'll ignore it for now.
+        TODO: I don't think self.input_type_idx still works with inputs
         """
         # Use the output type to set the value of the array
         if self.dtype is not None:
             dtype = self.dtype
         elif self.output_type.__name__ == 'image':
             # If image, keep the input type
-            dtype = pass_to_func[0].dtype
+            dtype = ex_arr.dtype
         elif self.output_type.__name__ == 'mask':
             # If mask, use only positive integers
             dtype = np.uint16
@@ -219,15 +323,16 @@ class ImageHelper():
         # Make output array
         # NOTE: This assumes that output is the same shape as input
         #       and that all the inputs have the same shape
-        out = np.empty(pass_to_func[0].shape).astype(dtype)
+        out = np.empty(ex_arr.shape).astype(dtype)
 
         '''If overlap > 0, frames need to be copied to the output array.
         If user hasn't specified which input to copy, then guess based
         on output.'''
+        # TODO: copy_to_output needs to be handled differently
         if self.overlap > 0:
             if self.copy_to_output is None:
                 # If only one input, then obviously it has to be used
-                if len(pass_to_func) == 1:
+                if len(ex_arr) == 1:
                     copy_idx = 0
                 else:
                     warnings.warn('If overlap is greater than 0, specify '
@@ -244,18 +349,26 @@ class ImageHelper():
                 copy_idx = self.input_type_idx.index(self.copy_to_output)
 
             # Copy number of frames from the correct input
-            frames = pass_to_func[copy_idx][:self.overlap]
+            frames = ex_arr[copy_idx][:self.overlap]
             out[:self.overlap, ...] = frames
 
         return out
 
     def _pass_by_frames(self,
                         pass_to_func: List,
-                        nonarr_inputs: Tuple,
+                        pre_input: Tuple,
                         *args, **kwargs
                         ) -> np.ndarray:
+        """
+        TODO:
+            - How to handle multiple outputs? Probably best to do a test-run,
+              then make the output arrays, then finish the run
+        """
         # Initialize output array - with frames copied if needed
-        out = self._get_output_array(pass_to_func)
+        if self.as_tuple:
+            out = self._get_output_array(pass_to_func[0][0])
+        else:
+            out = self._get_output_array(pass_to_func[0])
 
         # Get generators for each array in pass_to_func
         windows = [sliding_window_generator(p, self.overlap)
@@ -264,7 +377,7 @@ class ImageHelper():
         for fr, win in enumerate(zip(*windows)):
             # Pass each generator and save in index + overlap
             idx = fr + self.overlap
-            out[idx, ...] = self.func(*nonarr_inputs,
+            out[idx, ...] = self.func(*pre_input,
                                       *win, *args, **kwargs)
 
         return out
