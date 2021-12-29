@@ -337,29 +337,11 @@ class Pipeline():
 
             op_inputs = imgs + msks + trks + arrs
             req_inputs.append(op_inputs)
-            #req_inputs.append([imgs, msks, trks, arrs])
             req_outputs.append(o.output_id)
 
         # Log the inputs and outputs
-        # self.logger.info('Expected images: '
-        #                  f'{[i[0] for op in req_inputs for i in op[0]]}')
-        # self.logger.info('Expected masks: '
-        #                  f'{[i[0] for op in req_inputs for i in op[1]]}')
-        # self.logger.info('Expected tracks: '
-        #                  f'{[i[0] for op in req_inputs for i in op[2]]}')
-        # self.logger.info('Expected arrays: '
-        #                  f'{[i[0] for op in req_inputs for i in op[3]]}')
-        # self.logger.info(f'Exected outputs: {[r[0] for r in req_outputs]}')
-
-
-        print(req_inputs)
-        # # NEW: flatten list before returning - clean up later
-        # # Each operation is a list, flatten that list
-        # for n, op in enumerate(req_inputs):
-        #     op = [sl for l in op for sl in l]
-        #     req_inputs[n] = op
-        # #req_inputs = [sl for l in req_inputs for sl in l]
-        # print(req_inputs)
+        self.logger.info(f'Expected inputs: {[i for i in req_inputs]}')
+        self.logger.info(f'Exected outputs: {[r[0] for r in req_outputs]}')
 
         return req_inputs, req_outputs
 
