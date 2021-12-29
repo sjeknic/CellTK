@@ -161,7 +161,6 @@ class Operation():
             Either name or type hint must match the types above
             If multiple, must be present in above order
 
-
         TODO:
             - Update rules above
             - Would like to change up the file loading a little. Currently, if it doesn't find
@@ -193,8 +192,8 @@ class Operation():
                 # The user-defined expected type will overwrite output_type
                 if expec_type is None:
                     expec_type = out[1]
-                out = (out[0], expec_type)
 
+                out = (out[0], expec_type)
                 # Save for next function
                 inputs[out] = res
 
@@ -247,7 +246,7 @@ class Operation():
 
                 # THEN CONFIRM RUN_OP IN EXTRACT WILL STILL WORK
                 # THEN UPDATE __CALL__ FOR ALL OPS
-                # THEN JUST CLEAN UP AND START COMMITTING CHANGES.
+                # ADD LOGGER TO IMAGEHELPER
                 # THEN FINALLY CAN TRY MAKING MORPHSNAKES.
 
             self.logger.info(f'{func.__name__} execution time: {time.time() - exec_timer}')
@@ -541,7 +540,7 @@ class BaseExtract(Operation):
                       remove_parent=remove_parent)
         # Automatically add extract_data_from_image
         # Name is always None, because gets saved in Pipeline as output
-        self.functions = [tuple(['extract_data_from_image', Arr, [], kwargs, None])]
+        self.functions = [tuple(['extract_data_from_image', None, [], kwargs, None])]
         self.func_index = {i: f for i, f in enumerate(self.functions)}
 
         # Add division_frame and parent_id
@@ -732,46 +731,22 @@ class BaseExtract(Operation):
                                   'by default.')
 
     def run_operation(self,
-                      images: Collection[np.ndarray] = [],
-                      masks: Collection[np.ndarray] = [],
-                      tracks: Collection[np.ndarray] = [],
-                      arrays: Collection[np.ndarray] = [],
-                      **kwargs
-                      ) -> (Image, Mask, Track, Arr):
+                      inputs: ImageContainer
+                      ) -> ImageContainer:
         """
-        Extract is unique because it needs to take all the inputs
-        in order to extract data from all channels, masks, tracks
-        etc.
-
-        Extract function is unique because it expects to get a list
-        of images, masks, etc. Therefore, can't use @ImageHelper.
+        Add more detailed logging information
         """
-        # Arrays are not passed to extract_data_from_image
-        inputs = [images, masks, tracks]
-
         # Get inputs that were saved during __init__
         _, expec_type, args, kwargs, name = self.functions[0]
 
         # Extract needs separate logging here
-        self.logger.info('Starting function extract_data_from_image')
         self.logger.info(f"Channels: {list(zip(kwargs['channels'], self.input_images))}")
         self.logger.info(f"Regions: {list(zip(kwargs['regions'], self.input_tracks + self.input_masks))}")
         self.logger.info(f"Metrics: {self._metrics}")
         self.logger.info(f"Added metrics: {list(self._props_to_add.keys())}")
         self.logger.info(f"Condition: {kwargs['condition']}")
 
-        # Run function
-        exec_timer = time.time()
-        result = self.extract_data_from_image(*inputs, *args, **kwargs)
-        self.save_arrays[self.output] = self.output, result
-
-        # Log results
-        self.logger.info(f'Output: {result.name}, {result.shape}, '
-                         f'{result.dtype}')
-        self.logger.info(f'extract_data_from_image execution time: '
-                         f'{time.time() - exec_timer}.')
-
-        yield result
+        return super().run_operation(inputs)
 
 
 class BaseEvaluate(Operation):
