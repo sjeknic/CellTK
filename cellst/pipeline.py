@@ -216,7 +216,7 @@ class Pipeline():
                 with oper:
                     # oper_result is a generator for the results and keys
                     oper_result = oper.run_operation(imgs_for_operation)
-
+                    self._image_container.update(dict(oper_result))
                     # Write to disk if needed
                     if oper.save:
                         self.save_images(oper.save_arrays,
@@ -318,7 +318,6 @@ class Pipeline():
         Iterate through all the operations and figure out which images
         to save and which to remove.
 
-
         Returns:
             Output =
 
@@ -340,8 +339,8 @@ class Pipeline():
             req_outputs.append(o.output_id)
 
         # Log the inputs and outputs
-        self.logger.info(f'Expected inputs: {[i for i in req_inputs]}')
-        self.logger.info(f'Exected outputs: {[r[0] for r in req_outputs]}')
+        self.logger.info(f'Expected inputs: {req_inputs}')
+        self.logger.info(f'Exected outputs: {req_outputs}')
 
         return req_inputs, req_outputs
 
@@ -362,9 +361,6 @@ class Pipeline():
             - Add image selection based on regex
             - Should channels use regex or glob to match name
             - Could be moved to a utils file - staticmethod
-            - Include a check for file type as well!!
-                - Yeah, they are all over the place here. Need to be in _load
-                  as well
         """
         # First check in designated subfolder
         if subfolder is not None:

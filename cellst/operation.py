@@ -180,18 +180,20 @@ class Operation():
 
             # Set up the function run
             self.logger.info(f'Starting function {func.__name__}')
-            self.logger.info(f'All Inputs: {[(inpt.shape, inpt.dtype) for inpt in inputs.values()]}')
+            self.logger.info('All Inputs: '
+                             f'{[(key, inpt.shape, inpt.dtype) for key, inpt in inputs.items()]}')
             exec_timer = time.time()
 
             output_type, result = func(inputs, *args, **kwargs)
 
             # ridx is result index
             for ridx, (out, res) in enumerate(zip(output_type, result)):
-                # The user-defined expected type will overwrite output_type
-                if expec_type is not None:
-                    out = (out[0], expec_type)
+                self.logger.info(f'Returned: {out}, {res.shape}, {res.dtype}')
 
-                self.logger.info(f'Output: {out}, {res.shape}, {res.dtype}')
+                # The user-defined expected type will overwrite output_type
+                if expec_type is None:
+                    expec_type = out[1]
+                out = (out[0], expec_type)
 
                 # Save for next function
                 inputs[out] = res
@@ -203,45 +205,54 @@ class Operation():
                     self.save_arrays[save_fol] = out[1], res
 
                     # Save in return container if save_name is not None
+                    self.logger.info('Adding to return container: '
+                                     f'{out}, {res.shape}')
                     return_container[out] = res
 
                 # Check if it is the last function in the operation
                 elif fidx + 1 == len(self.functions):
-                    if self.save:
-                        # Get the correct folder name
-                        if len(result) > 1:
-                            # Need to be careful about overwriting saved files
-                            unique_names = set([k[0] for k in inputs.keys()])
-                            unique_types = set([k[1] for k in inputs.keys()])
+                    # Get the correct folder name and image key
+                    if len(result) > 1:
+                        # Need to be careful about overwriting saved files and stacks
+                        unique_names = set([k[0] for k in inputs.keys()])
+                        unique_types = set([k[1] for k in inputs.keys()])
 
-                            # Check if names or types are unique
-                            if len(unique_names) == len(inputs):
-                                save_fol = f'{out[0]}{self.output}'
-                            elif len(unique_types) == len(inputs):
-                                save_fol = f'{out[1]}{self.output}'
-                            else:
-                                warnings.warn(f'Some outputs from {func.__name__} will be '
-                                              'overwritten during save.')
-                                # Use names
-                                save_fol = f'{out[0]}{self.output}'
+                        # Check if names or types are unique
+                        if len(unique_names) == len(inputs):
+                            save_fol = f'{self.output}{out[0]}'
+                            out = f'{self.output}{out[0]}'
+                        elif len(unique_types) == len(inputs):
+                            save_fol = f'{self.output}{out[1]}'
+                            out = f'{self.output}{out[1]}'
                         else:
-                            # No worries about things being overwritten
-                            save_fol = self.output
+                            warnings.warn(f'Some outputs from {func.__name__} will be '
+                                          'overwritten during save.')
+                            # Use names
+                            save_fol = f'{self.output}{out[0]}'
+                            out = f'{self.output}{out[0]}'
+                    else:
+                        # No worries about things being overwritten
+                        save_fol = self.output
 
+                        # Last function and single output - define key
+                        out = (self.output, expec_type)
+
+                    if self.save:
                         self.save_arrays[save_fol] = out[1], res
 
                     # Last output always gets added to return container
+                    self.logger.info('Adding to return container: '
+                                     f'{out}, {res.shape}')
                     return_container[out] = res
 
-                # ALMOST DONE, JUST NEED TO FINISH WITH THE SAVING AND FOLDER NAMES ABOVE
-                # THEN GO TO PIPELINE AND MAKE SURE IT IS SET UP TO WORK WITH THE YIELD FROM
-                # THEN GO TO SAVE IMAGES AND CONFIRM ALL IS GOOD (SHOULD BE)
                 # THEN CONFIRM RUN_OP IN EXTRACT WILL STILL WORK
                 # THEN UPDATE __CALL__ FOR ALL OPS
-                # THEN UPDATE INPUT_OUTPUT_HELPER
                 # THEN JUST CLEAN UP AND START COMMITTING CHANGES.
                 # THEN FINALLY CAN TRY MAKING MORPHSNAKES.
 
+            self.logger.info(f'{func.__name__} execution time: {time.time() - exec_timer}')
+        self.logger.info('Returning to pipeline: '
+                         f'{[(k, v.shape) for k, v in return_container.items()]}')
         yield from return_container.items()
 
     def set_logger(self, logger: logging.Logger) -> None:
