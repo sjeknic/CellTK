@@ -8,10 +8,11 @@ import warnings
 from typing import List, Tuple
 
 import numpy as np
-from numpy.lib.stride_tricks import sliding_window_view
 
-from cellst.utils._types import Image, Mask, Track, Arr, ImageContainer
-from cellst.utils._types import INPT_NAMES
+from cellst.utils._types import (Image, Mask, Track,
+                                 Arr, ImageContainer,
+                                 Condition, Experiment,
+                                 INPT_NAMES)
 from cellst.utils.operation_utils import sliding_window_generator
 
 
@@ -140,10 +141,10 @@ class ImageHelper():
             if isinstance(args[0], ImageContainer):
                 # If first value is not self or class, then staticmethod
                 img_container = args[0]
-                pre_input = []
+                calling_cls = []
                 args = args[1:]
             else:
-                pre_input = [args[0]]
+                calling_cls = [args[0]]
                 img_container = args[1]
                 args = args[2:]
 
@@ -154,16 +155,15 @@ class ImageHelper():
             # Function expects and returns a stack.
             if not self.by_frame or len(pass_to_func) == 0:
                 # Pass all inputs together
-                stack = self.func(*pre_input, *pass_to_func,
+                stack = self.func(*calling_cls, *pass_to_func,
                                   *args, **nkwargs)
             else:
                 # Pass inputs individually
-                stack = self._pass_by_frames(pass_to_func, pre_input,
+                stack = self._pass_by_frames(pass_to_func, calling_cls,
                                              *args, **nkwargs)
 
             # Get the correct outputs and keys before returning
-            stack = self._correct_stack_dims(stack, keys)
-            keys = self._get_output_keys(stack, keys)
+            keys, stack = self._correct_outputs(keys, stack, calling_cls)
 
             return keys, stack
         return wrapper
@@ -249,41 +249,40 @@ class ImageHelper():
 
         return new_container, kwargs
 
-    def _correct_stack_dims(self, stack, keys):
-        """
-        TODO: Figure out why I needed this in the first place
-        TOOD: Shouldn't the expansion be happening on axis 0??
+    def _correct_outputs(self, keys, stack, calling_cls=[]):
+        # Store keys as list if not already
+        if isinstance(keys[0], str):
+            # Output type defined by function
+            keys = (keys[0], self.output_type.__name__)
+            keys = [keys]
 
-        Always returns stack as a list, even if only one value returned
-        """
+        # Store stack as list if not already
         if isinstance(stack, np.ndarray):
             stack = [stack]
+        elif isinstance(stack, (Condition, Experiment)):
+            stack = [stack]
+            # Assume only one output key - set to output id
+            try:
+                keys = [calling_cls[0].output_id]
+            except IndexError:
+                # The method was a staticmethod use first key and warn user
+                keys = [keys[0]]
+                warnings.warn('Possible mismatch with keys for ',
+                              f'for {self.func.__name__}.')
 
+        # Check that length matches
+        if len(stack) != len(keys):
+            # TODO: Is there a use-case for this or is error fine?
+            raise ValueError(f'Length of outputs ({len(stack)}) does not '
+                             f'match length of keys ({len(keys)}).')
+
+        # Adjust array dimensions if needed
         for n, (k, st) in enumerate(zip(keys, stack)):
             while st.ndim < 3 and any([i in k for i in (Image, Mask, Track)]):
                 st = np.expand_dims(st, axis=-1)
             stack[n] = st
 
-        return stack
-
-    def _get_output_keys(self, stack, keys):
-        """
-        Each key is always (name, type). Always returns list of keys.
-        """
-        if isinstance(keys[0], str):
-            # Indicates keys not yet in list
-            # Output type defined by function
-            keys = (keys[0], self.output_type.__name__)
-            keys = [keys]
-
-        # Check that length matches
-        if len(stack) == len(keys):
-            # Output type defined by the input type
-            return keys
-        else:
-            # TODO: Is there a use-case for this or is error fine?
-            raise ValueError(f'Length of outputs ({len(stack)}) does not '
-                             f'match length of keys ({len(keys)}).')
+        return keys, stack
 
     def _guess_input_from_output(self, output_type: type) -> type:
         """
@@ -356,7 +355,7 @@ class ImageHelper():
 
     def _pass_by_frames(self,
                         pass_to_func: List,
-                        pre_input: Tuple,
+                        calling_cls: Tuple,
                         *args, **kwargs
                         ) -> np.ndarray:
         """
@@ -377,7 +376,7 @@ class ImageHelper():
         for fr, win in enumerate(zip(*windows)):
             # Pass each generator and save in index + overlap
             idx = fr + self.overlap
-            out[idx, ...] = self.func(*pre_input,
+            out[idx, ...] = self.func(*calling_cls,
                                       *win, *args, **kwargs)
 
         return out
