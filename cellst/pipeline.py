@@ -487,6 +487,8 @@ class Pipeline():
 
                     img_stack[n, ...] = img
 
+                # Make img_stack read-only. To change image stack, overwrite container[key]
+                img_stack.flags.writeable = False
                 container[key] = img_stack
 
                 self.logger.info(f'Images loaded. shape: {img_stack.shape}, '
