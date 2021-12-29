@@ -6,7 +6,8 @@ import time
 import numpy as np
 from skimage.measure import regionprops_table
 
-from cellst.utils._types import Image, Mask, Track, Arr, INPT_NAME_IDX
+from cellst.utils._types import (Image, Mask, Track, Arr,
+                                 ImageContainer, INPT_NAME_IDX)
 from cellst.utils.operation_utils import (track_to_mask, parents_from_track,
                                           RandomNameProperty)
 from cellst.utils.log_utils import get_console_logger
@@ -130,13 +131,13 @@ class Operation():
     def add_function_to_operation(self,
                                   func: str,
                                   output_type: type = None,
-                                  name: str = None,
+                                  save_name: str = None,
                                   *args,
                                   **kwargs
                                   ) -> None:
         """
         args and kwargs are passed directly to the function.
-        if name is not None, the files will be saved in a separate folder
+        if save_name is not None, the files will be saved in a separate folder
 
         TODO:
             - Add option for func to be a Callable
@@ -144,59 +145,104 @@ class Operation():
         """
         if hasattr(self, func):
             # Save func as string for dictionaries
-            self.functions.append(tuple([func, output_type, args, kwargs, name]))
+            self.functions.append(tuple([func, output_type, args, kwargs, save_name]))
         else:
             raise AttributeError(f"Function {func} not found in {self}.")
 
         self.func_index = {i: f for i, f in enumerate(self.functions)}
 
     def run_operation(self,
-                      images: Collection[np.ndarray] = [],
-                      masks: Collection[np.ndarray] = [],
-                      tracks: Collection[np.ndarray] = [],
-                      arrays: Collection[np.ndarray] = []
-                      ) -> (Image, Mask, Track, Arr):
+                      inputs: ImageContainer
+                      ) -> ImageContainer:
         """
         Rules for operation functions:
             Must take in at least one of image, mask, track
             Can take in as many of each, but must be a separate positional argument
             Either name or type hint must match the types above
             If multiple, must be present in above order
-        """
-        # Default is to return the input if no function is run
-        inputs = [images, masks, tracks, arrays]
-        result = inputs[INPT_NAME_IDX[self._output_type.__name__]]
 
-        for (func, expec_type, args, kwargs, name) in self.functions:
+
+        TODO:
+            - Update rules above
+            - Would like to change up the file loading a little. Currently, if it doesn't find
+              files with match_str, it will look for subfolder with match_str and load ALL
+              images. Instead, would like to be able to save multiple results in same folder
+              (would make this function easier), but can't do that until loading images is changed
+        """
+        # By default, return all inputs of output type
+        return_container = ImageContainer()
+        return_container.update({k: v for k, v in inputs.items()
+                                 if k[1] == self._output_type.__name__})
+
+        # fidx is function index
+        for fidx, (func, expec_type, args, kwargs, save_name) in enumerate(self.functions):
             func = getattr(self, func)
 
-            # Run the function
+            # Set up the function run
             self.logger.info(f'Starting function {func.__name__}')
-            self.logger.info(f'Inputs: {[(i.shape, i.dtype) for inpt in inputs for i in inpt]}')
+            self.logger.info(f'All Inputs: {[(inpt.shape, inpt.dtype) for inpt in inputs.values()]}')
             exec_timer = time.time()
-            output_type, result = func(*inputs, *args, **kwargs)
 
-            # The user-defined expected type will overwrite output_type
-            output_type = expec_type if expec_type is not None else output_type
-            self.logger.info(f'Output: {output_type.__name__}, {result.shape}, '
-                             f'{result.dtype}')
-            self.logger.info(f'{func.__name__} execution time: '
-                             f'{time.time() - exec_timer}.')
+            output_type, result = func(inputs, *args, **kwargs)
 
-            # Pass the result to next func - raises KeyError on unexpected type
-            if isinstance(result, np.ndarray):
-                inputs[INPT_NAME_IDX[output_type.__name__]] = [result]
-            else:
-                inputs[INPT_NAME_IDX[output_type.__name__]] = result
+            # ridx is result index
+            for ridx, (out, res) in enumerate(zip(output_type, result)):
+                # The user-defined expected type will overwrite output_type
+                if expec_type is not None:
+                    out = (out[0], expec_type)
 
-            # Save the function if needed for Pipeline to write files
-            if name is not None:
-                self.save_arrays[name] = output_type.__name__, result
+                self.logger.info(f'Output: {out}, {res.shape}, {res.dtype}')
 
-        # Save the final result for saving as well
-        self.save_arrays[self.output] = self.output, result
+                # Save for next function
+                inputs[out] = res
 
-        return result
+                # Save images if save_name is not None
+                if save_name is not None:
+                    # Save_name overwrites output from class __init__
+                    save_fol = f'{out[0]}{save_name}'
+                    self.save_arrays[save_fol] = out[1], res
+
+                    # Save in return container if save_name is not None
+                    return_container[out] = res
+
+                # Check if it is the last function in the operation
+                elif fidx + 1 == len(self.functions):
+                    if self.save:
+                        # Get the correct folder name
+                        if len(result) > 1:
+                            # Need to be careful about overwriting saved files
+                            unique_names = set([k[0] for k in inputs.keys()])
+                            unique_types = set([k[1] for k in inputs.keys()])
+
+                            # Check if names or types are unique
+                            if len(unique_names) == len(inputs):
+                                save_fol = f'{out[0]}{self.output}'
+                            elif len(unique_types) == len(inputs):
+                                save_fol = f'{out[1]}{self.output}'
+                            else:
+                                warnings.warn(f'Some outputs from {func.__name__} will be '
+                                              'overwritten during save.')
+                                # Use names
+                                save_fol = f'{out[0]}{self.output}'
+                        else:
+                            # No worries about things being overwritten
+                            save_fol = self.output
+
+                        self.save_arrays[save_fol] = out[1], res
+
+                    # Last output always gets added to return container
+                    return_container[out] = res
+
+                # ALMOST DONE, JUST NEED TO FINISH WITH THE SAVING AND FOLDER NAMES ABOVE
+                # THEN GO TO PIPELINE AND MAKE SURE IT IS SET UP TO WORK WITH THE YIELD FROM
+                # THEN GO TO SAVE IMAGES AND CONFIRM ALL IS GOOD (SHOULD BE)
+                # THEN CONFIRM RUN_OP IN EXTRACT WILL STILL WORK
+                # THEN UPDATE __CALL__ FOR ALL OPS
+                # THEN UPDATE INPUT_OUTPUT_HELPER
+                # THEN JUST CLEAN UP AND START COMMITTING CHANGES.
+                # THEN FINALLY CAN TRY MAKING MORPHSNAKES.
+
+        yield from return_container.items()
 
     def set_logger(self, logger: logging.Logger) -> None:
         """
@@ -279,16 +325,23 @@ class BaseProcess(Operation):
 
     def __init__(self,
                  input_images: Collection[str] = [],
+                 input_masks = [],
                  output: str = 'process',
                  save: bool = False,
                  _output_id: Tuple[str] = None,
                  ) -> None:
         super().__init__(output, save, _output_id)
 
+        # TODO: For every operation, these should be set in BaseOperation
         if isinstance(input_images, str):
             self.input_images = [input_images]
         else:
             self.input_images = input_images
+
+        if isinstance(input_masks, str):
+            self.input_masks = [input_masks]
+        else:
+            self.input_masks = input_masks
 
         self.output = output
 
@@ -675,7 +728,11 @@ class BaseExtract(Operation):
                       **kwargs
                       ) -> (Image, Mask, Track, Arr):
         """
-        Extract function is different because it expects to get a list
+        Extract is unique because it needs to take all the inputs
+        in order to extract data from all channels, masks, tracks
+        etc.
+
+        Extract function is unique because it expects to get a list
         of images, masks, etc. Therefore, can't use @ImageHelper.
         """
         # Arrays are not passed to extract_data_from_image
@@ -703,7 +760,7 @@ class BaseExtract(Operation):
         self.logger.info(f'extract_data_from_image execution time: '
                          f'{time.time() - exec_timer}.')
 
-        return result
+        yield result
 
 
 class BaseEvaluate(Operation):
