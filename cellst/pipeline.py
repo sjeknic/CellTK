@@ -13,17 +13,13 @@ import tifffile as tiff
 import imageio as iio
 
 from cellst.operation import Operation
-from cellst.utils._types import Image, Mask, Track, Arr, INPT_NAMES
-from cellst.utils._types import Condition, Experiment
+from cellst.utils._types import Image, Mask, Track, Arr, ImageContainer
+from cellst.utils._types import Experiment
 from cellst.utils.process_utils import condense_operations, extract_operations
 from cellst.utils.utils import folder_name
 from cellst.utils.log_utils import get_logger, get_console_logger
 from cellst.utils.yaml_utils import save_operation_yaml, save_pipeline_yaml
 
-"""
-TODO: Orchestrator and Pipeline might need to be in separate modules so they can
-be called from the command line easily
-"""
 
 class Pipeline():
     """
@@ -84,7 +80,7 @@ class Pipeline():
             self.logger = get_console_logger()
 
         # Prepare for getting operations and images
-        self._image_container = {}
+        self._image_container = ImageContainer()
         self.operations = []
 
         # Log relevant information and parameters
@@ -101,7 +97,7 @@ class Pipeline():
         """
         # Create the image container if needed
         if not hasattr(self, '_image_container'):
-            self._image_container = {}
+            self._image_container = ImageContainer()
 
         # Start a timer
         self.timer = time.time()
@@ -157,6 +153,10 @@ class Pipeline():
             - Not sure the index results always make sense, best to add all
               operations at once
         """
+        # TODO: Dirty fix - Need to fix this in the master branch
+        if isinstance(operation, Operation):
+            operation = [operation]
+
         # Adds operations to self.operations (Collection[Operation])
         if isinstance(operation, Collection):
             if all([isinstance(o, Operation) for o in operation]):
@@ -424,11 +424,11 @@ class Pipeline():
         return im_names
 
     def _load_images_to_container(self,
-                                  container: Dict[tuple, np.ndarray],
+                                  container: ImageContainer,
                                   inputs: Collection[tuple],
                                   outputs: Collection[tuple],
                                   img_dtype: type = np.int16
-                                  ) -> Dict[tuple, np.ndarray]:
+                                  ) -> ImageContainer:
         """
         Loads image files and saves the result as a 3D np.ndarray
         in the given container.
@@ -446,29 +446,31 @@ class Pipeline():
             - Add saving of image metadata
             - No way to pass img_dtype to this function
         """
-        for idx, name in enumerate(INPT_NAMES):
-            # Get unique list of all inputs requested by operations
-            all_requested = [sl for l in [i[idx] for i in inputs] for sl in l]
-            to_load = list(set(all_requested))
 
-            for key in to_load:
-                fol = getattr(self, f'{name}_folder')
+        # Get unique list of all inputs requested by operations
+        all_requested = [sl for l in inputs for sl in l]
+        to_load = list(set(all_requested))
+
+        for key in to_load:
+            fol = getattr(self, f'{key[1]}_folder')
+            pths = self._get_image_paths(fol, key[0])
+            if len(pths) == 0:
+                # If no images are found in the path, check output_folder
+                fol = self.output_folder
                 pths = self._get_image_paths(fol, key[0])
-                if len(pths) == 0:
-                    # If no images are found in the path, check output_folder
-                    fol = self.output_folder
-                    pths = self._get_image_paths(fol, key[0])
-                    # If still no images, check the listed outputs
-                    if len(pths) == 0 and key not in outputs:
-                        # TODO: The order matters. Should raise error if it is made
-                        #       after it is needed, otherwise continue.
-                        raise ValueError(f'Data {key} cannot be found and is '
-                                         'not listed as an output.')
+                # If still no images, check the listed outputs
+                if len(pths) == 0 and key not in outputs:
+                    # TODO: The order matters. Should raise error if it is made
+                    #       after it is needed, otherwise continue.
+                    raise ValueError(f'Data {key} cannot be found and is '
+                                     'not listed as an output.')
 
-                # Log the paths
-                self.logger.info(f'Looking for {key[0]} in {fol}. '
-                                 f'Found {len(pths)} files.')
+            # Log the paths
+            self.logger.info(f'Looking for {key[0]} of type {key[1]} in {fol}. '
+                             f'Found {len(pths)} files.')
 
+            # TODO: This check is redundant, simplify later
+            if len(pths) > 0:
                 # Load the images
                 '''NOTE: Using mimread instead of imread to add the option of limiting
                 the memory of the loaded image. However, mimread still only loads one
@@ -496,7 +498,7 @@ class Pipeline():
 
     def _get_images_from_container(self,
                                    input_keys: Collection[Collection],
-                                   ) -> List[np.ndarray]:
+                                   ) -> ImageContainer:
         """
         Checks for key in the image container and returns the corresponding stacks
         Raises error if not found.
@@ -504,16 +506,12 @@ class Pipeline():
         TODO:
             - If it doesn't find a key, could first try reloading the _image_container
         """
-        temp = []
-        for keys in input_keys:
-            try:
-                temp.append(
-                    [self._image_container[k] for k in keys]
-                )
-            except KeyError:
-                raise KeyError(f'Image stack {keys} does not exist.')
+        # Create a copy that points to the same locations in memory
+        new_container = ImageContainer()
+        # TODO: Should a KeyError be caught here?
+        new_container.update({k: self._image_container[k] for k in input_keys})
 
-        return temp
+        return new_container
 
     def _set_all_paths(self,
                        parent_folder: str,
