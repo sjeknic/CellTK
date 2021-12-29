@@ -206,7 +206,7 @@ class Pipeline():
 
                 # Get images and pass to operation
                 try:
-                    imgs, msks, trks, arrs = self._get_images_from_container(inpts)
+                    imgs_for_operation = self._get_images_from_container(inpts)
                 except KeyError as e:
                     raise KeyError(f'Failed to find all inputs for {oper} \n',
                                    e.__str__())
@@ -214,11 +214,8 @@ class Pipeline():
                 # Run the operation and save results
                 oper.set_logger(self.logger)
                 with oper:
-                    oper_result = oper.run_operation(imgs, msks, trks, arrs)
-                    self._image_container = self.update_image_container(
-                                                self._image_container,
-                                                oper_result,
-                                                otpts)
+                    # oper_result is a generator for the results and keys
+                    oper_result = oper.run_operation(imgs_for_operation)
 
                     # Write to disk if needed
                     if oper.save:
@@ -226,21 +223,6 @@ class Pipeline():
                                          oper._output_type.__name__)
 
         return oper_result
-
-    def update_image_container(self,
-                               container: Dict[str, np.ndarray],
-                               array: (Image, Mask, Track),
-                               key: Tuple[str],
-                               ) -> None:
-        """
-        """
-        if key not in container:
-            container[key] = array
-        else:
-            # TODO: Should there be an option to not overwrite?
-            container[key] = array
-
-        return container
 
     def save_images(self,
                     save_arrays: Dict[str, Tuple],
@@ -331,13 +313,18 @@ class Pipeline():
 
         return cls._build_from_dict(pipe_dict)
 
-    def _input_output_handler(self) -> Tuple[str]:
+    def _input_output_handler(self) -> List[List[Tuple[str]]]:
         """
         Iterate through all the operations and figure out which images
         to save and which to remove.
 
+
+        Returns:
+            Output =
+
         TODO:
             - Determine after which operation the stack is no longer needed
+            - Call function to delete uneeded stacks (probably after oper.__exit__)
         """
         # Inputs and outputs determined by the args passed to each Operation
         req_inputs = []
@@ -348,19 +335,31 @@ class Pipeline():
             trks = [tuple([t, Track.__name__]) for t in o.input_tracks]
             arrs = [tuple([a, Arr.__name__]) for a in o.input_arrays]
 
-            req_inputs.append([imgs, msks, trks, arrs])
+            op_inputs = imgs + msks + trks + arrs
+            req_inputs.append(op_inputs)
+            #req_inputs.append([imgs, msks, trks, arrs])
             req_outputs.append(o.output_id)
 
         # Log the inputs and outputs
-        self.logger.info('Expected images: '
-                         f'{[i[0] for op in req_inputs for i in op[0]]}')
-        self.logger.info('Expected masks: '
-                         f'{[i[0] for op in req_inputs for i in op[1]]}')
-        self.logger.info('Expected tracks: '
-                         f'{[i[0] for op in req_inputs for i in op[2]]}')
-        self.logger.info('Expected arrays: '
-                         f'{[i[0] for op in req_inputs for i in op[3]]}')
-        self.logger.info(f'Exected outputs: {[r[0] for r in req_outputs]}')
+        # self.logger.info('Expected images: '
+        #                  f'{[i[0] for op in req_inputs for i in op[0]]}')
+        # self.logger.info('Expected masks: '
+        #                  f'{[i[0] for op in req_inputs for i in op[1]]}')
+        # self.logger.info('Expected tracks: '
+        #                  f'{[i[0] for op in req_inputs for i in op[2]]}')
+        # self.logger.info('Expected arrays: '
+        #                  f'{[i[0] for op in req_inputs for i in op[3]]}')
+        # self.logger.info(f'Exected outputs: {[r[0] for r in req_outputs]}')
+
+
+        print(req_inputs)
+        # # NEW: flatten list before returning - clean up later
+        # # Each operation is a list, flatten that list
+        # for n, op in enumerate(req_inputs):
+        #     op = [sl for l in op for sl in l]
+        #     req_inputs[n] = op
+        # #req_inputs = [sl for l in req_inputs for sl in l]
+        # print(req_inputs)
 
         return req_inputs, req_outputs
 
@@ -410,7 +409,6 @@ class Pipeline():
                           if os.path.isdir(os.path.join(folder, fol))
                           if match_str in fol][0]
                 folder = os.path.join(folder, subfol)
-
                 # Look ONLY for images in that subdirectory
                 # Load all images, even if match_str doesn't match
                 im_names = [os.path.join(folder, im)
