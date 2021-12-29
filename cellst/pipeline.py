@@ -247,10 +247,10 @@ class Pipeline():
 
             # Save CellArray separately
             if oper_output == 'array':
-                name = os.path.join(self.output_folder, f"{otpt_type}.hdf5")
+                name = os.path.join(self.output_folder, f"{name}.hdf5")
                 arr.save(name)
 
-                self.logger.info(f'Saved data frame in {self.output_folder}. '
+                self.logger.info(f'Saved data frame at {name}. '
                                  f'shape: {arr.shape}, type: {arr.dtype}.')
             else:
                 save_dtype = arr.dtype if img_dtype is None else img_dtype
