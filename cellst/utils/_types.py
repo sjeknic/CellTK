@@ -30,6 +30,7 @@ class Condition():
         """
         TODO:
             - Reorder if-statements for speed in key_coord functions.
+            - Should save path to file in hdf5 as well for re-saving Conditions
         """
         # Convert inputs to tuple
         regions = tuple(regions)
@@ -734,11 +735,24 @@ class Experiment():
         return pos
 
 
+class ImageContainer(dict):
+    """
+    Class to hold all image stacks.
+
+    For now just a dictionary, but class is different
+    so that ImageHelper knows what to do.
+
+    TODO:
+        - Add check on set_item to make sure it is ndarray
+        - Add flags.writeable=False to set_item
+    """
+
+
 # Define custom types to make output tracking esier
 Image = NewType('image', np.ndarray)
 Mask = NewType('mask', np.ndarray)
 Track = NewType('track', np.ndarray)
-Arr = NewType('array', Condition)
+Arr = NewType('array', Condition)  # For Condition/Experiment
 
 # Save input names and types
 INPT_NAMES = [Image.__name__, Mask.__name__, Track.__name__, Arr.__name__]
