@@ -1,4 +1,4 @@
-from typing import Dict, Generator
+from typing import Dict, Generator, Tuple
 
 import numpy as np
 from numpy.lib.stride_tricks import sliding_window_view
@@ -50,9 +50,8 @@ def dilate_sitk(labels: Mask, radius: int) -> np.ndarray:
     """
     Direct copy from CellTK. Should dilate images
 
-
     TODO:
-        - Update function (or ata least understand the function)
+        - Update function (or at least understand the function)
     """
     slabels = sitk.GetImageFromArray(labels)
     gd = sitk.GrayscaleDilateImageFilter()
@@ -159,7 +158,6 @@ def sliding_window_generator(arr: np.ndarray, overlap: int = 0) -> Generator:
 def shift_array(array: np.ndarray,
                 shift: tuple,
                 fill: float = np.nan,
-                crop_vals: tuple = None
                 ) -> np.ndarray:
     """
     Shifts an array and fills in the values or crops to size
@@ -192,11 +190,53 @@ def shift_array(array: np.ndarray,
     elif y < 0 and x == 0:
         result[y:, :] = fill
         result[:y, :] = array[-y:, :]
-
-    if crop_vals is not None:
-        y, x = crop_vals
+    elif y == 0 and x > 0:
+        result[:, :x] = fill
+        result[:, x:] = array[:, :-x]
+    elif y == 0 and x < 0:
+        result[y:, x:] = fill
+        result[:, :x] = array[:, -x:]
 
     return result
+
+
+def crop_array(array: np.ndarray,
+               crop_vals: Tuple[int] = None,
+               crop_area: float = 0.6
+               ) -> np.ndarray:
+    """
+    Crops an image to the specified dimensions
+    if crop_vals is None - use crop area to calc crop vals
+
+    TODO:
+        - There must be a much neater way to write this function
+        - Incorporate crop_area
+        - Possible numba.njit
+    """
+    if crop_vals is None:
+        # TODO: calculate crop coordinates for area
+        pass
+
+    y, x = crop_vals
+
+    if y == 0 and x == 0:
+        return array
+    elif y > 0 and x > 0:
+        return array[..., y:, x:]
+    elif y > 0 and x < 0:
+        return array[..., y:, :x]
+    elif y > 0 and x == 0:
+        return array[..., y:, :]
+    elif y < 0 and x > 0:
+        return array[..., :y, x:]
+    elif y < 0 and x < 0:
+        return array[..., :y, :x]
+    elif y < 0 and x == 0:
+        return array[..., :y, :]
+    elif y == 0 and x > 0:
+        return array[..., x:]
+    elif y == 0 and x < 0:
+        return array[..., :x]
 
 
 class RandomNameProperty():
