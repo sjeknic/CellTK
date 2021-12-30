@@ -101,6 +101,7 @@ class Segment(BaseSegment):
     @ImageHelper(by_frame=True)
     def random_walk_segmentation(self,
                                  image: Image,
+                                 seeds: Mask = None,
                                  seed_thres: float = 0.99,
                                  seed_min_size: float = 12,
                                  beta: float = 80,
@@ -117,7 +118,9 @@ class Segment(BaseSegment):
               random_walk not expand too much when labeling?
         """
         # Generate seeds
-        seeds = label(image >= seed_thres)
+        if seeds is None:
+            seeds = label(image >= seed_thres)
+
         if seed_min_size is not None:
             seeds = remove_small_objects(seeds, seed_min_size)
 
@@ -189,6 +192,7 @@ class Segment(BaseSegment):
     @ImageHelper(by_frame=True)
     def watershed_ift_segmentation(self,
                                    image: Image,
+                                   seeds: Mask = None,
                                    seed_thres: float = 0.975,
                                    seed_min_size: float = 12,
                                    connectivity: int = 2
@@ -199,9 +203,14 @@ class Segment(BaseSegment):
             - Accept pre-made seed mask from a different function
         """
         # Generate seeds based on constant threshold
-        seeds = label(image >= seed_thres)
+        if seeds is None:
+            seeds = label(image >= seed_thres)
+
         if seed_min_size is not None:
             seeds = remove_small_objects(seeds, seed_min_size, connectivity=2)
+
+        if image.dtype in (np.float32, np.float64):
+            image = convert_prob_to_int(image)
 
         # Convert background pixels to negative
         seeds[seeds == 0] = -1
