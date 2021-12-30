@@ -153,6 +153,9 @@ class ImageHelper():
                 args = args[2:]
 
             self.logger = self._get_calling_logger(calling_cls)
+            self.logger.info(f'ImageHelper called for {self.func.__name__}')
+            self.logger.info(f'by_frame: {self.by_frame}, overlap: {self.overlap}, '
+                             f'as_tuple: {self.as_tuple}, dtype: {self.dtype}')
 
             # Sort the inputs and keep only those that are relevant
             keys, pass_to_func, nkwargs = self._type_helper(img_container,
