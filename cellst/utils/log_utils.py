@@ -53,3 +53,24 @@ def get_console_logger(level: str = 'WARNING') -> logging.Logger:
     # Add handler and return
     logger.addHandler(sh)
     return logger
+
+
+def get_null_logger(level: str = 'CRITICAL') -> logging.Logger:
+    """
+    Used as a default logger. Writes to console only.
+    """
+    # Get logger with name of module
+    logger = logging.getLogger('null')
+
+    # Set parameters
+    logger.setLevel(getattr(logging, level))
+    # formatter = logging.Formatter('')
+
+    # # Create stream handler to specify standard output
+    # sh = logging.StreamHandler()
+    # sh.setLevel(getattr(logging, level))
+    # sh.setFormatter(formatter)
+
+    # # Add handler and return
+    # logger.addHandler(sh)
+    return logger

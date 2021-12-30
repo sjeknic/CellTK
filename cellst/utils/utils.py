@@ -5,6 +5,7 @@ import inspect
 import functools
 import contextlib
 import warnings
+import logging
 from typing import List, Tuple
 
 import numpy as np
@@ -14,6 +15,7 @@ from cellst.utils._types import (Image, Mask, Track,
                                  Condition, Experiment,
                                  INPT_NAMES)
 from cellst.utils.operation_utils import sliding_window_generator
+from cellst.utils.log_utils import get_null_logger
 
 
 def nan_helper(y: np.ndarray) -> np.ndarray:
@@ -94,6 +96,8 @@ class ImageHelper():
         - See PEP563, should use typing.get_type_hints
         - Add logger
     """
+    __name__ = 'ImageHelper'
+
     def __init__(self,
                  by_frame: bool = False,
                  overlap: int = 0,
@@ -148,6 +152,8 @@ class ImageHelper():
                 img_container = args[1]
                 args = args[2:]
 
+            self.logger = self._get_calling_logger(calling_cls)
+
             # Sort the inputs and keep only those that are relevant
             keys, pass_to_func, nkwargs = self._type_helper(img_container,
                                                             **kwargs)
@@ -184,6 +190,9 @@ class ImageHelper():
                       or (i + 's' in self.expected_names)
                       for i in INPT_NAMES]
 
+        self.logger.info('Function accepts: '
+                         f'{[i for i, b in zip(INPT_NAMES, inpt_bools) if b]}')
+
         imgs, msks, trks, arrs = ([(k, v) for k, v in img_container.items()
                                    if k[1] == i]
                                   for i in INPT_NAMES)
@@ -195,11 +204,14 @@ class ImageHelper():
                                        in zip(inpt_bools,
                                               [imgs, msks, trks, arrs])
                                        if b and len(inpt) > 0])
+            inpt_size_type = [(p.shape, p.dtype) for tup in pass_to_func
+                              for p in tup]
         else:
             keys, pass_to_func = zip(*[i for b, inpt
                                        in zip(inpt_bools,
                                               [imgs, msks, trks, arrs])
                                        for i in inpt if b])
+            inpt_size_type = [(p.shape, p.dtype) for p in pass_to_func]
 
         self.input_type_idx = [i for b, i, count
                                in zip(inpt_bools,
@@ -209,6 +221,8 @@ class ImageHelper():
 
         # Flatten keys, as outputs must be flat
         keys = tuple([k for sk in keys for k in sk])
+
+        self.logger.info(f'Selected inputs: {list(zip(keys, inpt_size_type))}')
 
         return keys, pass_to_func, kwargs
 
@@ -283,6 +297,24 @@ class ImageHelper():
             stack[n] = st
 
         return keys, stack
+
+    def _get_calling_logger(self, calling_cls):
+        """
+        Gets the operation logger to record info about inputs and outputs
+
+        TODO:
+            - I think this could be cleaner
+        """
+        if len(calling_cls) > 0:
+            try:
+                logger = calling_cls[0].logger
+            except AttributeError:
+                return get_null_logger()
+
+            if logger is not None:
+                return logging.getLogger(f'{logger.name}.{self.__name__}')
+            else:
+                return get_null_logger()
 
     def _guess_input_from_output(self, output_type: type) -> type:
         """
