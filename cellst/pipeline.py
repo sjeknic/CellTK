@@ -360,7 +360,6 @@ class Pipeline():
         TODO:
             - Add image selection based on regex
             - Should channels use regex or glob to match name
-            - Could be moved to a utils file - staticmethod
         """
         self.logger.info(f'Looking for {match_str} of type {im_type} in {folder}.')
 
@@ -372,18 +371,20 @@ class Pipeline():
 
             return name * ext * fil
 
+        # Walk through all directories in folder
         for lvl, (pth, dirs, files) in enumerate(os.walk(folder)):
             if lvl == 0:
                 # Check for images that match in first folder
                 im_names = [os.path.join(pth, f) for f in sorted(files)
                             if _confirm_im_match(f, match_str)]
-                if im_names: break
             elif pth.split('/')[-1] == match_str:
                 # Check for images if in dir that matches
                 for st in (match_str, im_type, None):
                     im_names = [os.path.join(pth, f) for f in sorted(files)
                                 if _confirm_im_match(f, st)]
                     if im_names: break
+
+            if im_names: break
 
         self.logger.info(f'Found {len(im_names)} images.')
         return im_names
