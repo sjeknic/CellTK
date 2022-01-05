@@ -347,7 +347,7 @@ class Pipeline():
     def _get_image_paths(self,
                          folder: str,
                          match_str: str,
-                         im_type: str = None
+                         im_type: str
                          ) -> Collection[str]:
         """
         Steps to get images:
@@ -362,6 +362,8 @@ class Pipeline():
             - Should channels use regex or glob to match name
             - Could be moved to a utils file - staticmethod
         """
+        self.logger.info(f'Looking for {match_str} of type {im_type} in {folder}.')
+
         # Function to check if img should be loaded
         def _confirm_im_match(im: str, match_str: str) -> bool:
             name = True if match_str is None else match_str in im
@@ -370,33 +372,20 @@ class Pipeline():
 
             return name * ext * fil
 
-        # Find images and sort into list
-        im_names = [os.path.join(folder, im)
-                    for im in sorted(os.listdir(folder))
-                    if _confirm_im_match(im, match_str)]
-
-        # If no images were found, look for a subdirectory
-        if not im_names:
-            try:
-                # Check for folder that is called match_str
-                subfol = [fol for fol in sorted(os.listdir(folder))
-                          if os.path.isdir(os.path.join(folder, fol))
-                          if match_str == fol][0]
-                folder = os.path.join(folder, subfol)
-
-                # Look for images by type, then name, then any
-                check_order = [im_type, match_str, None]
-                for to_check in check_order:
-                    im_names = [os.path.join(folder, im)
-                                for im in sorted(os.listdir(folder))
-                                if _confirm_im_match(im, im_type)]
-
+        for lvl, (pth, dirs, files) in enumerate(os.walk(folder)):
+            if lvl == 0:
+                # Check for images that match in first folder
+                im_names = [os.path.join(pth, f) for f in sorted(files)
+                            if _confirm_im_match(f, match_str)]
+                if im_names: break
+            elif pth.split('/')[-1] == match_str:
+                # Check for images if in dir that matches
+                for st in (match_str, im_type, None):
+                    im_names = [os.path.join(pth, f) for f in sorted(files)
+                                if _confirm_im_match(f, st)]
                     if im_names: break
 
-            except IndexError:
-                # Indidcates that no sub_folders were found, return []
-                pass
-
+        self.logger.info(f'Found {len(im_names)} images.')
         return im_names
 
     def _load_images_to_container(self,
@@ -422,31 +411,28 @@ class Pipeline():
             - Add saving of image metadata
             - No way to pass img_dtype to this function
         """
-
         # Get unique list of all inputs requested by operations
         all_requested = [sl for l in inputs for sl in l]
         to_load = list(set(all_requested))
 
         for key in to_load:
             fol = getattr(self, f'{key[1]}_folder')
-            pths = self._get_image_paths(fol, key[0])
-            if len(pths) == 0:
+            pths = self._get_image_paths(fol, *key)
+
+            if not pths:
                 # If no images are found in the path, check output_folder
-                fol = self.output_folder
-                pths = self._get_image_paths(fol, key[0])
+                if fol != self.output_folder:
+                    pths = self._get_image_paths(self.output_folder, *key)
+
                 # If still no images, check the listed outputs
-                if len(pths) == 0 and key not in outputs:
+                if not pths and key not in outputs:
                     # TODO: The order matters. Should raise error if it is made
                     #       after it is needed, otherwise continue.
                     raise ValueError(f'Data {key} cannot be found and is '
                                      'not listed as an output.')
 
-            # Log the paths
-            self.logger.info(f'Looking for {key[0]} of type {key[1]} in {fol}. '
-                             f'Found {len(pths)} files in {folder_name(os.path.dirname(pths[0]))}.')
-
             # TODO: This check is redundant, simplify later
-            if len(pths) > 0:
+            if pths:
                 # Load the images
                 '''NOTE: Using mimread instead of imread to add the option of limiting
                 the memory of the loaded image. However, mimread still only loads one
