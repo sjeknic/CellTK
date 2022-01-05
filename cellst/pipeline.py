@@ -347,28 +347,24 @@ class Pipeline():
     def _get_image_paths(self,
                          folder: str,
                          match_str: str,
-                         subfolder: str = None
+                         im_type: str = None
                          ) -> Collection[str]:
         """
-        match_str: Tuple[str], [0] is the  mat
-
-        1. Look for images in subfolder if given
-        2. Look for images in folder
-        3. Look for subfolder that matches match_str.
-        4. If exists, return those images.
+        Steps to get images:
+        1. Check folder for images that match
+        2. Check subfolders for one that matches match_str EXACTLY
+            2a. Load images that match type by name... (TODO: pass type here)
+            2b. Load images containing match_str
+            2c. Load all the images
 
         TODO:
             - Add image selection based on regex
             - Should channels use regex or glob to match name
             - Could be moved to a utils file - staticmethod
         """
-        # First check in designated subfolder
-        if subfolder is not None:
-            folder = os.path.join(folder, subfolder)
-
         # Function to check if img should be loaded
-        def _confirm_im_match(im, check_name: bool = True) -> bool:
-            name = True if not check_name else match_str in im
+        def _confirm_im_match(im: str, match_str: str) -> bool:
+            name = True if match_str is None else match_str in im
             ext = self.file_extension in im
             fil = os.path.isfile(os.path.join(folder, im))
 
@@ -377,24 +373,28 @@ class Pipeline():
         # Find images and sort into list
         im_names = [os.path.join(folder, im)
                     for im in sorted(os.listdir(folder))
-                    if _confirm_im_match(im)]
+                    if _confirm_im_match(im, match_str)]
 
         # If no images were found, look for a subdirectory
-        if len(im_names) == 0:
+        if not im_names:
             try:
-                # Take first subdirectory found that has match_str
+                # Check for folder that is called match_str
                 subfol = [fol for fol in sorted(os.listdir(folder))
                           if os.path.isdir(os.path.join(folder, fol))
-                          if match_str in fol][0]
+                          if match_str == fol][0]
                 folder = os.path.join(folder, subfol)
-                # Look ONLY for images in that subdirectory
-                # Load all images, even if match_str doesn't match
-                im_names = [os.path.join(folder, im)
-                            for im in sorted(os.listdir(folder))
-                            if _confirm_im_match(im, check_name=False)]
+
+                # Look for images by type, then name, then any
+                check_order = [im_type, match_str, None]
+                for to_check in check_order:
+                    im_names = [os.path.join(folder, im)
+                                for im in sorted(os.listdir(folder))
+                                if _confirm_im_match(im, im_type)]
+
+                    if im_names: break
+
             except IndexError:
-                # Indidcates that no sub_folders were found
-                # im_names should be [] at this point
+                # Indidcates that no sub_folders were found, return []
                 pass
 
         return im_names
@@ -443,7 +443,7 @@ class Pipeline():
 
             # Log the paths
             self.logger.info(f'Looking for {key[0]} of type {key[1]} in {fol}. '
-                             f'Found {len(pths)} files.')
+                             f'Found {len(pths)} files in {folder_name(os.path.dirname(pths[0]))}.')
 
             # TODO: This check is redundant, simplify later
             if len(pths) > 0:
@@ -675,6 +675,7 @@ class Orchestrator():
 
         # Set paths and start logging
         self._set_all_paths(yaml_folder, parent_folder, output_folder)
+        self._make_output_folder(self.overwrite)
         if log_file:
             self.logger = get_logger(self.__name__, self.output_folder,
                                      overwrite=overwrite)
@@ -685,7 +686,7 @@ class Orchestrator():
         self.pipelines = {}
         self._build_pipelines(match_str, image_folder, mask_folder,
                               track_folder, array_folder)
-        self._make_output_folder(self.overwrite)
+
 
         # Prepare for getting operations
         self.operations = []
