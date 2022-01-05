@@ -2,12 +2,13 @@ import warnings
 from typing import Collection, Tuple, Callable, List, Dict
 import logging
 import time
+import inspect
 
 import numpy as np
 from skimage.measure import regionprops_table
 
 from cellst.utils._types import (Image, Mask, Track, Arr,
-                                 ImageContainer, INPT_NAME_IDX)
+                                 ImageContainer, INPT_NAMES)
 from cellst.utils.operation_utils import (track_to_mask, parents_from_track,
                                           RandomNameProperty)
 from cellst.utils.log_utils import get_console_logger
@@ -64,7 +65,7 @@ class Operation():
 
         # Get the names of the inputs
         inputs = tuple([f"{name[0]}:{getattr(self, f'input_{name}s')}"
-                        for name in INPT_NAME_IDX.keys()
+                        for name in INPT_NAMES
                         if getattr(self, f'input_{name}s')])
 
         # Format each function as a str
@@ -105,7 +106,7 @@ class Operation():
         self.logger.info(f'Operation {self.__name__} at '
                          f'{hex(id(self))} entered.')
         # Log requests for each data type
-        for name in INPT_NAME_IDX.keys():
+        for name in INPT_NAMES:
             if getattr(self, f'input_{name}s'):
                 self.logger.info(f"input_{name}:{getattr(self, f'input_{name}s')}")
         self.logger.info(f"Output ID: {self.output_id}")
@@ -262,6 +263,37 @@ class Operation():
 
         # This logs to same file, but records the Operation name
         self.logger = logging.getLogger(f'{log_name}.{self.__name__}')
+
+    def get_inputs_and_outputs(self) -> List[List[tuple]]:
+        """
+        Returns all inputs and outputs to Pipeline._input_output_handler
+        """
+        # Get all keys for the functions in Operation with save_name
+        # f = (func, output_type, args, kwargs, save_name)
+        f_keys = [(f[-1], f[1]) if f[1] is not None
+                  else (f[-1], self._get_func_output_type(f[0]))
+                  for f in self.functions]
+
+        # f_keys for inputs should not be included if no function follows
+        f_keys_for_inputs = [f for f in f_keys[:-1] if f[0] is not None]
+        f_keys = [f for f in f_keys if f[0] is not None]
+
+        # Get all the outputs
+        inputs = []
+        for i in INPT_NAMES:
+            inputs.extend([(g, i) for g in getattr(self, f'input_{i}s')])
+
+        inputs += f_keys_for_inputs
+        outputs = [self.output_id] + f_keys
+
+        return inputs, outputs
+
+    def _get_func_output_type(self, func: (Callable, str)) -> str:
+        """Returns the annotated output type of the function"""
+        if isinstance(func, str):
+            func = getattr(self, func)
+
+        return inspect.signature(func).return_annotation.__name__
 
     def _operation_to_dict(self, op_slots: Collection[str] = None) -> Dict:
         """

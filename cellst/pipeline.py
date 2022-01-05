@@ -329,14 +329,9 @@ class Pipeline():
         req_inputs = []
         req_outputs = []
         for o in self.operations:
-            imgs = [tuple([i, Image.__name__]) for i in o.input_images]
-            msks = [tuple([m, Mask.__name__]) for m in o.input_masks]
-            trks = [tuple([t, Track.__name__]) for t in o.input_tracks]
-            arrs = [tuple([a, Arr.__name__]) for a in o.input_arrays]
-
-            op_inputs = imgs + msks + trks + arrs
-            req_inputs.append(op_inputs)
-            req_outputs.append(o.output_id)
+            op_in, op_out = o.get_inputs_and_outputs()
+            req_inputs.append(op_in)
+            req_outputs.append(op_out)
 
         # Log the inputs and outputs
         self.logger.info(f'Expected inputs: {req_inputs}')
@@ -412,7 +407,8 @@ class Pipeline():
             - Add saving of image metadata
             - No way to pass img_dtype to this function
         """
-        # Get unique list of all inputs requested by operations
+        # Get list of all outputs/unique inputs from operations
+        outputs = [sl for l in outputs for sl in l]
         all_requested = [sl for l in inputs for sl in l]
         to_load = list(set(all_requested))
 
@@ -474,7 +470,8 @@ class Pipeline():
         # Create a copy that points to the same locations in memory
         new_container = ImageContainer()
         # TODO: Should a KeyError be caught here?
-        new_container.update({k: self._image_container[k] for k in input_keys})
+        new_container.update({k: self._image_container[k] for k in input_keys
+                              if k in self._image_container})
 
         return new_container
 
