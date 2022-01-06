@@ -34,7 +34,10 @@ def nan_helper_2d(arr: np.ndarray) -> np.ndarray:
 
 
 def folder_name(path: str) -> str:
-    """Returns name of last folder in a path"""
+    """Returns name of last folder in a path
+
+    TODO: Only works if path points to file!!!
+    """
     return os.path.basename(os.path.normpath(path))
 
 
@@ -200,30 +203,28 @@ class ImageHelper():
                                    if k[1] == i]
                                   for i in INPT_NAMES)
 
-        # Check that everything here works
-        if self.as_tuple:
-            # If input doesn't exist, nothing is appended
-            keys, pass_to_func = zip(*[zip(*inpt) for b, inpt
-                                       in zip(inpt_bools,
-                                              [imgs, msks, trks, arrs])
-                                       if b and len(inpt) > 0])
-            inpt_size_type = [(p.shape, p.dtype) for tup in pass_to_func
-                              for p in tup]
-        else:
-            keys, pass_to_func = zip(*[i for b, inpt
-                                       in zip(inpt_bools,
-                                              [imgs, msks, trks, arrs])
-                                       for i in inpt if b])
-            inpt_size_type = [(p.shape, p.dtype) for p in pass_to_func]
+        # Sort the inputs based on what is requested
+        keys = []
+        pass_to_func = []
+        inpt_size_type = []
+        for include, inpt in zip(inpt_bools, [imgs, msks, trks, arrs]):
+            if include and inpt:
+                # These are just used for naming and logging, so always flat
+                keys.extend([i[0] for i in inpt])
+                inpt_size_type.extend([(i[1].shape, i[1].dtype) for i in inpt])
 
+                # Group the inputs by type if required
+                if self.as_tuple:
+                    pass_to_func.append([i[1] for i in inpt])
+                else:
+                    pass_to_func.extend([i[1] for i in inpt])
+
+        # TODO: Remove this and fix copy_to_output
         self.input_type_idx = [i for b, i, count
                                in zip(inpt_bools,
                                       INPT_NAMES,
                                       [imgs, msks, trks, arrs])
                                for c in count if b]
-
-        # Flatten keys, as outputs must be flat
-        keys = tuple([k for sk in keys for k in sk])
 
         self.logger.info(f'Selected inputs: {list(zip(keys, inpt_size_type))}')
 
@@ -240,7 +241,10 @@ class ImageHelper():
             if (exp_name in kwargs) and (exp_typ in INPT_NAMES):
                 # Then check if they provided one name or multiple
                 names = kwargs[exp_name]
-                if isinstance(names, str):
+                if names is None:
+                    # User does not want any image passed
+                    names = []
+                elif isinstance(names, str):
                     # Append the expected type to the name
                     names = [(names, exp_typ)]
                 else:
@@ -255,11 +259,17 @@ class ImageHelper():
 
             # Load image stack for each name
             for nm in names:
+                print(nm)
                 try:
+                    # TODO: So here is where _hierarchy should proably come into play.
+                    #       Doesn't have to exactly match nm, but first from hierarchy
+                    #       that matches
                     new_container[nm] = img_container[nm]
                 except KeyError:
                     # TODO: Add a strict_type option. If False, check for nm
                     #       of different types.
+                    self.logger.info(f'Available images of type {nm[1]}: '
+                                     f'{[i for i in img_container if i[1] == nm[1]]}')
                     raise KeyError(f'Could not find input {nm[0]} of '
                                    f'type {nm[1]} in the inputs to '
                                    f'function {self.func}')
