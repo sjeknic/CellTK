@@ -35,7 +35,7 @@ class Pipeline():
                  'track_folder', 'array_folder',
                  'operation_index', 'file_extension',
                  'logger', 'timer', 'overwrite',
-                 'name', 'log_file')
+                 'name', 'log_file', '_split_key')
 
     def __init__(self,
                  parent_folder: str = None,
@@ -47,7 +47,8 @@ class Pipeline():
                  name: str = None,
                  file_extension: str = 'tif',
                  overwrite: bool = True,
-                 log_file: bool = True
+                 log_file: bool = True,
+                 _split_key: str = '&'
                  ) -> None:
         """
         Pipeline will only handle a folder that has images in it.
@@ -64,6 +65,7 @@ class Pipeline():
         # Save some values in case Pipeline is written as yaml
         self.overwrite = overwrite
         self.log_file = log_file
+        self._split_key = _split_key
 
         # Define paths to find and save images
         self.file_extension = file_extension
@@ -341,22 +343,29 @@ class Pipeline():
 
     def _get_image_paths(self,
                          folder: str,
-                         match_str: str,
-                         im_type: str
+                         key: Tuple[str],
                          ) -> Collection[str]:
         """
         Steps to get images:
         1. Check folder for images that match
         2. Check subfolders for one that matches match_str EXACTLY
-            2a. Load images that match type by name... (TODO: pass type here)
-            2b. Load images containing match_str
+            2a. Load images containing match_str
+            2b. Load images that match type by name
             2c. Load all the images
 
         TODO:
             - Add image selection based on regex
             - Should channels use regex or glob to match name
         """
-        self.logger.info(f'Looking for {match_str} of type {im_type} in {folder}.')
+        match_str, im_type = key
+
+        # Check if key includes an operation identifier
+        if self._split_key in match_str:
+            fol_id, match_str = match_str.split(self._split_key)
+            folder = os.path.join(folder, fol_id)
+
+        self.logger.info(f'Looking for {match_str} of type '
+                         f'{im_type} in {folder}.')
 
         # Function to check if img should be loaded
         def _confirm_im_match(im: str, match_str: str) -> bool:
@@ -367,11 +376,13 @@ class Pipeline():
             return name * ext * fil
 
         # Walk through all directories in folder
+        im_names = []  # Needed in case walk doesn't return anything
         for lvl, (pth, dirs, files) in enumerate(os.walk(folder)):
             if lvl == 0:
                 # Check for images that match in first folder
                 im_names = [os.path.join(pth, f) for f in sorted(files)
                             if _confirm_im_match(f, match_str)]
+
             elif pth.split('/')[-1] == match_str:
                 # Check for images if in dir that matches
                 for st in (match_str, im_type, None):
@@ -414,19 +425,25 @@ class Pipeline():
 
         for key in to_load:
             fol = getattr(self, f'{key[1]}_folder')
-            pths = self._get_image_paths(fol, *key)
+            pths = self._get_image_paths(fol, key)
 
             if not pths:
                 # If no images are found in the path, check output_folder
                 if fol != self.output_folder:
-                    pths = self._get_image_paths(self.output_folder, *key)
+                    pths = self._get_image_paths(self.output_folder, key)
 
                 # If still no images, check the listed outputs
-                if not pths and key not in outputs:
-                    # TODO: The order matters. Should raise error if it is made
-                    #       after it is needed, otherwise continue.
-                    raise ValueError(f'Data {key} cannot be found and is '
-                                     'not listed as an output.')
+                if not pths:
+                    # Accept outputs that include save_name, but not channel
+                    if self._split_key in key[0]:
+                        _out = key[0].split(self._split_key)[0]
+                        _out = (_out, key[1])
+                        if _out in outputs: continue
+                    elif key not in outputs:
+                        # If nothing, check for whole key in outputs
+                        # TODO: Include consideration of operation order
+                        raise ValueError(f'Data {key} cannot be found and is '
+                                         'not listed as an output.')
 
             # TODO: This check is redundant, simplify later
             if pths:
@@ -546,7 +563,8 @@ class Pipeline():
         # Save basic parameters
         init_params = ('parent_folder', 'output_folder', 'image_folder',
                        'mask_folder', 'track_folder', 'array_folder',
-                       'overwrite', 'file_extension', 'log_file', 'name')
+                       'overwrite', 'file_extension', 'log_file', 'name',
+                       '_split_key')
         pipe_dict = {att: getattr(self, att) for att in init_params}
 
         # Add Operations to dict
