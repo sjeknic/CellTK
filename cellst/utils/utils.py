@@ -35,8 +35,7 @@ def nan_helper_2d(arr: np.ndarray) -> np.ndarray:
 
 def folder_name(path: str) -> str:
     """Returns name of last folder in a path
-
-    TODO: Only works if path points to file!!!
+    TODO: Doesn't work if path points to file - returns file name, not folder name
     """
     return os.path.basename(os.path.normpath(path))
 
@@ -279,9 +278,11 @@ class ImageHelper():
     def _correct_outputs(self, keys, stack, calling_cls=[]):
         # Store keys as list if not already
         if isinstance(keys[0], str):
-            # Output type defined by function
-            keys = (keys[0], self.output_type.__name__)
             keys = [keys]
+
+        # If output_type is same out_type = in_type, else defined by function
+        if self.output_type.__name__ != 'same':
+            keys = [(k[0], self.output_type.__name__) for k in keys]
 
         # Store stack as list if not already
         if isinstance(stack, np.ndarray):
@@ -333,15 +334,12 @@ class ImageHelper():
         """
         Uses simple heuristics to guess the input type
         """
-        if output_type == 'image':
-            # For image, assume image
-            return 'image'
-        elif output_type == 'mask' or output_type == 'track':
-            # For track or mask, I think mask is best
+        if output_type == 'mask' or output_type == 'track':
+            # For track or mask, assume mask
             return 'mask'
-        elif output_type == 'array':
-            # Not sure this would ever happen
-            return 'array'
+        else:
+            # Otherwise same as input
+            return output_type
 
     def _get_output_array(self, ex_arr: np.ndarray) -> np.ndarray:
         """
@@ -352,17 +350,14 @@ class ImageHelper():
         # Use the output type to set the value of the array
         if self.dtype is not None:
             dtype = self.dtype
-        elif self.output_type.__name__ == 'image':
-            # If image, keep the input type
-            dtype = ex_arr.dtype
         elif self.output_type.__name__ == 'mask':
             # If mask, use only positive integers
             dtype = np.uint16
         elif self.output_type.__name__ == 'track':
             dtype = np.int16
         else:
-            raise TypeError('Was unable to determine type for '
-                            f'output of {self.func}.')
+            # For image and same
+            dtype = ex_arr.dtype
 
         # Make output array
         # NOTE: This assumes that output is the same shape as input

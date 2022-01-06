@@ -753,6 +753,7 @@ Image = NewType('image', np.ndarray)
 Mask = NewType('mask', np.ndarray)
 Track = NewType('track', np.ndarray)
 Arr = NewType('array', Condition)  # For Condition/Experiment
+Same = NewType('same', np.ndarray)  # Allows functions to return multiple types
 
 # Save input names and types
 INPT_NAMES = [Image.__name__, Mask.__name__, Track.__name__, Arr.__name__]
