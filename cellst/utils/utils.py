@@ -164,7 +164,7 @@ class ImageHelper():
                                                             **kwargs)
 
             # Function expects and returns a stack.
-            if not self.by_frame or len(pass_to_func) == 0:
+            if not self.by_frame or not pass_to_func:
                 # Pass all inputs together
                 stack = self.func(*calling_cls, *pass_to_func,
                                   *args, **nkwargs)
@@ -187,17 +187,12 @@ class ImageHelper():
         # First check if user specified names
         img_container, kwargs = self._name_helper(img_container, **kwargs)
 
-        # TODO: Should names continue to be allowed to be used as the input?
-        # TODO: I'm not sure inpt_bools is even necessary after _name_helper
         # Check for what the function expects. Include plurals for the name
-        inpt_bools = [(i in self.expected_types)
-                      or (i in self.expected_names)
-                      or (i + 's' in self.expected_names)
-                      for i in INPT_NAMES]
-
+        inpt_bools = [(i in self.expected_types) for i in INPT_NAMES]
         self.logger.info('Function accepts: '
                          f'{[i for i, b in zip(INPT_NAMES, inpt_bools) if b]}')
 
+        # Get the inputs from the selected img_container
         imgs, msks, trks, arrs = ([(k, v) for k, v in img_container.items()
                                    if k[1] == i]
                                   for i in INPT_NAMES)
@@ -206,8 +201,8 @@ class ImageHelper():
         keys = []
         pass_to_func = []
         inpt_size_type = []
-        for include, inpt in zip(inpt_bools, [imgs, msks, trks, arrs]):
-            if include and inpt:
+        for inpt in [imgs, msks, trks, arrs]:
+            if inpt:
                 # These are just used for naming and logging, so always flat
                 keys.extend([i[0] for i in inpt])
                 inpt_size_type.extend([(i[1].shape, i[1].dtype) for i in inpt])
@@ -258,11 +253,8 @@ class ImageHelper():
 
             # Load image stack for each name
             for nm in names:
-                print(nm)
+                # The names in this container use the INPUT type
                 try:
-                    # TODO: So here is where _hierarchy should proably come into play.
-                    #       Doesn't have to exactly match nm, but first from hierarchy
-                    #       that matches
                     new_container[nm] = img_container[nm]
                 except KeyError:
                     # TODO: Add a strict_type option. If False, check for nm
@@ -299,8 +291,17 @@ class ImageHelper():
                               f'for {self.func.__name__}.')
 
         # Check that length matches
-        if len(stack) != len(keys):
-            # TODO: Is there a use-case for this or is error fine?
+        if len(stack) < len(keys):
+            try:
+                # If fewer images than keys, try to match by type
+                same_type_keys = [k for k in keys
+                                  if k[1] == self.output_type.__name__]
+                keys = same_type_keys[:len(stack)]
+            except IndexError:
+                # Did not have enough keys of same type
+                keys = keys[:len(stack)]
+        elif len(stack) > len(keys):
+            # Returned more images than inpupts... Will deal with if it happens
             raise ValueError(f'Length of outputs ({len(stack)}) does not '
                              f'match length of keys ({len(keys)}).')
 
@@ -383,7 +384,7 @@ class ImageHelper():
                     except ValueError:
                         raise ValueError(f'Did not find type {copy_type} '
                                          'to add to output array. '
-                                         'Set self.copy_to_output.')
+                                         'Set ImageHelper.copy_to_output.')
             else:
                 copy_idx = self.input_type_idx.index(self.copy_to_output)
 
