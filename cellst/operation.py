@@ -1,3 +1,4 @@
+import os
 import warnings
 from typing import Collection, Tuple, Callable, List, Dict
 import logging
@@ -19,12 +20,14 @@ class Operation():
     __name__ = 'Operation'
     __slots__ = ('save', 'output', 'functions', 'func_index', 'input_images',
                  'input_masks', 'input_tracks', 'input_arrays', 'save_arrays',
-                 'output_id', '_input_type', '_output_type', 'logger', 'timer')
+                 'output_id', '_input_type', '_output_type', 'logger', 'timer',
+                 '_split_key')
 
     def __init__(self,
                  output: str,
                  save: bool = False,
                  _output_id: Tuple[str] = None,
+                 _split_key: str = '&',
                  **kwargs
                  ) -> None:
         """
@@ -35,6 +38,7 @@ class Operation():
         # Save basic params
         self.save = save
         self.output = output
+        self._split_key = _split_key
 
         # These are used to track what the operation has been asked to do
         self.functions = []
@@ -90,6 +94,11 @@ class Operation():
                  ) -> (Image, Mask, Track, Arr):
         """
         __call__ runs operation independently of Pipeline class
+
+        TODO:
+            - In order for __call__ to work with the new ImageContainer system
+              it will have to take the inputs and build the ImageContainer. Only
+              question will be the keys, they have to match the inputs.
         """
         return self.run_operation(images, masks, tracks, arrays)
 
@@ -177,80 +186,79 @@ class Operation():
         # fidx is function index
         for fidx, (func, expec_type, args, kwargs, save_name) in enumerate(self.functions):
             func = getattr(self, func)
+            last_func = fidx + 1 == len(self.functions)
 
             # Set up the function run
             self.logger.info(f'Starting function {func.__name__}')
             self.logger.info('All Inputs: '
                              f'{[(key, inpt.shape, inpt.dtype) for key, inpt in inputs.items()]}')
+            self.logger.info(f'args / kwargs: {args} {kwargs}')
+            self.logger.info(f'User set output type: {expec_type}. Save name: {save_name}')
             exec_timer = time.time()
 
-            output_type, result = func(inputs, *args, **kwargs)
 
-            # ridx is result index
-            for ridx, (out, res) in enumerate(zip(output_type, result)):
-                self.logger.info(f'Returned: {out}, {res.shape}, {res.dtype}')
+            # TODO: Add check for if function is already completed
+            # Get outputs and overwrite type if needed
+            output_key, result = func(inputs, *args, **kwargs)
+            output_key = [out if expec_type is None else (out[0], expec_type)
+                          for out in output_key]
+            self.logger.info(f'Returned: {[o for o in output_key]}, '
+                             f'{[(r.shape, r.dtype) for r in result]}')
 
-                # The user-defined expected type will overwrite output_type
-                if expec_type is None:
-                    expec_type = out[1]
-
-                out = (out[0], expec_type)
-                # Save for next function
+            # Outputs written to inputs ImageContainer before keys are changed
+            for out, res in zip(output_key, result):
                 inputs[out] = res
 
-                # Save images if save_name is not None
+            # Handle keys for saving and returning results
+            save_folders = []
+            if len(result) > 1:
+                # By default, use names of the results to identify outputs
+                # Remove self._split_key from keys
+                res_id = [o[0].split(self._split_key)[0] for o in output_key]
+
+                # Overwrite the output_keys to ensure they are unique
+                if len(set([o[1] for o in output_key])) == len(output_key):
+                    # Types of outputs are unique
+                    res_id = [o[1] for o in output_key]
+                elif len(set([o[1] for o in output_key])) != len(output_key):
+                    # Neither names or types are unique
+                    self.logger.warn(f'Keys are not unique for {func.__name__}'
+                                     '. Some outputs may be overwritten.')
+
                 if save_name is not None:
-                    # Save_name overwrites output from class __init__
-                    save_fol = f'{out[0]}{save_name}'
-                    self.save_arrays[save_fol] = out[1], res
+                    # Will save in sub-directories in folder save_name
+                    output_key = [(f'{save_name}{self._split_key}{r}', out[1])
+                                  for out, r in zip(output_key, res_id)]
+                    save_folders = [os.path.join(save_name, r) for r in res_id]
+                elif last_func:
+                    output_key = [(f'{self.output}{self._split_key}{r}', out[1])
+                                  for out, r in zip(output_key, res_id)]
+                    save_folders = [os.path.join(save_name, r) for r in res_id]
+            else:
+                # Only one result, nothing fancy with the outputs
+                if save_name is not None:
+                    output_key = [(save_name, output_key[0][1])]
+                    save_folders = [save_name]
+                elif last_func:
+                    output_key = [(self.output, output_key[0][1])]
+                    save_folders = [self.output]
 
-                    # Save in return container if save_name is not None
-                    self.logger.info('Adding to return container: '
+            # Check if any images need to be saved
+            if save_folders:
+                for ridx, (out, res) in enumerate(zip(output_key, result)):
+                    # Save images if save_name is not None
+                    self.logger.info(f'Adding to save container: '
+                                     f'{save_folders[ridx]} '
+                                     f'{out[1]}, {res.shape}')
+                    self.save_arrays[save_folders[ridx]] = out[1], res
+
+                    self.logger.info(f'Returning to the Pipeline: '
                                      f'{out}, {res.shape}')
                     return_container[out] = res
 
-                # Check if it is the last function in the operation
-                elif fidx + 1 == len(self.functions):
-                    # Get the correct folder name and image key
-                    if len(result) > 1:
-                        # Need to be careful about overwriting saved files and stacks
-                        unique_names = set([k[0] for k in inputs.keys()])
-                        unique_types = set([k[1] for k in inputs.keys()])
+            self.logger.info(f'{func.__name__} execution time: '
+                             f'{time.time() - exec_timer}')
 
-                        # Check if names or types are unique
-                        if len(unique_names) == len(inputs):
-                            save_fol = f'{self.output}{out[0]}'
-                            out = f'{self.output}{out[0]}'
-                        elif len(unique_types) == len(inputs):
-                            save_fol = f'{self.output}{out[1]}'
-                            out = f'{self.output}{out[1]}'
-                        else:
-                            warnings.warn(f'Some outputs from {func.__name__} will be '
-                                          'overwritten during save.')
-                            # Use names
-                            save_fol = f'{self.output}{out[0]}'
-                            out = f'{self.output}{out[0]}'
-                    else:
-                        # No worries about things being overwritten
-                        save_fol = self.output
-
-                        # Last function and single output - define key
-                        out = (self.output, expec_type)
-
-                    if self.save:
-                        self.save_arrays[save_fol] = out[1], res
-
-                    # Last output always gets added to return container
-                    self.logger.info('Adding to return container: '
-                                     f'{out}, {res.shape}')
-                    return_container[out] = res
-
-                # THEN CONFIRM RUN_OP IN EXTRACT WILL STILL WORK
-                # THEN UPDATE __CALL__ FOR ALL OPS
-                # ADD LOGGER TO IMAGEHELPER
-                # THEN FINALLY CAN TRY MAKING MORPHSNAKES.
-
-            self.logger.info(f'{func.__name__} execution time: {time.time() - exec_timer}')
         self.logger.info('Returning to pipeline: '
                          f'{[(k, v.shape) for k, v in return_container.items()]}')
         yield from return_container.items()
@@ -278,12 +286,14 @@ class Operation():
         f_keys_for_inputs = [f for f in f_keys[:-1] if f[0] is not None]
         f_keys = [f for f in f_keys if f[0] is not None]
 
-        # Get all the outputs
+        # Get all the inputs that were passed to __init__
         inputs = []
         for i in INPT_NAMES:
             inputs.extend([(g, i) for g in getattr(self, f'input_{i}s')])
 
         inputs += f_keys_for_inputs
+
+        # TODO: This is also possibly inaccurate because save_name overwrites output
         outputs = [self.output_id] + f_keys
 
         return inputs, outputs
