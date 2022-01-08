@@ -173,10 +173,6 @@ class Operation():
 
         TODO:
             - Update rules above
-            - Would like to change up the file loading a little. Currently, if it doesn't find
-              files with match_str, it will look for subfolder with match_str and load ALL
-              images. Instead, would like to be able to save multiple results in same folder
-              (would make this function easier), but can't do that until loading images is changed
         """
         # By default, return all inputs of output type
         return_container = ImageContainer()
@@ -195,7 +191,6 @@ class Operation():
             self.logger.info(f'args / kwargs: {args} {kwargs}')
             self.logger.info(f'User set output type: {expec_type}. Save name: {save_name}')
             exec_timer = time.time()
-
 
             # TODO: Add check for if function is already completed
             # Get outputs and overwrite type if needed
@@ -294,7 +289,7 @@ class Operation():
         inputs += f_keys_for_inputs
 
         # TODO: This is also possibly inaccurate because save_name overwrites output
-        outputs = [self.output_id] + f_keys
+        outputs = f_keys + [self.output_id]
 
         return inputs, outputs
 
