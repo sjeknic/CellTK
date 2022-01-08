@@ -96,7 +96,6 @@ class ImageHelper():
 
     TODO:
         - See PEP563, should use typing.get_type_hints
-        - Add logger
     """
     __name__ = 'ImageHelper'
 
@@ -131,7 +130,7 @@ class ImageHelper():
                 raise ValueError('Did not understand copy_to_output type.')
 
     def __call__(self, func):
-        # Get expected type from function annotation
+        # Save information about the function from the signature
         self.func = func
         self.output_type = inspect.signature(self.func).return_annotation
 
@@ -140,6 +139,10 @@ class ImageHelper():
                                for i in func_params
                                if hasattr(i.annotation, '__name__')]
         self.expected_names = [i.name for i in func_params]
+
+        # Used to determine how many of each input to pass
+        self.expected_numbers = {i: len([l for l in self.expected_types if l == i])
+                                 for i in INPT_NAMES}
 
         @functools.wraps(self.func)
         def wrapper(*args, **kwargs):
@@ -201,17 +204,22 @@ class ImageHelper():
         keys = []
         pass_to_func = []
         inpt_size_type = []
-        for inpt in [imgs, msks, trks, arrs]:
+        for inpt, typ in zip([imgs, msks, trks, arrs], INPT_NAMES):
             if inpt:
+                # Check how inputs are to be passed
+                if self.as_tuple:
+                    # Inputs are not trimmed or sorted if passed as tuple
+                    pass_to_func.append([i[1] for i in inpt])
+                else:
+                    # Trim the input based on the number to be passed
+                    # Reverse order so most recent entry is passed first
+                    inpt = inpt[-self.expected_numbers[typ]:][::-1]
+
+                    pass_to_func.extend([i[1] for i in inpt])
+
                 # These are just used for naming and logging, so always flat
                 keys.extend([i[0] for i in inpt])
                 inpt_size_type.extend([(i[1].shape, i[1].dtype) for i in inpt])
-
-                # Group the inputs by type if required
-                if self.as_tuple:
-                    pass_to_func.append([i[1] for i in inpt])
-                else:
-                    pass_to_func.extend([i[1] for i in inpt])
 
         # TODO: Remove this and fix copy_to_output
         self.input_type_idx = [i for b, i, count
