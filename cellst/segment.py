@@ -2,7 +2,9 @@ import numpy as np
 from skimage.measure import label
 from skimage.segmentation import (clear_border, random_walker,
                                   relabel_sequential, watershed,
-                                  find_boundaries)
+                                  find_boundaries, expand_labels,
+                                  morphological_chan_vese,
+                                  morphological_geodesic_active_contour)
 from skimage.morphology import remove_small_objects, opening, binary_erosion
 from skimage.filters import threshold_otsu
 from scipy.ndimage import gaussian_filter, watershed_ift
@@ -209,10 +211,8 @@ class Segment(BaseSegment):
         if seed_min_size is not None:
             seeds = remove_small_objects(seeds, seed_min_size, connectivity=2)
 
-        if image.dtype in (np.float32, np.float64):
-            image = convert_prob_to_int(image)
-
         # Convert background pixels to negative
+        seeds = seeds.astype(np.int16)  # convert to signed integers
         seeds[seeds == 0] = -1
         # Search area is equivalent to connectivity = 2
         struct = np.ones((3, 3))
@@ -224,25 +224,76 @@ class Segment(BaseSegment):
         return out
 
     @ImageHelper(by_frame=True)
+    def morphological_acwe(self,
+                           image: Image,
+                           seeds: Mask = 'checkerboard',
+                           iterations: int = 50,  # TODO: Set appr. value
+                           smoothing: int = 1,
+                           lambda1: float = 1,
+                           lambda2: float = 1,
+                           connectivity: int = 1,
+                           ) -> Mask:
+        """
+        Should run skimage.segmentation.morphological_chan_vese
+
+        # rename
+        """
+        # Get Voronoi boundaries to use to separate objects
+        vor_mask = voronoi_boundaries(seeds, thinner=True)
+
+        # Propagate shapes
+        regions = morphological_chan_vese(image, iterations, seeds, smoothing,
+                                          lambda1, lambda2)
+
+        # Remove voronoi boundaries and label objects
+        regions[vor_mask] = 0
+        regions = label(regions, connectivity=connectivity)
+
+        # # If seed mask is provided, transfer labels
+        if isinstance(seeds, np.ndarray):
+            regions = match_labels_linear(seeds, regions)
+
+        return regions
+
+    @ImageHelper(by_frame=True)
+    def morphological_geodesic_active_contour(self,
+                                              image: Image,
+                                              seeds: Mask = 'checkerboard',
+                                              iterations: int = 50,  # TODO: Set appr. value
+                                              smoothing: int = 1,
+                                              threshold: float = 'auto',
+                                              balloon: float = 0
+                                              ) -> Mask:
+        """
+        Should run skimage.segmentation.morphological_geodesic_active_contour
+
+        TODO:
+            - Add preprocess options - sobel, inverse gaussian
+        """
+        return morphological_geodesic_active_contour(image, iterations,
+                                                     seeds, smoothing,
+                                                     threshold, balloon)
+
+    @ImageHelper(by_frame=True)
     def find_boundaries(self,
                         mask: Mask,
                         connectivity: int = 2,
                         mode: str = 'inner'
                         ) -> Mask:
         """
-        TODO:
-            - Still needs to be tested
+        Outlines the objects in mask and preserves labels.
         """
         boundaries = find_boundaries(mask, connectivity=connectivity,
                                      mode=mode)
+
         return np.where(boundaries, mask, 0)
 
     @ImageHelper(by_frame=True)
-    def dilate_to_cytoring(self,
-                           mask: Mask,
-                           ringwidth: int = 1,
-                           margin: int = 1
-                           ) -> Mask:
+    def dilate_to_cytoring_celltk(self,
+                                  mask: Mask,
+                                  ringwidth: int = 1,
+                                  margin: int = 1
+                                  ) -> Mask:
         """
         Copied directly from CellTK. Should dilate out from nuclear mask
         to create cytoplasmic ring.
@@ -285,6 +336,26 @@ class Segment(BaseSegment):
         return dilated_nuc.astype(np.uint16)
 
     @ImageHelper(by_frame=True)
+    def expand_to_cytoring(self,
+                           mask: Mask,
+                           distance: float = 1,
+                           margin: int = 0
+                           ) -> Mask:
+        """
+        Creating a cytoring using skimage functions
+
+        TODO:
+            - need to implement margin
+
+            - This is important. Consider the pipeline expand_to_cytoring()
+            followed by remove_nuc_from_cyto. After the first function, the mask
+            (nuclear) will be overwritten by the output, because they have the same input
+            However, remove_nuc_from_Cyto requires two inputs... So I need to figure out how to handle that
+            but probably not right now...
+        """
+        return expand_labels(mask, distance)
+
+    @ImageHelper(by_frame=True)
     def remove_nuc_from_cyto(self,
                              nuc_mask: Mask,
                              cyto_mask: Mask,
@@ -303,7 +374,7 @@ class Segment(BaseSegment):
         if val_match:
             new_cyto_mask = np.where(cyto_mask == nuc_mask, 0, cyto_mask)
         else:
-            new_cyto_mask = np.where(nuc_mask > 0, 0, cyto_mask)
+            new_cyto_mask = np.where(nuc_mask, 0, cyto_mask)
 
         if erosion:
             binary_img = new_cyto_mask.astype(bool)
