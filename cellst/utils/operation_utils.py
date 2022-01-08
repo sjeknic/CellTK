@@ -2,9 +2,12 @@ from typing import Dict, Generator, Tuple
 
 import numpy as np
 from numpy.lib.stride_tricks import sliding_window_view
-from skimage.morphology import dilation, remove_small_holes
+from skimage.morphology import dilation, remove_small_holes, thin
 from skimage.measure import label
-from scipy.ndimage import (binary_dilation, distance_transform_edt)
+from skimage.segmentation import find_boundaries
+from scipy.ndimage import binary_dilation, distance_transform_edt
+from scipy.optimize import linear_sum_assignment
+from mahotas.segmentation import gvoronoi
 import SimpleITK as sitk
 
 from cellst.utils._types import Image, Mask, Track, Arr
@@ -237,6 +240,71 @@ def crop_array(array: np.ndarray,
         return array[..., x:]
     elif y == 0 and x < 0:
         return array[..., :x]
+
+
+def voronoi_boundaries(seed: np.ndarray, thinner: bool = False) -> np.ndarray:
+    """
+    Calculate voronoi boundaries, and return as mask to set pixels to 0.
+    """
+    bound = find_boundaries(gvoronoi(seed))
+
+    if thinner:
+        bound = thin(bound)
+
+    return bound
+
+
+def match_labels_linear(source: np.ndarray, dest: np.ndarray) -> np.ndarray:
+    """
+    Should transfer labels from source to dest based on area overlap
+
+    TODO:
+        - Should overlap be calculated relative to original area?
+        - Should there be a threshold of the overlapping amount?
+        - Should overlap be relative to source or dest?
+        - Handle overflow amounts
+    """
+    # Get unique labels and remove 0
+    source_labels = np.unique(source)[1:]
+    dest_labels = np.unique(dest)[1:]
+    dest_idx = {d: n for n, d in enumerate(dest_labels)}
+
+    # Calculate matrix of overlaps
+    cost_matrix = np.zeros((len(source_labels), len(dest_labels)))
+    for x, slab in enumerate(source_labels):
+        # Get values in dest that overlap with slab
+        _dest = dest[source == slab]
+        labels, overlaps = np.unique(_dest, return_counts=True)
+
+        # Need to remove 0 again
+        for l, o in zip(labels, overlaps):
+            if l:
+                cost_matrix[x, dest_idx[l]] = -o
+
+    # These are the indices of the lowest cost assignment
+    s_idx, d_idx = linear_sum_assignment(cost_matrix)
+
+    # Check if all dest labels were labeled
+    # TODO: Should add option to check source labels
+    if len(d_idx) < len(dest_labels):
+        # TODO: Need to get the equivalent of dest_labels[~d_idx]
+        # Get the indices of the unlabled and add to the original.
+        unlabeled = set(range(len(dest_labels))).difference(d_idx)
+        unlabeled = np.fromiter(unlabeled, int)
+        new_labels = np.arange(1, len(unlabeled) + 1) + np.max(source_labels)
+
+        # Update the original arrays
+        source_labels = np.concatenate([source_labels, new_labels])
+        d_idx = np.concatenate([d_idx, unlabeled])
+        s_idx = np.concatenate([s_idx,
+                                np.arange(len(s_idx), len(source_labels))])
+
+    # Assign the values in a new output matrix
+    out = np.zeros_like(dest)
+    for s, d in zip(source_labels[s_idx], dest_labels[d_idx]):
+        out[dest == d] = s
+
+    return out
 
 
 class RandomNameProperty():
