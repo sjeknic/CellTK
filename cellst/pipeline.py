@@ -368,10 +368,10 @@ class Pipeline():
                          f'{im_type} in {folder}.')
 
         # Function to check if img should be loaded
-        def _confirm_im_match(im: str, match_str: str) -> bool:
+        def _confirm_im_match(im: str, match_str: str, path: str) -> bool:
             name = True if match_str is None else match_str in im
             ext = self.file_extension in im
-            fil = os.path.isfile(os.path.join(folder, im))
+            fil = os.path.isfile(os.path.join(path, im))
 
             return name * ext * fil
 
@@ -381,13 +381,13 @@ class Pipeline():
             if lvl == 0:
                 # Check for images that match in first folder
                 im_names = [os.path.join(pth, f) for f in sorted(files)
-                            if _confirm_im_match(f, match_str)]
+                            if _confirm_im_match(f, match_str, pth)]
 
             elif pth.split('/')[-1] == match_str:
                 # Check for images if in dir that matches
                 for st in (match_str, im_type, None):
                     im_names = [os.path.join(pth, f) for f in sorted(files)
-                                if _confirm_im_match(f, st)]
+                                if _confirm_im_match(f, st, pth)]
                     if im_names: break
 
             if im_names: break
