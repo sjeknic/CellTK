@@ -1,8 +1,11 @@
 import subprocess
 import logging
+import os
+from time import sleep
 from typing import Collection
 
 from cellst.utils.log_utils import get_console_logger
+from cellst.pipeline import Pipeline
 
 
 class JobController():
@@ -44,7 +47,8 @@ class SlurmController(JobController):
                  cpu: int,
                  mem: str,
                  name: str = 'cellst',
-                 modules: str = None
+                 modules: str = None,
+                 maxjobs: int = 1,
                  ) -> None:
         # Save the inputs
         self.pipelines = pipelines
@@ -55,15 +59,60 @@ class SlurmController(JobController):
         self.mem = mem
         self.name = name
         self.modules = modules
+        self.maxjobs = maxjobs
 
         # Set up default logger
         self.logger = get_console_logger()
 
-    def run(self) -> None:
+    def __enter__(self):
+        print(os.getcwd())
+        self._working_dir = os.path.join(os.getcwd(), '.cellst_temp')
+        if not os.path.exists(self._working_dir):
+            os.makedirs(self._working_dir)
+
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+        if os.path.exists(self._working_dir):
+            # This might raise an error if dir is not empty
+            os.rmdir(self._working_dir)
+        del self._working_dir
+
+    def run(self, pipelines: dict) -> None:
         """This needs to run the individual pipelines"""
         # TODO: How to pass the pipeline yaml without making the file???
         #       or should I just accept it and always make the yaml in the output dir?
-        pass
+        curr_jobs = self._check_user_jobs(self.partition, self.user)
+        print('current jobs ', curr_jobs)
+
+        if curr_jobs < self.maxjobs:
+            sbatch_path = self._yield_working_sbatch(pipelines)
+
+            # Run the sbatch
+            subprocess.run(f"sbatch {sbatch_path}", shell=True)
+
+            # Wait
+            print('submitted and waiting')
+            sleep(self._delay)
+
+    def _yield_working_sbatch(self, pipelines: dict):
+        for fol, kwargs in pipelines.items():
+            print(fol)
+            # First load the pipeline, then save as yaml that can be accessed
+            # TODO: Obviously could be more efficient - esp if Orchestrator made yamls
+            _pipe = Pipeline._build_from_dict(kwargs)
+            _y_path = os.path.join(self._working_dir, 'tempyaml.yaml')
+            _pipe.save_as_yaml(self._working_dir, 'tempyaml.yaml')
+
+            # Make batch script
+            _batch_path = os.path.join(self._working_dir, 'tempsbatch.sh')
+            self._create_bash_script(partition=self.partition, job_name=f'{self.name}_{fol}',
+                                     time=self.time, ntasks=1, cpus_per_task=self.cpu,
+                                     mem=self.mem, fname=_batch_path, yaml_path=_y_path)
+
+            # Return path to the script
+            yield _batch_path
+
+            # After running, clean up the files
+            os.remove(_y_path, _batch_path)
 
     def _check_user_jobs(self,
                          partition: str = '$GROUP',
@@ -83,9 +132,10 @@ class SlurmController(JobController):
                             job_name: str = 'cellst_pipe',
                             time: str = '24:00:00',
                             ntasks: str = '1',
-                            cpus_per_task: str = '1',
-                            mem: str = '8GB',
-                            fname: str = '.temp.sh'
+                            cpus_per_task: str = '4',
+                            mem: str = '12GB',
+                            fname: str = '.temp.sh',
+                            yaml_path: str = None,
                             ) -> None:
         """
         Runs a bash script to submit a single job to the SLURM controller
@@ -115,5 +165,10 @@ class SlurmController(JobController):
         mods = 'module load cellst376'
         _add_line(mods, '', '')
 
-        command = 'python -m cellst.pipeline -y home/groups/sjeknic/CellST/pipeline_yamls/pipeline_yamls/F5-Site_1.yaml'
+        command = f'python -m cellst.pipeline -y {yaml_path}'
         _add_line(command, '', '')
+
+        # Make the file
+        with open(fname, 'w') as file:
+            file.write(string)
+

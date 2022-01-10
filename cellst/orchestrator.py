@@ -16,7 +16,7 @@ from cellst.utils.utils import folder_name
 from cellst.utils.log_utils import get_logger, get_console_logger
 from cellst.utils.yaml_utils import (save_operation_yaml, save_pipeline_yaml,
                                      save_yaml_file)
-from cellst.utils.slurm_utils import JobController
+from cellst.utils.slurm_utils import JobController, SlurmController
 from cellst.utils.cli_utils import CLIParser
 
 
@@ -108,9 +108,11 @@ class Orchestrator():
 
         # Run with multiple cores or just a single core
         if self.controller is not None:
-            self.controller.add_logger()
-            self.controller.run(self.pipelines)
-        if n_cores > 1:
+            with self.controller:
+                self.controller.add_logger()
+                self.controller.run(self.pipelines)
+                results = []
+        elif n_cores > 1:
             results = self.run_multiple_pipelines(self.pipelines,
                                                   n_cores=n_cores)
         else:
@@ -438,7 +440,6 @@ class Orchestrator():
             log_file=not args.no_log,
             save_master_df=not args.no_save_master_df,
         )
-        orch = Orchestrator(**input_args)
 
         # Add operations
         if args.operations is not None:
@@ -453,11 +454,17 @@ class Orchestrator():
                 cpu=args.cpu,
                 mem=args.mem,
                 name=args.job_name,
-                modules=args.modules
+                modules=args.modules,
+                maxjobs = args.maxjobs
             )
 
         except AttributeError:
             raise AttributeError()
+
+        scont = SlurmController(**controller_args)
+        orch = Orchestrator(**input_args, job_controller=scont)
+
+        return orch
 
 
 if __name__ == '__main__':
@@ -465,4 +472,6 @@ if __name__ == '__main__':
     args = parser.get_command_line_inputs()
     print(args)
     orch = Orchestrator._build_from_cli(args)
-    orch.run()
+    #orch.run()
+    print(orch)
+    print(orch.job_controller)
