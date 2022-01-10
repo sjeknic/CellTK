@@ -744,7 +744,6 @@ class ImageContainer(dict):
 
     TODO:
         - Add check on set_item to make sure it is ndarray
-        - Add flags.writeable=False to set_item
     """
 
 

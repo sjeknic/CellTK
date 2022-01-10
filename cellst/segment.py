@@ -13,7 +13,20 @@ from cellst.operation import BaseSegment
 from cellst.utils._types import Image, Mask
 from cellst.utils.utils import ImageHelper
 from cellst.utils.operation_utils import (remove_small_holes_keep_labels,
-                                          dilate_sitk)
+                                          dilate_sitk, voronoi_boundaries,
+                                          match_labels_linear)
+
+"""
+TODO:
+    - Test Taka's CellTK functions (find_boundaries, cytoring)
+    - fix expand_cytoring
+    - Add more cytoring functions (thres, adaptive_thres, etc.)
+    - Add more bg subtract functions (bg_subtract_wavelet_hazen)
+    - Add morphsnakes segmentation and test
+    - Add levelset segmentation
+    - Test eSJ69 segmentation
+    - Add mahotas/watershed_distance
+"""
 
 
 class Segment(BaseSegment):
@@ -160,9 +173,7 @@ class Segment(BaseSegment):
         Similar to, but likely faster than, random walk segmentation.
 
         TODO:
-            - This function could be able to take in a pre-made seed mask
-              This might be challenging, because I don't think I can currently
-              make any of (Image, Mask, Track, Arr) optional.
+            - agglom_min and agglom_max should be set as a fraction of the image values
         """
         # Candidate pixels and percentiles can be set on 3D stack
         if agglom_max is None: agglom_max = np.nanmax(image)

@@ -116,6 +116,9 @@ class Pipeline():
         # Log time spent after enter
         try:
             self.logger.info(f'Total execution time: {time.time() - self.timer}')
+
+            # TODO: Can duplicate logger streams be removed here
+
             self.timer = None
         except TypeError:
             # KeyboardInterrupt now won't cause additional exceptions
@@ -689,7 +692,6 @@ class Orchestrator():
         self._build_pipelines(match_str, image_folder, mask_folder,
                               track_folder, array_folder)
 
-
         # Prepare for getting operations
         self.operations = []
 
@@ -782,6 +784,7 @@ class Orchestrator():
         # Make Experiment array to hold data
         out = Experiment(name=self.name)
 
+        # TODO: Add using of passed arrays here
         # Search for all dfs in all pipeline folders
         for fol in self.pipelines:
             otpt_fol = os.path.join(self.output_folder, fol)
