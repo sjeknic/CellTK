@@ -4,15 +4,17 @@ import warnings
 import numpy as np
 
 from cellst.operation import BaseExtract
+from cellst.utils.utils import ImageHelper
 from cellst.utils._types import Image, Mask, Track, Arr, Condition
 from cellst.utils.operation_utils import lineage_to_track, parents_from_track
 
 
 class Extract(BaseExtract):
+    @ImageHelper(by_frame=False, as_tuple=True)
     def extract_data_from_image(self,
-                                images: Collection[Image],
-                                masks: Collection[Mask] = [],
-                                tracks: Collection[Track] = [],
+                                images: Image,
+                                masks: Mask = [],
+                                tracks: Track = [],
                                 channels: Collection[str] = [],
                                 regions: Collection[str] = [],
                                 lineages: Collection[np.ndarray] = [],
