@@ -209,7 +209,7 @@ class ImageHelper():
                 # Check how inputs are to be passed
                 if self.as_tuple:
                     # Inputs are not trimmed or sorted if passed as tuple
-                    pass_to_func.append([i[1] for i in inpt])
+                    pass_to_func.append(tuple([i[1] for i in inpt]))
                 else:
                     # Trim the input based on the number to be passed
                     # Reverse order so most recent entry is passed first
