@@ -1,16 +1,25 @@
 import numpy as np
+import SimpleITK as sitk
 from skimage.registration import phase_cross_correlation
 from skimage.restoration import rolling_ball
 from skimage.filters import gaussian
+from skimage.segmentation import inverse_gaussian_gradient
 from scipy.ndimage import gaussian_laplace
 
 from cellst.operation import BaseProcess
-from cellst.utils._types import Image, Mask, Track, Arr
+from cellst.utils._types import Image, Mask, Track, Arr, Same
 from cellst.utils.utils import ImageHelper
 from cellst.utils.operation_utils import (sliding_window_generator,
                                           shift_array, crop_array)
 
-
+"""
+TODO:
+    - Add stand-alone crop function
+    - Add optical-flow registration
+    - Add faster bg subtract (wavelet hazen)
+    - Add unet_predict here
+    - Add sobel filter
+"""
 
 class Process(BaseProcess):
     @ImageHelper(by_frame=False, as_tuple=True)
@@ -20,15 +29,11 @@ class Process(BaseProcess):
                                    track: Track = tuple([]),
                                    align_with: str = 'image',
                                    crop: bool = True
-                                   ) -> Image:
+                                   ) -> Same:
         """
-        Crops images based on calculated shift from phase_cross_correlation.
-
-        TODO:
-            - Add crop working
+        Shifts and crops images based on phase_cross_correlation.
         """
-        # Get the image that aligning will be based on
-        # By defaut to_align should use the first image in whatever align_with is
+        # Image that aligning will be based on - first img in align_with
         to_align = locals()[align_with][0]
 
         # Get frame generator
@@ -110,3 +115,37 @@ class Process(BaseProcess):
         """
         bg = rolling_ball(image, radius=radius, kernel=kernel, nansafe=nansafe)
         return image - bg
+
+    @ImageHelper(by_frame=True)
+    def inverse_gaussian_gradient(self,
+                                  image: Image,
+                                  alpha: float = 100.0,
+                                  sigma: float = 5.0
+                                  ) -> Image:
+        """
+        """
+        return inverse_gaussian_gradient(image, alpha, sigma)
+
+    @ImageHelper(by_frame=True, overlap=1)
+    def histogram_matching(self,
+                           image: Image,
+                           bins: int = 500,
+                           match_pts: int = 2,
+                           threshold: bool = False,
+                           ) -> Image:
+        """
+        Histogram matching from CellTK
+        """
+        # Get frames as sITK images
+        frame0 = sitk.GetImageFromArray(image[0, ...])
+        frame1 = sitk.GetImageFromArray(image[1, ...])
+
+        # Get the histogram matching filter
+        fil = sitk.HistogramMatchingImageFilter()
+        fil.SetNumberOfHistogramLevels(bins)
+        fil.SetNumberOfMatchPoints(match_pts)
+        fil.SetThresholdAtMeanIntensity(threshold)
+
+        # Apply the filter and return
+        filimg = fil.Execute(frame0, frame1)
+        return sitk.GetArrayFromImage(filimg)
