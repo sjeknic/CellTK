@@ -11,16 +11,13 @@ import tifffile as tiff
 import imageio as iio
 
 from cellst.operation import Operation
-from cellst.utils._types import Image, Mask, Track, Arr, INPT_NAMES
+from cellst.utils._types import Image, Mask, Track, Arr, ImageContainer
+from cellst.utils._types import Experiment
 from cellst.utils.process_utils import condense_operations, extract_operations
 from cellst.utils.utils import folder_name
 from cellst.utils.log_utils import get_logger, get_console_logger
 from cellst.utils.yaml_utils import save_operation_yaml, save_pipeline_yaml
 
-"""
-TODO: Orchestrator and Pipeline might need to be in separate modules so they can
-be called from the command line easily
-"""
 
 class Pipeline():
     """
@@ -36,7 +33,7 @@ class Pipeline():
                  'track_folder', 'array_folder',
                  'operation_index', 'file_extension',
                  'logger', 'timer', 'overwrite',
-                 'name', 'log_file')
+                 'name', 'log_file', '_split_key')
 
     def __init__(self,
                  parent_folder: str = None,
@@ -48,7 +45,8 @@ class Pipeline():
                  name: str = None,
                  file_extension: str = 'tif',
                  overwrite: bool = True,
-                 log_file: bool = True
+                 log_file: bool = True,
+                 _split_key: str = '&'
                  ) -> None:
         """
         Pipeline will only handle a folder that has images in it.
@@ -65,6 +63,7 @@ class Pipeline():
         # Save some values in case Pipeline is written as yaml
         self.overwrite = overwrite
         self.log_file = log_file
+        self._split_key = _split_key
 
         # Define paths to find and save images
         self.file_extension = file_extension
@@ -81,7 +80,7 @@ class Pipeline():
             self.logger = get_console_logger()
 
         # Prepare for getting operations and images
-        self._image_container = {}
+        self._image_container = ImageContainer()
         self.operations = []
 
         # Log relevant information and parameters
@@ -98,7 +97,7 @@ class Pipeline():
         """
         # Create the image container if needed
         if not hasattr(self, '_image_container'):
-            self._image_container = {}
+            self._image_container = ImageContainer()
 
         # Start a timer
         self.timer = time.time()
@@ -115,6 +114,9 @@ class Pipeline():
         # Log time spent after enter
         try:
             self.logger.info(f'Total execution time: {time.time() - self.timer}')
+
+            # TODO: Can duplicate logger streams be removed here
+
             self.timer = None
         except TypeError:
             # KeyboardInterrupt now won't cause additional exceptions
@@ -154,6 +156,10 @@ class Pipeline():
             - Not sure the index results always make sense, best to add all
               operations at once
         """
+        # TODO: Dirty fix - Need to fix this in the master branch
+        if isinstance(operation, Operation):
+            operation = [operation]
+
         # Adds operations to self.operations (Collection[Operation])
         if isinstance(operation, Collection):
             if all([isinstance(o, Operation) for o in operation]):
@@ -203,7 +209,7 @@ class Pipeline():
 
                 # Get images and pass to operation
                 try:
-                    imgs, msks, trks, arrs = self._get_images_from_container(inpts)
+                    imgs_for_operation = self._get_images_from_container(inpts)
                 except KeyError as e:
                     raise KeyError(f'Failed to find all inputs for {oper} \n',
                                    e.__str__())
@@ -211,33 +217,15 @@ class Pipeline():
                 # Run the operation and save results
                 oper.set_logger(self.logger)
                 with oper:
-                    oper_result = oper.run_operation(imgs, msks, trks, arrs)
-                    self._image_container = self.update_image_container(
-                                                self._image_container,
-                                                oper_result,
-                                                otpts)
-
+                    # oper_result is a generator for the results and keys
+                    oper_result = oper.run_operation(imgs_for_operation)
+                    self._image_container.update(dict(oper_result))
                     # Write to disk if needed
                     if oper.save:
                         self.save_images(oper.save_arrays,
                                          oper._output_type.__name__)
 
         return oper_result
-
-    def update_image_container(self,
-                               container: Dict[str, np.ndarray],
-                               array: (Image, Mask, Track),
-                               key: Tuple[str],
-                               ) -> None:
-        """
-        """
-        if key not in container:
-            container[key] = array
-        else:
-            # TODO: Should there be an option to not overwrite?
-            container[key] = array
-
-        return container
 
     def save_images(self,
                     save_arrays: Dict[str, Tuple],
@@ -262,10 +250,10 @@ class Pipeline():
 
             # Save CellArray separately
             if oper_output == 'array':
-                name = os.path.join(self.output_folder, f"{otpt_type}.hdf5")
+                name = os.path.join(self.output_folder, f"{name}.hdf5")
                 arr.save(name)
 
-                self.logger.info(f'Saved data frame in {self.output_folder}. '
+                self.logger.info(f'Saved data frame at {name}. '
                                  f'shape: {arr.shape}, type: {arr.dtype}.')
             else:
                 save_dtype = arr.dtype if img_dtype is None else img_dtype
@@ -328,104 +316,92 @@ class Pipeline():
 
         return cls._build_from_dict(pipe_dict)
 
-    def _input_output_handler(self) -> Tuple[str]:
+    def _input_output_handler(self) -> List[List[Tuple[str]]]:
         """
         Iterate through all the operations and figure out which images
         to save and which to remove.
 
+        Returns:
+            Output =
+
         TODO:
             - Determine after which operation the stack is no longer needed
+            - Call function to delete uneeded stacks (probably after oper.__exit__)
         """
         # Inputs and outputs determined by the args passed to each Operation
         req_inputs = []
         req_outputs = []
         for o in self.operations:
-            imgs = [tuple([i, Image.__name__]) for i in o.input_images]
-            msks = [tuple([m, Mask.__name__]) for m in o.input_masks]
-            trks = [tuple([t, Track.__name__]) for t in o.input_tracks]
-            arrs = [tuple([a, Arr.__name__]) for a in o.input_arrays]
-
-            req_inputs.append([imgs, msks, trks, arrs])
-            req_outputs.append(o.output_id)
+            op_in, op_out = o.get_inputs_and_outputs()
+            req_inputs.append(op_in)
+            req_outputs.append(op_out)
 
         # Log the inputs and outputs
-        self.logger.info('Expected images: '
-                         f'{[i[0] for op in req_inputs for i in op[0]]}')
-        self.logger.info('Expected masks: '
-                         f'{[i[0] for op in req_inputs for i in op[1]]}')
-        self.logger.info('Expected tracks: '
-                         f'{[i[0] for op in req_inputs for i in op[2]]}')
-        self.logger.info('Expected arrays: '
-                         f'{[i[0] for op in req_inputs for i in op[3]]}')
-        self.logger.info(f'Exected outputs: {[r[0] for r in req_outputs]}')
+        self.logger.info(f'Expected inputs: {req_inputs}')
+        self.logger.info(f'Exected outputs: {req_outputs}')
 
         return req_inputs, req_outputs
 
     def _get_image_paths(self,
                          folder: str,
-                         match_str: str,
-                         subfolder: str = None
+                         key: Tuple[str],
                          ) -> Collection[str]:
         """
-        match_str: Tuple[str], [0] is the  mat
-
-        1. Look for images in subfolder if given
-        2. Look for images in folder
-        3. Look for subfolder that matches match_str.
-        4. If exists, return those images.
+        Steps to get images:
+        1. Check folder for images that match
+        2. Check subfolders for one that matches match_str EXACTLY
+            2a. Load images containing match_str
+            2b. Load images that match type by name
+            2c. Load all the images
 
         TODO:
             - Add image selection based on regex
             - Should channels use regex or glob to match name
-            - Could be moved to a utils file - staticmethod
-            - Include a check for file type as well!!
-                - Yeah, they are all over the place here. Need to be in _load
-                  as well
         """
-        # First check in designated subfolder
-        if subfolder is not None:
-            folder = os.path.join(folder, subfolder)
+        match_str, im_type = key
+
+        # Check if key includes an operation identifier
+        if self._split_key in match_str:
+            fol_id, match_str = match_str.split(self._split_key)
+            folder = os.path.join(folder, fol_id)
+
+        self.logger.info(f'Looking for {match_str} of type '
+                         f'{im_type} in {folder}.')
 
         # Function to check if img should be loaded
-        def _confirm_im_match(im, check_name: bool = True) -> bool:
-            name = True if not check_name else match_str in im
+        def _confirm_im_match(im: str, match_str: str, path: str) -> bool:
+            name = True if match_str is None else match_str in im
             ext = self.file_extension in im
-            fil = os.path.isfile(os.path.join(folder, im))
+            fil = os.path.isfile(os.path.join(path, im))
 
             return name * ext * fil
 
-        # Find images and sort into list
-        im_names = [os.path.join(folder, im)
-                    for im in sorted(os.listdir(folder))
-                    if _confirm_im_match(im)]
+        # Walk through all directories in folder
+        im_names = []  # Needed in case walk doesn't return anything
+        for lvl, (pth, dirs, files) in enumerate(os.walk(folder)):
+            if lvl == 0:
+                # Check for images that match in first folder
+                im_names = [os.path.join(pth, f) for f in sorted(files)
+                            if _confirm_im_match(f, match_str, pth)]
 
-        # If no images were found, look for a subdirectory
-        if len(im_names) == 0:
-            try:
-                # Take first subdirectory found that has match_str
-                subfol = [fol for fol in sorted(os.listdir(folder))
-                          if os.path.isdir(os.path.join(folder, fol))
-                          if match_str in fol][0]
-                folder = os.path.join(folder, subfol)
+            elif pth.split('/')[-1] == match_str:
+                # Check for images if in dir that matches
+                for st in (match_str, im_type, None):
+                    im_names = [os.path.join(pth, f) for f in sorted(files)
+                                if _confirm_im_match(f, st, pth)]
+                    if im_names: break
 
-                # Look ONLY for images in that subdirectory
-                # Load all images, even if match_str doesn't match
-                im_names = [os.path.join(folder, im)
-                            for im in sorted(os.listdir(folder))
-                            if _confirm_im_match(im, check_name=False)]
-            except IndexError:
-                # Indidcates that no sub_folders were found
-                # im_names should be [] at this point
-                pass
+            if im_names: break
 
+        self.logger.info(f'Found {len(im_names)} images.')
         return im_names
 
     def _load_images_to_container(self,
-                                  container: Dict[tuple, np.ndarray],
+                                  container: ImageContainer,
                                   inputs: Collection[tuple],
                                   outputs: Collection[tuple],
                                   img_dtype: type = np.int16
-                                  ) -> Dict[tuple, np.ndarray]:
+                                  ) -> ImageContainer:
         """
         Loads image files and saves the result as a 3D np.ndarray
         in the given container.
@@ -443,29 +419,35 @@ class Pipeline():
             - Add saving of image metadata
             - No way to pass img_dtype to this function
         """
-        for idx, name in enumerate(INPT_NAMES):
-            # Get unique list of all inputs requested by operations
-            all_requested = [sl for l in [i[idx] for i in inputs] for sl in l]
-            to_load = list(set(all_requested))
+        # Get list of all outputs/unique inputs from operations
+        outputs = [sl for l in outputs for sl in l]
+        all_requested = [sl for l in inputs for sl in l]
+        to_load = list(set(all_requested))
 
-            for key in to_load:
-                fol = getattr(self, f'{name}_folder')
-                pths = self._get_image_paths(fol, key[0])
-                if len(pths) == 0:
-                    # If no images are found in the path, check output_folder
-                    fol = self.output_folder
-                    pths = self._get_image_paths(fol, key[0])
-                    # If still no images, check the listed outputs
-                    if len(pths) == 0 and key not in outputs:
-                        # TODO: The order matters. Should raise error if it is made
-                        #       after it is needed, otherwise continue.
+        for key in to_load:
+            fol = getattr(self, f'{key[1]}_folder')
+            pths = self._get_image_paths(fol, key)
+
+            if not pths:
+                # If no images are found in the path, check output_folder
+                if fol != self.output_folder:
+                    pths = self._get_image_paths(self.output_folder, key)
+
+                # If still no images, check the listed outputs
+                if not pths:
+                    # Accept outputs that include save_name, but not channel
+                    if self._split_key in key[0]:
+                        _out = key[0].split(self._split_key)[0]
+                        _out = (_out, key[1])
+                        if _out in outputs: continue
+                    elif key not in outputs:
+                        # If nothing, check for whole key in outputs
+                        # TODO: Include consideration of operation order
                         raise ValueError(f'Data {key} cannot be found and is '
                                          'not listed as an output.')
 
-                # Log the paths
-                self.logger.info(f'Looking for {key[0]} in {fol}. '
-                                 f'Found {len(pths)} files.')
-
+            # TODO: This check is redundant, simplify later
+            if pths:
                 # Load the images
                 '''NOTE: Using mimread instead of imread to add the option of limiting
                 the memory of the loaded image. However, mimread still only loads one
@@ -484,6 +466,8 @@ class Pipeline():
 
                     img_stack[n, ...] = img
 
+                # Make img_stack read-only. To change image stack, overwrite container[key]
+                img_stack.flags.writeable = False
                 container[key] = img_stack
 
                 self.logger.info(f'Images loaded. shape: {img_stack.shape}, '
@@ -493,7 +477,7 @@ class Pipeline():
 
     def _get_images_from_container(self,
                                    input_keys: Collection[Collection],
-                                   ) -> List[np.ndarray]:
+                                   ) -> ImageContainer:
         """
         Checks for key in the image container and returns the corresponding stacks
         Raises error if not found.
@@ -501,16 +485,13 @@ class Pipeline():
         TODO:
             - If it doesn't find a key, could first try reloading the _image_container
         """
-        temp = []
-        for keys in input_keys:
-            try:
-                temp.append(
-                    [self._image_container[k] for k in keys]
-                )
-            except KeyError:
-                raise KeyError(f'Image stack {keys} does not exist.')
+        # Create a copy that points to the same locations in memory
+        new_container = ImageContainer()
+        # TODO: Should a KeyError be caught here?
+        new_container.update({k: self._image_container[k] for k in input_keys
+                              if k in self._image_container})
 
-        return temp
+        return new_container
 
     def _set_all_paths(self,
                        parent_folder: str,
@@ -583,7 +564,8 @@ class Pipeline():
         # Save basic parameters
         init_params = ('parent_folder', 'output_folder', 'image_folder',
                        'mask_folder', 'track_folder', 'array_folder',
-                       'overwrite', 'file_extension', 'log_file', 'name')
+                       'overwrite', 'file_extension', 'log_file', 'name',
+                       '_split_key')
         pipe_dict = {att: getattr(self, att) for att in init_params}
 
         # Add Operations to dict
@@ -648,7 +630,379 @@ class Pipeline():
     @classmethod
     def _get_command_line_inputs(cls) -> argparse.Namespace:
 
+<<<<<<< HEAD
         parser = argparse.ArgumentParser(conflict_handler='resolve')
+=======
+class Orchestrator():
+    """
+    TODO:
+        - Add __str__ method
+        - Add function for submitting jobs to SLURM
+    """
+    file_location = os.path.dirname(os.path.realpath(__file__))
+
+    __name__ = 'Orchestrator'
+    __slots__ = ('pipelines', 'operations', 'yaml_folder',
+                 'parent_folder', 'output_folder',
+                 'operation_index', 'file_extension', 'name',
+                 'overwrite', 'save', 'condition_map',
+                 'logger')
+
+    def __init__(self,
+                 yaml_folder: str = None,
+                 parent_folder: str = None,
+                 output_folder: str = None,
+                 match_str: str = None,
+                 image_folder: str = None,
+                 mask_folder: str = None,
+                 track_folder: str = None,
+                 array_folder: str = None,
+                 condition_map: dict = {},
+                 name: str = 'experiment',
+                 file_extension: str = 'tif',
+                 overwrite: bool = True,
+                 log_file: bool = True,
+                 save_master_df: bool = True,
+                 ) -> None:
+        """
+        Args:
+
+        Returns:
+            None
+
+        TODO:
+            - Should be able to parse args and load a yaml as well
+            - Should be able to load yaml to define operations
+        """
+        # Save some values
+        self.name = name
+        self.file_extension = file_extension
+        self.overwrite = overwrite
+        self.save = save_master_df
+        self.condition_map = condition_map
+
+        # Set paths and start logging
+        self._set_all_paths(yaml_folder, parent_folder, output_folder)
+        self._make_output_folder(self.overwrite)
+        if log_file:
+            self.logger = get_logger(self.__name__, self.output_folder,
+                                     overwrite=overwrite)
+        else:
+            self.logger = get_console_logger()
+
+        # Build the Pipelines and input/output paths
+        self.pipelines = {}
+        self._build_pipelines(match_str, image_folder, mask_folder,
+                              track_folder, array_folder)
+
+        # Prepare for getting operations
+        self.operations = []
+
+    def __len__(self) -> int:
+        return len(self.pipelines)
+
+    def run(self, n_cores: int = 1) -> None:
+        """
+        Run all the Pipelines with all of the operations.
+
+        TODO:
+            - Should results really be saved?
+        """
+        # Can skip doing anything if no operations have been added
+        if len(self.operations) == 0 or len(self.pipelines) == 0:
+            warnings.warn('No Operations and/or Pipelines. Returning None.',
+                          UserWarning)
+            return
+
+        # Add operations to the pipelines
+        self.add_operations_to_pipelines(self.operations)
+
+        # Run with multiple cores or just a single core
+        if n_cores > 1:
+            results = self.run_multiple_pipelines(self.pipelines,
+                                                  n_cores=n_cores)
+        else:
+            results = []
+            for fol, kwargs in self.pipelines.items():
+                results.append(Pipeline._run_single_pipe(kwargs))
+
+        if self.save:
+            # TODO: If results are saved, pass here, otherwise, use files
+            self.build_experiment_file()
+
+        return results
+
+    def run_multiple_pipelines(self,
+                               pipeline_dict: Dict,
+                               n_cores: int = 1
+                               ) -> Collection[Arr]:
+        """
+        pipeline_dict holds path information for building ALL of the pipelines
+            - key is subfolder, val is to be passed to Pipeline.__init__
+
+        Assumes that operations are already added to the Pipelines
+        """
+        # Run asynchronously
+        with Pool(n_cores) as pool:
+            # Set up pool of workers
+            multi = [pool.apply_async(Pipeline._run_single_pipe, args=(kwargs))
+                     for kwargs in pipeline_dict.values()]
+
+            # Run pool and return results
+            return [m.get() for m in multi]
+
+    def add_operations(self,
+                       operation: Collection[Operation],
+                       index: int = -1
+                       ) -> None:
+        """
+        Adds Operations to the Orchestrator and recalculates the index
+
+        Args:
+
+        Returns:
+        """
+        if isinstance(operation, Collection):
+            if all([isinstance(o, Operation) for o in operation]):
+                if index == -1:
+                    self.operations.extend(operation)
+                else:
+                    self.operations[index:index] = operation
+            else:
+                raise ValueError('Not all items in operation are Operations.')
+        elif isinstance(operation, Operation):
+            if index == -1:
+                self.operations.append(operation)
+            else:
+                self.operations.insert(index, operation)
+        else:
+            raise ValueError(f'Expected Operation, got {type(operation)}.')
+
+        self.operation_index = {i: o for i, o in enumerate(self.operations)}
+
+    def build_experiment_file(self, arrays: Collection[Arr] = None) -> None:
+        """
+        Search folders in self.pipelines for hdf5 data frames
+        """
+        # Make Experiment array to hold data
+        out = Experiment(name=self.name)
+
+        # TODO: Add using of passed arrays here
+        # Search for all dfs in all pipeline folders
+        for fol in self.pipelines:
+            otpt_fol = os.path.join(self.output_folder, fol)
+
+            # NOTE: if df.name is already in Experiment, will be overwritten
+            for df in glob(os.path.join(otpt_fol, '*.hdf5')):
+                out.load_condition(df)
+
+        # Save the master df file
+        save_path = os.path.join(self.output_folder, f'{self.name}.hdf5')
+        out.save(save_path)
+
+    def add_operations_to_pipelines(self,
+                                    operations: Collection[Operation] = []
+                                    ) -> None:
+        """
+        Adds Operations to each Pipeline in Orchestrator
+        """
+        # Collect operations
+        op_dict = condense_operations(operations)
+
+        self.logger.info(f'Adding Operations {operations} '
+                         f'to {len(self)} Pipelines.')
+        for pipe, kwargs in self.pipelines.items():
+            # First try to append operations before overwriting
+            try:
+                kwargs['_operations'].update(op_dict)
+            except KeyError:
+                kwargs.update({'_operations': op_dict})
+
+    def update_condition_map(self, condition_map: dict = {}) -> None:
+        """
+        Adds conditions to each of the Pipelines in Orchestrator
+        """
+        for fol, cond in condition_map.items():
+            self.pipelines[fol]['name'] = cond
+
+        self.condition_map = condition_map
+
+    def save_pipelines_as_yamls(self, path: str = None) -> None:
+        """
+        Save yaml file that can be loaded as Pipeline
+        """
+        # Set path for saving files - saves in yaml folder
+        path = self.output_folder if path is None else path
+        path = os.path.join(path, 'pipeline_yamls')
+        if not os.path.exists(path):
+            os.makedirs(path)
+
+        # Make sure operations are added to pipelines
+        self.add_operations_to_pipelines(self.operations)
+
+        # Save each pipeline
+        self.logger.info(f"Saving {len(self.pipelines)} yamls in {path}")
+        for pipe, kwargs in self.pipelines.items():
+            # Save the Pipeline
+            fname = os.path.join(path,
+                                 f"{folder_name(kwargs['parent_folder'])}.yaml")
+            save_pipeline_yaml(fname, kwargs)
+
+    def save_operations_as_yaml(self,
+                                path: str = None,
+                                fname: str = 'operations.yaml'
+                                ) -> None:
+        """
+        Save self.operations as a yaml file.
+        """
+        # Get the path
+        path = self.output_folder if path is None else path
+        if not os.path.exists(path):
+            os.makedirs(path)
+        path = os.path.join(path, fname)
+
+        # Save using yaml_utils
+        self.logger.info(f"Saving Operations at {path}")
+        save_operation_yaml(path, self.operations)
+
+    def _build_pipelines(self,
+                         match_str: str,
+                         image_folder: str,
+                         mask_folder: str,
+                         track_folder: str,
+                         array_folder: str
+                         ) -> None:
+        """
+        """
+        # If yamls are provided, use those to make the Pipelines
+        if self.yaml_folder is not None:
+            files = [os.path.join(self.yaml_folder, f)
+                     for f in os.listdir(self.yaml_folder)
+                     if f.endswith('.yaml')]
+            self.logger.info(f'Found {len(files)} possible pipelines '
+                             f'in {self.yaml_folder}')
+            # Load all yamls as dictionaries
+            for f in files:
+                with open(f, 'r') as yf:
+                    pipe = yaml.load(yf, Loader=yaml.FullLoader)
+                    try:
+                        fol = folder_name(pipe['parent_folder'])
+                        self.pipelines[fol] = pipe
+                    except KeyError:
+                        # Indicates yaml file was not a Pipeline yaml
+                        pass
+        else:
+            # Find all folders that will be needed for Pipelines
+            self.logger.info(f'Found {len(os.listdir(self.parent_folder))} '
+                             f'possible pipelines in {self.parent_folder}')
+            for fol in os.listdir(self.parent_folder):
+                # Check for the match_str
+                if match_str is not None and match_str not in fol:
+                    continue
+
+                # Make sure the path is a directory
+                fol_path = os.path.join(self.parent_folder, fol)
+                if os.path.isdir(fol_path) and fol_path != self.output_folder:
+                    # First initialize the dictionary
+                    self.pipelines[fol] = {}
+
+                    # Save parent folder
+                    self.pipelines[fol]['parent_folder'] = fol_path
+
+                    # Save output folder relative to self.output_folder
+                    out_fol = os.path.join(self.output_folder, fol)
+                    self.pipelines[fol]['output_folder'] = out_fol
+
+                    # Set all of the subfolders
+                    self.pipelines[fol].update(dict(
+                        image_folder=self._set_rel_to_par(fol_path,
+                                                          image_folder),
+                        mask_folder=self._set_rel_to_par(fol_path,
+                                                         mask_folder),
+                        track_folder=self._set_rel_to_par(fol_path,
+                                                          track_folder),
+                        array_folder=self._set_rel_to_par(fol_path,
+                                                          array_folder),
+                    ))
+
+                    # Add condition
+                    try:
+                        self.pipelines[fol]['name'] = self.condition_map[fol]
+                    except KeyError:
+                        self.pipelines[fol]['name'] = fol
+
+                    # Add miscellaneous options
+                    self.pipelines[fol]['file_extension'] = self.file_extension
+                    self.pipelines[fol]['overwrite'] = self.overwrite
+
+        self.logger.info(f'Loaded {len(self)} pipelines')
+
+    def _set_all_paths(self,
+                       yaml_folder: str,
+                       parent_folder: str,
+                       output_folder: str
+                       ) -> None:
+        # Parent folder defaults to folder where Orchestrator was called
+        if parent_folder is None:
+            self.parent_folder = os.path.abspath(sys.argv[0])
+        else:
+            self.parent_folder = parent_folder
+
+        # Output folder defaults to folder in parent_folder
+        if output_folder is None:
+            self.output_folder = os.path.join(self.parent_folder, 'outputs')
+        else:
+            self.output_folder = output_folder
+
+        # YAML folder can remain None
+        self.yaml_folder = yaml_folder
+
+    def _make_output_folder(self,
+                            overwrite: bool = True
+                            ) -> None:
+        """
+        """
+        if not os.path.exists(self.output_folder):
+            os.makedirs(self.output_folder)
+            fmode = 'a'
+        elif overwrite:
+            fmode = 'w'
+        elif not overwrite:
+            fmode = 'a'
+            it = 0
+            tempdir = self.output_folder + f'_{it}'
+            while os.path.exists(tempdir):
+                it += 1
+                tempdir = self.output_folder + f'_{it}'
+
+            self.output_folder = tempdir
+            os.makedirs(self.output_folder)
+
+    def _set_rel_to_par(self,
+                        par_path: str,
+                        inpt: str
+                        ) -> str:
+        """
+        Makes inpts relative to the parent_folder of that Pipeline
+        """
+        # Parse sub-folder inputs
+        if inpt is not None:
+            inpt = os.path.join(par_path, inpt)
+
+        return inpt
+
+    def parse_yaml(self, path: str) -> Dict:
+        """
+        Parses the input yaml file
+        """
+        with open(path, 'r') as yaml_file:
+            args = yaml.load(yaml_file, Loader=yaml.FullLoader)
+        return args
+
+    def _get_command_line_inputs(self) -> argparse.Namespace:
+
+        self.parser = argparse.ArgumentParser(conflict_handler='resolve')
+>>>>>>> main
 
         # Input file is easiest way to pass arguments
         parser.add_argument(
