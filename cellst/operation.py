@@ -20,12 +20,13 @@ class Operation():
     __name__ = 'Operation'
     __slots__ = ('save', 'output', 'functions', 'func_index', 'input_images',
                  'input_masks', 'input_tracks', 'input_arrays', 'save_arrays',
-                 'output_id', '_input_type', '_output_type', 'logger', 'timer',
-                 '_split_key')
+                 'output_id', 'logger', 'timer', '_split_key', 'force_rerun',
+                 '_input_type', '_output_type')
 
     def __init__(self,
                  output: str,
                  save: bool = False,
+                 force_rerun: bool = False,
                  _output_id: Tuple[str] = None,
                  _split_key: str = '&',
                  **kwargs
@@ -38,6 +39,7 @@ class Operation():
         # Save basic params
         self.save = save
         self.output = output
+        self.force_rerun = force_rerun
         self._split_key = _split_key
 
         # These are used to track what the operation has been asked to do
@@ -155,7 +157,9 @@ class Operation():
         """
         if hasattr(self, func):
             # Save func as string for dictionaries
-            self.functions.append(tuple([func, output_type, args, kwargs, save_name]))
+            # TODO: Output type should be input after args, kwargs
+            self.functions.append(tuple([func, output_type,
+                                         args, kwargs, save_name]))
         else:
             raise AttributeError(f"Function {func} not found in {self}.")
 
@@ -192,7 +196,30 @@ class Operation():
             self.logger.info(f'User set output type: {expec_type}. Save name: {save_name}')
             exec_timer = time.time()
 
-            # TODO: Add check for if function is already completed
+            # Check if input is already loaded
+            if not self.force_rerun:
+                if expec_type is None:
+                    _out_type = self._get_func_output_type(func)
+                else:
+                    _out_type = expec_type
+
+                # Only checks for functions that are expected to be saved
+                if save_name is not None:
+                    _check_key = (save_name, _out_type)
+                elif last_func:
+                    _check_key = (self.output, _out_type)
+                else:
+                    _check_key = (None, None)
+
+                # The output already exists
+                # TODO: This doesn't handle any keys with _split_key
+                if _check_key in inputs:
+                    self.logger.info(f'Output already loaded: {_check_key} '
+                                     f'{inputs[_check_key].shape}, '
+                                     f'{inputs[_check_key].dtype}.')
+                    self.logger.info(f'Skipping {func.__name__}.')
+                    continue
+
             # Get outputs and overwrite type if needed
             output_key, result = func(inputs, *args, **kwargs)
             output_key = [out if expec_type is None else (out[0], expec_type)
@@ -270,6 +297,9 @@ class Operation():
     def get_inputs_and_outputs(self) -> List[List[tuple]]:
         """
         Returns all inputs and outputs to Pipeline._input_output_handler
+
+        # TODO:
+            - This must also change when order of inputs to add_func changes
         """
         # Get all keys for the functions in Operation with save_name
         # f = (func, output_type, args, kwargs, save_name)
@@ -286,7 +316,7 @@ class Operation():
         for i in INPT_NAMES:
             inputs.extend([(g, i) for g in getattr(self, f'input_{i}s')])
 
-        inputs += f_keys_for_inputs
+        inputs += f_keys_for_inputs + [self.output_id]
 
         # TODO: This is also possibly inaccurate because save_name overwrites output
         outputs = f_keys + [self.output_id]
@@ -305,7 +335,8 @@ class Operation():
         Returns a dictionary that fully defines the operation
         """
         # Get attributes to lookup
-        base_slots = ['__name__', '__module__', 'save', 'output', '_output_id']
+        base_slots = ['__name__', '__module__', 'save', 'output',
+                      'force_rerun', '_output_id']
         if op_slots is not None: base_slots.extend(op_slots)
 
         # Save in dictionary
@@ -375,9 +406,10 @@ class BaseProcess(Operation):
                  input_masks = [],
                  output: str = 'process',
                  save: bool = False,
+                 force_rerun: bool = False,
                  _output_id: Tuple[str] = None,
                  ) -> None:
-        super().__init__(output, save, _output_id)
+        super().__init__(output, save, force_rerun, _output_id)
 
         # TODO: For every operation, these should be set in BaseOperation
         if isinstance(input_images, str):
@@ -416,9 +448,10 @@ class BaseSegment(Operation):
                  input_masks: Collection[str] = [],
                  output: str = 'mask',
                  save: bool = False,
+                 force_rerun: bool = False,
                  _output_id: Tuple[str] = None,
                  ) -> None:
-        super().__init__(output, save, _output_id)
+        super().__init__(output, save, force_rerun, _output_id)
 
         if isinstance(input_images, str):
             self.input_images = [input_images]
@@ -457,9 +490,10 @@ class BaseTrack(Operation):
                  input_masks: Collection[str] = [],
                  output: str = 'track',
                  save: bool = False,
+                 force_rerun: bool = False,
                  _output_id: Tuple[str] = None,
                  ) -> None:
-        super().__init__(output, save, _output_id)
+        super().__init__(output, save, force_rerun, _output_id)
 
         if isinstance(input_images, str):
             self.input_images = [input_images]
@@ -531,6 +565,7 @@ class BaseExtract(Operation):
                  remove_parent: bool = True,
                  output: str = 'data_frame',
                  save: bool = True,
+                 force_rerun: bool = True,
                  _output_id: Tuple[str] = None
                  ) -> None:
         """
@@ -538,7 +573,7 @@ class BaseExtract(Operation):
         with the images and masks they correspond to.
         """
 
-        super().__init__(output, save, _output_id)
+        super().__init__(output, save, force_rerun, _output_id)
 
         if isinstance(input_images, str):
             self.input_images = [input_images]
@@ -795,9 +830,10 @@ class BaseEvaluate(Operation):
                  input_arrays: Collection[str] = [],
                  output: str = 'evaluate',
                  save: bool = False,
+                 force_rerun: bool = False,
                  _output_id: Tuple[str] = None,
                  ) -> None:
-        super().__init__(output, save, _output_id)
+        super().__init__(output, save, force_rerun, _output_id)
 
         if isinstance(input_arrays, str):
             self.input_arrays = [input_arrays]
