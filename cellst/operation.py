@@ -194,7 +194,6 @@ class Operation():
                              f'{[(key, inpt.shape, inpt.dtype) for key, inpt in inputs.items()]}')
             self.logger.info(f'args / kwargs: {args} {kwargs}')
             self.logger.info(f'User set output type: {expec_type}. Save name: {save_name}')
-            exec_timer = time.time()
 
             # Check if input is already loaded
             if not self.force_rerun:
@@ -212,7 +211,7 @@ class Operation():
                     _check_key = (None, None)
 
                 # The output already exists
-                # TODO: This doesn't handle any keys with _split_key
+                # TODO: Add ability to use keys with _split_key
                 if _check_key in inputs:
                     self.logger.info(f'Output already loaded: {_check_key} '
                                      f'{inputs[_check_key].shape}, '
@@ -221,6 +220,7 @@ class Operation():
                     continue
 
             # Get outputs and overwrite type if needed
+            exec_timer = time.time()
             output_key, result = func(inputs, *args, **kwargs)
             output_key = [out if expec_type is None else (out[0], expec_type)
                           for out in output_key]
@@ -228,10 +228,10 @@ class Operation():
                              f'{[(r.shape, r.dtype) for r in result]}')
 
             # Outputs written to inputs ImageContainer before keys are changed
-            for out, res in zip(output_key, result):
-                inputs[out] = res
+            # for out, res in zip(output_key, result):
+            #     inputs[out] = res
 
-            # Handle keys for saving and returning results
+            # Update the keys before saving images
             save_folders = []
             if len(result) > 1:
                 # By default, use names of the results to identify outputs
@@ -266,8 +266,11 @@ class Operation():
                     save_folders = [self.output]
 
             # Check if any images need to be saved
-            if save_folders:
-                for ridx, (out, res) in enumerate(zip(output_key, result)):
+            for ridx, (out, res) in enumerate(zip(output_key, result)):
+                # Save all outputs
+                inputs[out] = res
+
+                if save_folders:
                     # Save images if save_name is not None
                     self.logger.info(f'Adding to save container: '
                                      f'{save_folders[ridx]} '
