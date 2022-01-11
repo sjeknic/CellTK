@@ -44,6 +44,9 @@ def _dict_to_operation(oper_dict: Dict) -> Operation:
     # Get operation class to call
     operation = to_init.pop('__name__')
     module = to_init.pop('__module__')
+    if module not in sys.modules:
+        __import__(module)
+
     operation = getattr(sys.modules[module], operation)
 
     # Initalize the class

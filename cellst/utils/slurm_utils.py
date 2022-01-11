@@ -40,18 +40,16 @@ class SlurmController(JobController):
     _delay = 10  # Wait between commands in sec
 
     def __init__(self,
-                 pipelines: Collection[dict],
                  partition: str,
                  user: str,
                  time: str,
                  cpu: int,
                  mem: str,
-                 name: str = 'cellst',
+                 name: str = 'cst',
                  modules: str = None,
                  maxjobs: int = 1,
                  ) -> None:
         # Save the inputs
-        self.pipelines = pipelines
         self.partition = partition
         self.user = user
         self.time = time
@@ -70,28 +68,38 @@ class SlurmController(JobController):
         if not os.path.exists(self._working_dir):
             os.makedirs(self._working_dir)
 
+        print('slurm working dir ', self._working_dir)
+
     def __exit__(self, exc_type, exc_val, exc_tb) -> None:
-        if os.path.exists(self._working_dir):
-            # This might raise an error if dir is not empty
-            os.rmdir(self._working_dir)
-        del self._working_dir
+        # if os.path.exists(self._working_dir):
+        #     # This might raise an error if dir is not empty
+        #     os.rmdir(self._working_dir)
+        # del self._working_dir
+        pass
 
     def run(self, pipelines: dict) -> None:
         """This needs to run the individual pipelines"""
         # TODO: How to pass the pipeline yaml without making the file???
         #       or should I just accept it and always make the yaml in the output dir?
+        batches = self._yield_working_sbatch(pipelines)
+
         curr_jobs = self._check_user_jobs(self.partition, self.user)
         print('current jobs ', curr_jobs)
 
-        if curr_jobs < self.maxjobs:
-            sbatch_path = self._yield_working_sbatch(pipelines)
 
+        # TODO: This needs to be in a separate function. increment curr_jobs until it fails, then check slurm
+        while curr_jobs < self.maxjobs:
+            print(curr_jobs)
+            sbatch_path = next(batches)
+            print(sbatch_path)
             # Run the sbatch
-            subprocess.run(f"sbatch {sbatch_path}", shell=True)
+            subprocess.run([f"sbatch {sbatch_path}"], shell=True)
 
             # Wait
             print('submitted and waiting')
             sleep(self._delay)
+            # TODO: Change later, see above
+            curr_jobs += 1
 
     def _yield_working_sbatch(self, pipelines: dict):
         for fol, kwargs in pipelines.items():
@@ -111,8 +119,10 @@ class SlurmController(JobController):
             # Return path to the script
             yield _batch_path
 
+            print('post run')
             # After running, clean up the files
-            os.remove(_y_path, _batch_path)
+            # os.remove(_y_path)
+            # os.remove(_batch_path)
 
     def _check_user_jobs(self,
                          partition: str = '$GROUP',
@@ -123,7 +133,10 @@ class SlurmController(JobController):
         """
         # Count jobs using the number of lines - does not distinguish running or not
         command = f'squeue -p {partition} -u {user} | wc -l'
-        result = subprocess.run([command], shell=True)  # what to do with stdout?
+        print(command)
+        result = subprocess.run([command], shell=True, stdout=subprocess.PIPE)  # what to do with stdout?
+        print(result)
+        print(result.stdout)
 
         return int(result.stdout) - self._line_offset
 
@@ -141,32 +154,41 @@ class SlurmController(JobController):
         Runs a bash script to submit a single job to the SLURM controller
         sbatch will return 0 on success or error code on failure.
         """
-        def _add_line(add: str,
+
+        def _add_line(string: str,
+                      add: str,
                       header: str = '#SBATCH',
                       div: str = ' '
                       ) -> str:
             string += f'\n{header}{div}{add}'
+            return string
 
         # Get the options for the script
-        params = {l: v for l, v in locals().items()
-                  if l != 'self' and l != '_add_line'}
+        to_write = ['partition', 'job_name', 'time', 'ntasks', 'cpus_per_task',
+                    'mem']
+        loc = locals()
+        params = {l: loc[l] for l in to_write}
 
+        print(params['partition'])
+        if params['partition'][0] == '$':
+            params['partition'] = os.environ[params['partition'][1:]]
+        print(params['partition'])
         # Start with bash
         string = '#!/bin/bash'
         for p, val in params.items():
             pname = p.replace('_', '-')
             to_add = f'--{pname}={val}'
-            _add_line(to_add, div=' ')
+            string = _add_line(string, to_add, div=' ')
 
         # TODO: Is the blank line really needed?
-        _add_line('', '', '')
+        string = _add_line(string, '', '', '')
 
         # TODO: Add the real python command here
-        mods = 'module load cellst376'
-        _add_line(mods, '', '')
+        mods = 'module restore cellst376'
+        string = _add_line(string, mods, '', '')
 
-        command = f'python -m cellst.pipeline -y {yaml_path}'
-        _add_line(command, '', '')
+        command = f'python3 -m cellst.pipeline -y {yaml_path}'
+        string = _add_line(string, command, '', '')
 
         # Make the file
         with open(fname, 'w') as file:

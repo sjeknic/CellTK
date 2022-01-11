@@ -9,8 +9,7 @@ from glob import glob
 
 from cellst.operation import Operation
 from cellst.pipeline import Pipeline
-from cellst.utils._types import Arr
-from cellst.utils._types import Experiment
+from cellst.utils._types import Arr, Experiment
 from cellst.utils.process_utils import condense_operations, extract_operations
 from cellst.utils.utils import folder_name
 from cellst.utils.log_utils import get_logger, get_console_logger
@@ -108,8 +107,9 @@ class Orchestrator():
 
         # Run with multiple cores or just a single core
         if self.controller is not None:
+            self.logger.info(f'Running Pipelines with {self.controller}')
             with self.controller:
-                self.controller.add_logger()
+                self.controller.set_logger(self.logger)
                 self.controller.run(self.pipelines)
                 results = []
         elif n_cores > 1:
@@ -441,17 +441,13 @@ class Orchestrator():
             save_master_df=not args.no_save_master_df,
         )
 
-        # Add operations
-        if args.operations is not None:
-            orch.load_operations_from_yaml(args.operations)
-
         # Try building a Controller
         try:
             controller_args = dict(
                 partition=args.partition,
                 user=args.user,
                 time=args.time,
-                cpu=args.cpu,
+                cpu=args.cpus,
                 mem=args.mem,
                 name=args.job_name,
                 modules=args.modules,
@@ -464,14 +460,17 @@ class Orchestrator():
         scont = SlurmController(**controller_args)
         orch = Orchestrator(**input_args, job_controller=scont)
 
+        # Add operations
+        if args.operations is not None:
+            orch.load_operations_from_yaml(args.operations)
+
         return orch
 
 
 if __name__ == '__main__':
     parser = CLIParser('orchestrator')
     args = parser.get_command_line_inputs()
-    print(args)
+
     orch = Orchestrator._build_from_cli(args)
-    #orch.run()
-    print(orch)
-    print(orch.job_controller)
+    orch.run()
+

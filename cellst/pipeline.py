@@ -651,7 +651,7 @@ class Pipeline():
             help='If set, will overwrite contents of output folder. Otherwise makes new folder.'
         )
 
-        return parser.parse_arg()
+        return parser.parse_args()
 
 
 if __name__ == '__main__':
