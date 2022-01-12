@@ -593,6 +593,13 @@ class BaseExtract(Operation):
         else:
             self.input_tracks = input_tracks
 
+
+        if isinstance(regions, str):
+            regions = [regions]
+        if isinstance(channels, str):
+            channels = [channels]
+
+
         if len(channels) == 0:
             channels = input_images
 

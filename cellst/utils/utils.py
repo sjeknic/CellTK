@@ -186,6 +186,10 @@ class ImageHelper():
         """
         This func is for sorting the input types and selecting the correct
         types that should get passed to the function.
+
+        TODO:
+            - This could be changed to allow different orders of img, msk, trk, etc.
+              This would allow certain functions to say, require mask, but have image optional
         """
         # First check if user specified names
         img_container, kwargs = self._name_helper(img_container, **kwargs)
