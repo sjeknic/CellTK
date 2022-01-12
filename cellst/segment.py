@@ -289,15 +289,21 @@ class Segment(BaseSegment):
     def find_boundaries(self,
                         mask: Mask,
                         connectivity: int = 2,
-                        mode: str = 'inner'
+                        mode: str = 'inner',
+                        binary: bool = False
                         ) -> Mask:
         """
         Outlines the objects in mask and preserves labels.
+
+        if binary - don't preserve labels
         """
         boundaries = find_boundaries(mask, connectivity=connectivity,
                                      mode=mode)
 
-        return np.where(boundaries, mask, 0)
+        if binary:
+            return boundaries
+        else:
+            return np.where(boundaries, mask, 0)
 
     @ImageHelper(by_frame=True)
     def dilate_to_cytoring_celltk(self,
