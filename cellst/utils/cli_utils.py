@@ -138,6 +138,7 @@ class CLIParser():
         slurm_parser.add_argument(
             '--partition', '-p',
             default='$GROUP',
+            nargs='*',
             type=str,
             help='Name of the partition to submit jobs to.'
         )
@@ -184,7 +185,8 @@ class CLIParser():
         # SLURM - Queue control
         slurm_parser.add_argument(
             '--maxjobs', '-x',
-            default=10,
+            default=1,
+            nargs='*',
             type=int,
             help='Max jobs allowed in queue at any one time.'
         )
