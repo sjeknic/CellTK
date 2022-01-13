@@ -6,6 +6,7 @@ import warnings
 from multiprocessing import Pool
 from typing import Dict, Collection
 from glob import glob
+from pprint import pp
 
 from cellst.operation import Operation
 from cellst.pipeline import Pipeline
@@ -108,8 +109,8 @@ class Orchestrator():
         # Run with multiple cores or just a single core
         if self.controller is not None:
             self.logger.info(f'Running Pipelines with {self.controller}')
+            self.controller.set_logger(self.logger)
             with self.controller:
-                self.controller.set_logger(self.logger)
                 self.controller.run(self.pipelines)
                 results = []
         elif n_cores > 1:
@@ -184,7 +185,6 @@ class Orchestrator():
             self.add_operations(opers)
         except KeyError:
             raise KeyError(f'Failed to find Operations in {path}.')
-
     def build_experiment_file(self, arrays: Collection[Arr] = None) -> None:
         """
         Search folders in self.pipelines for hdf5 data frames
@@ -212,15 +212,23 @@ class Orchestrator():
         """
         # Collect operations
         op_dict = condense_operations(operations)
-
         self.logger.info(f'Adding Operations {operations} '
                          f'to {len(self)} Pipelines.')
         for pipe, kwargs in self.pipelines.items():
+            # If Extract is in operations, update the condition
+            # TODO: This won't work for multiple Extract operations
+            if 'extract' in op_dict and op_dict['extract']['condition'] == 'default':
+                condition = kwargs['name']
+                new_extract = {k: (v if k != 'condition' else pipe)
+                               for k, v in op_dict['extract'].items()}
+                op = {k: v for k, v in op_dict.items() if k != 'extract'}
+                op.update({'extract': new_extract})
+
             # First try to append operations before overwriting
             try:
-                kwargs['_operations'].update(op_dict)
+                kwargs['_operations'].update(op)
             except KeyError:
-                kwargs.update({'_operations': op_dict})
+                kwargs.update({'_operations': op})
 
     def update_condition_map(self,
                              condition_map: dict = {},

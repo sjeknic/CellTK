@@ -4,6 +4,8 @@ import argparse
 import yaml
 import warnings
 import time
+import shutil
+from pprint import pp
 from typing import Dict, List, Collection, Tuple
 
 import numpy as np
@@ -46,6 +48,7 @@ class Pipeline():
                  file_extension: str = 'tif',
                  overwrite: bool = True,
                  log_file: bool = True,
+                 yaml_path: str = None,
                  _split_key: str = '&'
                  ) -> None:
         """
@@ -78,6 +81,12 @@ class Pipeline():
                                      overwrite=overwrite)
         else:
             self.logger = get_console_logger()
+
+        # Copy yaml file to output
+        # if yaml_path:
+        #     targ = os.path.join(self.output_folder, yaml_path.split('/')[-1])
+        #     shutil.move(yaml_path, targ)
+        #     self.logger.info(f'Moved input yaml to: {targ}')
 
         # Prepare for getting operations and images
         self._image_container = ImageContainer()
@@ -312,9 +321,9 @@ class Pipeline():
     def load_from_yaml(cls, path: str) -> 'Pipeline':
         """Builds Pipeline class from specifications in yaml file"""
         with open(path, 'r') as yf:
-            pipe_dict = yaml.load(yf, Loader=yaml.FullLoader)
+            pipe_dict = yaml.load(yf, Loader=yaml.Loader)
 
-        return cls._build_from_dict(pipe_dict)
+        return cls._build_from_dict(pipe_dict, path)
 
     def _input_output_handler(self) -> List[List[Tuple[str]]]:
         """
@@ -581,7 +590,7 @@ class Pipeline():
         self.add_operations(extract_operations(oper_dict))
 
     @classmethod
-    def _build_from_dict(cls, pipe_dict: dict) -> 'Pipeline':
+    def _build_from_dict(cls, pipe_dict: dict, yaml_path: str = None) -> 'Pipeline':
         # Save Operations to use later
         try:
             op_dict = pipe_dict.pop('_operations')
@@ -590,13 +599,7 @@ class Pipeline():
             op_dict = {}
 
         # Load pipeline
-        pipe = cls(**pipe_dict)
-
-        # Save condition to add to Extract operations
-        # TODO: This won't work for multiple Extract operations
-        condition = pipe_dict['name']
-        if 'extract' in op_dict and op_dict['extract']['condition'] == 'default':
-            op_dict['extract']['condition'] = condition
+        pipe = cls(**pipe_dict, yaml_path=yaml_path)
 
         # Load the operations
         pipe._load_operations_from_dict(op_dict)
@@ -619,8 +622,7 @@ class Pipeline():
               else should be handled externally.
         """
         pipe = cls._build_from_dict(pipe_dict)
-        with pipe:
-            result = pipe.run()
+        result = pipe.run()
 
         # Remove from memory
         del pipe
