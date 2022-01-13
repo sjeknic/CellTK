@@ -48,6 +48,8 @@ class SlurmController(JobController):
                  name: str = 'cst',
                  modules: str = None,
                  maxjobs: int = 1,
+                 working_dir: str = '.cellst_temp',
+                 output_dir: str = 'slurm_logs'
                  ) -> None:
         # Save the inputs
         self.partition = partition
@@ -59,22 +61,31 @@ class SlurmController(JobController):
         self.modules = modules
         self.maxjobs = maxjobs
 
+        # Save folders
+        self.working_dir = os.path.join(os.getcwd(), working_dir)
+        self.output_dir = os.path.join(os.getcwd(), output_dir)
+
         # Set up default logger
         self.logger = get_console_logger()
 
     def __enter__(self):
-        self._working_dir = os.path.join(os.getcwd(), '.cellst_temp')
-        if not os.path.exists(self._working_dir):
-            os.makedirs(self._working_dir)
-            self.logger.info(f'Made temporary working directory: {self._working_dir}')
+        if not os.path.exists(self.working_dir):
+            os.makedirs(self.working_dir)
+            self.logger.info(f'Made temporary working directory: {self.working_dir}')
         else:
-            self.logger.info(f'Using existing working directory: {self._working_dir}')
+            self.logger.info(f'Using existing working directory: {self.working_dir}')
+
+        if not os.path.exists(self.output_dir):
+            os.makedirs(self.output_dir)
+            self.logger.info(f'Made output directory: {self.output_dir}')
+        else:
+            self.logger.info(f'Using existing output directory: {self.output_dir}')
 
     def __exit__(self, exc_type, exc_val, exc_tb) -> None:
-        # if os.path.exists(self._working_dir):
+        # if os.path.exists(self.working_dir):
         #     # This might raise an error if dir is not empty
-        #     os.rmdir(self._working_dir)
-        # del self._working_dir
+        #     os.rmdir(self.working_dir)
+        # del self.working_dir
         pass
 
     def run(self, pipelines: dict) -> None:
@@ -122,14 +133,15 @@ class SlurmController(JobController):
             # TODO: Obviously could be more efficient - esp if Orchestrator made yamls
             _pipe = Pipeline._build_from_dict(kwargs)
 
-            _y_path = os.path.join(self._working_dir, f'{fol}yaml.yaml')
-            _pipe.save_as_yaml(self._working_dir, f'{fol}yaml.yaml')
+            _y_path = os.path.join(self.working_dir, f'{fol}yaml.yaml')
+            _pipe.save_as_yaml(self.working_dir, f'{fol}yaml.yaml')
 
             # Make batch script
-            _batch_path = os.path.join(self._working_dir, f'{fol}sbatch.sh')
+            _batch_path = os.path.join(self.working_dir, f'{fol}sbatch.sh')
             self._create_bash_script(partition=self.partition, job_name=f'{self.name}_{fol}',
                                      time=self.time, ntasks=1, cpus_per_task=self.cpu,
-                                     mem=self.mem, fname=_batch_path, yaml_path=_y_path)
+                                     mem=self.mem, fname=_batch_path, yaml_path=_y_path,
+                                     output_path=self.output_dir)
 
             # Return path to the script
             yield _batch_path
@@ -156,6 +168,7 @@ class SlurmController(JobController):
                             mem: str = '12GB',
                             fname: str = '.temp.sh',
                             yaml_path: str = None,
+                            output_path: str = None
                             ) -> None:
         """
         Runs a bash script to submit a single job to the SLURM controller
@@ -185,10 +198,16 @@ class SlurmController(JobController):
             to_add = f'--{pname}={val}'
             string = _add_line(string, to_add, div=' ')
 
+        # Add output locations
+        if output_path is not None:
+            out = os.path.join(output_path, f'{job_name}-"%j".out')
+            err = os.path.join(output_path, f'{job_name}-"%j".err')
+            string = _add_line(string, f'--output={out}', div=' ')
+            string = _add_line(string, f'--error={err}', div=' ')
+
         # TODO: Is the blank line really needed?
         string = _add_line(string, '', '', '')
 
-        # TODO: Add the real python command here
         if self.modules:
             mods = f'module restore {self.modules}'
             string = _add_line(string, mods, '', '')
