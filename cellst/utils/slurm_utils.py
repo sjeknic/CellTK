@@ -3,6 +3,7 @@ import logging
 import os
 from time import sleep
 from typing import Collection, Generator
+from pprint import pp
 
 from cellst.utils.log_utils import get_console_logger
 from cellst.pipeline import Pipeline
@@ -111,8 +112,17 @@ class SlurmController(JobController):
         """Interacts with the SLURM scheduler"""
         while curr_jobs < self.maxjobs:
             try:
-                # Get the sbatch.sh file
-                sbatch_path = next(batches)
+                # Move batches to be ready for input
+                next(batches)
+
+                # Gather the partition information to send to batches
+                slurm_kwargs = dict(partition=self.partition,
+                                    job_name=self.name,
+                                    time=self.time, ntasks=1,
+                                    cpus_per_task=self.cpu,
+                                    mem=self.mem,
+                                    output_path=self.output_dir)
+                sbatch_path = batches.send(slurm_kwargs)
             except StopIteration:
                 return False
 
@@ -138,10 +148,9 @@ class SlurmController(JobController):
 
             # Make batch script
             _batch_path = os.path.join(self.working_dir, f'{fol}sbatch.sh')
-            self._create_bash_script(partition=self.partition, job_name=f'{self.name}_{fol}',
-                                     time=self.time, ntasks=1, cpus_per_task=self.cpu,
-                                     mem=self.mem, fname=_batch_path, yaml_path=_y_path,
-                                     output_path=self.output_dir)
+            slurm_kwargs = yield
+            slurm_kwargs['job_name'] = f"{fol}_{slurm_kwargs['job_name']}"
+            self._create_bash_script(**slurm_kwargs, fname=_batch_path, yaml_path=_y_path)
 
             # Return path to the script
             yield _batch_path
