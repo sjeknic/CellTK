@@ -2,7 +2,7 @@ import subprocess
 import logging
 import os
 from time import sleep
-from typing import Collection, Generator
+from typing import Collection, Generator, List
 from pprint import pp
 
 from cellst.utils.log_utils import get_console_logger
@@ -25,13 +25,7 @@ class JobController():
 class SlurmController(JobController):
     """
     TODO:
-        - This should be able to run to multiple partitions at once. SEe this ntoe.
-            '''A couple things to keep in mind with running Orchestrator. Lets say that I want
-    to submit jobs to both mcovert and owners. Then I need a way to 1) not submit the same job twice
-    and 2) not write to the .temp.sh file from two places at once. The way I Ithink this would work best
-    is if when the SlurmController is getting ready to submit a job, it first moves the yaml file to the target
-    directory, makes the .temp.sh file in the target directory, then submits the sbatch request. If the job fails,
-    which is quite possible. I need a way to monitor that ideally. '''
+        - Add ability to set maximum number of submissions
 
     Shitty gurobi license error:
     'gurobipy.GurobiError: HostID mismatch (licensed to cab1ca21, hostid is 59bdde52)'
@@ -41,30 +35,29 @@ class SlurmController(JobController):
     _delay = 5  # Wait between commands in sec
 
     def __init__(self,
-                 partition: str = '$GROUP',
+                 partition: (list, str) = '$GROUP',
                  user: str = '$USER',
                  time: str = '24:00:00',
                  cpu: int = 2,
                  mem: str = '8GB',
                  name: str = 'cst',
                  modules: str = None,
-                 maxjobs: int = 1,
+                 maxjobs: (list, int) = 1,
                  working_dir: str = '.cellst_temp',
                  output_dir: str = 'slurm_logs'
                  ) -> None:
-        # Save the inputs
-        self.partition = partition
+        # Save inputs
         self.user = user
-        self.time = time
-        self.cpu = cpu
-        self.mem = mem
         self.name = name
         self.modules = modules
         self.maxjobs = maxjobs
-
-        # Save folders
         self.working_dir = os.path.join(os.getcwd(), working_dir)
         self.output_dir = os.path.join(os.getcwd(), output_dir)
+
+        # Save the inputs
+        if isinstance(partition, str):
+            partition = [partition]
+        self.slurm_partitions = self._make_slurm_kwargs(partition, time, cpu, mem)
 
         # Set up default logger
         self.logger = get_console_logger()
@@ -97,31 +90,61 @@ class SlurmController(JobController):
 
         _running = True
         while _running:
-            curr_jobs = self._check_user_jobs(self.partition, self.user)
-            self.logger.info(f'Found {curr_jobs} jobs in {self.partition}. '
-                             f'Max jobs allowed: {self.maxjobs}')
+            for pidx, partition in enumerate(self.slurm_partitions):
+                part_name = partition['partition']
+                curr_jobs = self._check_user_jobs(part_name, self.user)
+                self.logger.info(f'Found {curr_jobs}. Max jobs allowed: {self.maxjobs[pidx]}')
 
-            _running = self._start_single_jobs(curr_jobs, batches)
+                _running = self._submit_jobs_to_slurm(curr_jobs, self.maxjobs[pidx],
+                                                      batches, partition)
 
             self.logger.info(f'Finished round of submissions. Waiting {10 * self._delay}s.')
             sleep(10 * self._delay)
 
         self.logger.info('Finished running jobs.')
 
-    def _start_single_jobs(self, curr_jobs: int, batches: Generator) -> None:
-        """Interacts with the SLURM scheduler"""
-        while curr_jobs < self.maxjobs:
-            try:
-                # Move batches to be ready for input
-                next(batches)
+    def _make_slurm_kwargs(self,
+                           partition: List,
+                           time: str,
+                           cpu: int,
+                           mem: str,
+                           ) -> List[dict]:
+        """
+        Makes kwargs to submit jobs to multiple partitions in the same loop
 
-                # Gather the partition information to send to batches
-                slurm_kwargs = dict(partition=self.partition,
-                                    job_name=self.name,
-                                    time=self.time, ntasks=1,
-                                    cpus_per_task=self.cpu,
-                                    mem=self.mem,
-                                    output_path=self.output_dir)
+        For now, only partition can be changed (i.e. cpu, time, etc. is the same)
+
+        TODO:
+            - Allow partition specific job params
+        """
+        partition_list = []
+        for part in partition:
+            partition_list.append(dict(partition=part,
+                                       time=time,
+                                       cpus_per_task=cpu,
+                                       mem=mem,
+                                       ntasks=1,
+                                       output_path=self.output_dir))
+
+        # Need maxjobs for each partition
+        if isinstance(self.maxjobs, (int, float)):
+            self.maxjobs = [self.maxjobs] * len(partition)
+        else:
+            assert len(self.maxjobs) == len(partition_list)
+
+        return partition_list
+
+    def _submit_jobs_to_slurm(self,
+                              curr_jobs: int,
+                              max_jobs: int,
+                              batches: Generator,
+                              slurm_kwargs: dict
+                              ) -> bool:
+        """Interacts with the SLURM scheduler"""
+        while curr_jobs < max_jobs:
+            try:
+                # Send info to batches and get sbatch file
+                next(batches)
                 sbatch_path = batches.send(slurm_kwargs)
             except StopIteration:
                 return False
@@ -149,8 +172,9 @@ class SlurmController(JobController):
             # Make batch script
             _batch_path = os.path.join(self.working_dir, f'{fol}sbatch.sh')
             slurm_kwargs = yield
-            slurm_kwargs['job_name'] = f"{fol}_{slurm_kwargs['job_name']}"
-            self._create_bash_script(**slurm_kwargs, fname=_batch_path, yaml_path=_y_path)
+            job_name = f"{fol}_{self.name}"
+            self._create_bash_script(**slurm_kwargs, fname=_batch_path,
+                                     yaml_path=_y_path, job_name=job_name)
 
             # Return path to the script
             yield _batch_path
@@ -163,6 +187,7 @@ class SlurmController(JobController):
         Checks the SLURM queue and returns the number of jobs
         """
         # Count jobs using the number of lines - does not distinguish running or not
+        self.logger.info(f'Checking jobs for {user} in {partition}.')
         command = f'squeue -p {partition} -u {user} | wc -l'
         result = subprocess.run([command], shell=True, stdout=subprocess.PIPE)  # what to do with stdout?
 
@@ -170,7 +195,7 @@ class SlurmController(JobController):
 
     def _create_bash_script(self,
                             partition: str = '$GROUP',
-                            job_name: str = 'cellst_pipe',
+                            job_name: str = 'cst',
                             time: str = '24:00:00',
                             ntasks: str = '1',
                             cpus_per_task: str = '4',
