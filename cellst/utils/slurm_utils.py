@@ -2,7 +2,7 @@ import subprocess
 import logging
 import os
 from time import sleep
-from typing import Collection
+from typing import Collection, Generator
 
 from cellst.utils.log_utils import get_console_logger
 from cellst.pipeline import Pipeline
@@ -37,14 +37,14 @@ class SlurmController(JobController):
     """
     __name__ = 'SlurmController'
     _line_offset = 1  # Number of lines squeue returns if n_jobs == 0
-    _delay = 10  # Wait between commands in sec
+    _delay = 5  # Wait between commands in sec
 
     def __init__(self,
-                 partition: str,
-                 user: str,
-                 time: str,
-                 cpu: int,
-                 mem: str,
+                 partition: str = '$GROUP',
+                 user: str = '$USER',
+                 time: str = '24:00:00',
+                 cpu: int = 2,
+                 mem: str = '8GB',
                  name: str = 'cst',
                  modules: str = None,
                  maxjobs: int = 1,
@@ -63,12 +63,12 @@ class SlurmController(JobController):
         self.logger = get_console_logger()
 
     def __enter__(self):
-        print(os.getcwd())
         self._working_dir = os.path.join(os.getcwd(), '.cellst_temp')
         if not os.path.exists(self._working_dir):
             os.makedirs(self._working_dir)
-
-        print('slurm working dir ', self._working_dir)
+            self.logger.info(f'Made temporary working directory: {self._working_dir}')
+        else:
+            self.logger.info(f'Using existing working directory: {self._working_dir}')
 
     def __exit__(self, exc_type, exc_val, exc_tb) -> None:
         # if os.path.exists(self._working_dir):
@@ -83,46 +83,56 @@ class SlurmController(JobController):
         #       or should I just accept it and always make the yaml in the output dir?
         batches = self._yield_working_sbatch(pipelines)
 
-        curr_jobs = self._check_user_jobs(self.partition, self.user)
-        print('current jobs ', curr_jobs)
+        _running = True
+        while _running:
+            curr_jobs = self._check_user_jobs(self.partition, self.user)
+            self.logger.info(f'Found {curr_jobs} jobs in {self.partition}. '
+                             f'Max jobs allowed: {self.maxjobs}')
 
+            _running = self._start_single_jobs(curr_jobs, batches)
 
-        # TODO: This needs to be in a separate function. increment curr_jobs until it fails, then check slurm
+            self.logger.info(f'Finished round of submissions. Waiting {10 * self._delay}s.')
+            sleep(10 * self._delay)
+
+        self.logger.info('Finished running jobs.')
+
+    def _start_single_jobs(self, curr_jobs: int, batches: Generator) -> None:
+        """Interacts with the SLURM scheduler"""
         while curr_jobs < self.maxjobs:
-            print(curr_jobs)
-            sbatch_path = next(batches)
-            print(sbatch_path)
+            try:
+                # Get the sbatch.sh file
+                sbatch_path = next(batches)
+            except StopIteration:
+                return False
+
             # Run the sbatch
             subprocess.run([f"sbatch {sbatch_path}"], shell=True)
-
-            # Wait
-            print('submitted and waiting')
+            self.logger.info(f'Submitted {sbatch_path}. Waiting {self._delay}s.')
             sleep(self._delay)
-            # TODO: Change later, see above
+
             curr_jobs += 1
 
+        return True
+
     def _yield_working_sbatch(self, pipelines: dict):
-        for fol, kwargs in pipelines.items():
-            print(fol)
+        self.logger.info(f'Building {len(pipelines)} pipelines: {list(pipelines.keys())}')
+
+        for pidx, (fol, kwargs) in enumerate(pipelines.items()):
             # First load the pipeline, then save as yaml that can be accessed
             # TODO: Obviously could be more efficient - esp if Orchestrator made yamls
             _pipe = Pipeline._build_from_dict(kwargs)
-            _y_path = os.path.join(self._working_dir, 'tempyaml.yaml')
-            _pipe.save_as_yaml(self._working_dir, 'tempyaml.yaml')
+
+            _y_path = os.path.join(self._working_dir, f'{fol}yaml.yaml')
+            _pipe.save_as_yaml(self._working_dir, f'{fol}yaml.yaml')
 
             # Make batch script
-            _batch_path = os.path.join(self._working_dir, 'tempsbatch.sh')
+            _batch_path = os.path.join(self._working_dir, f'{fol}sbatch.sh')
             self._create_bash_script(partition=self.partition, job_name=f'{self.name}_{fol}',
                                      time=self.time, ntasks=1, cpus_per_task=self.cpu,
                                      mem=self.mem, fname=_batch_path, yaml_path=_y_path)
 
             # Return path to the script
             yield _batch_path
-
-            print('post run')
-            # After running, clean up the files
-            # os.remove(_y_path)
-            # os.remove(_batch_path)
 
     def _check_user_jobs(self,
                          partition: str = '$GROUP',
@@ -133,10 +143,7 @@ class SlurmController(JobController):
         """
         # Count jobs using the number of lines - does not distinguish running or not
         command = f'squeue -p {partition} -u {user} | wc -l'
-        print(command)
         result = subprocess.run([command], shell=True, stdout=subprocess.PIPE)  # what to do with stdout?
-        print(result)
-        print(result.stdout)
 
         return int(result.stdout) - self._line_offset
 
@@ -154,7 +161,6 @@ class SlurmController(JobController):
         Runs a bash script to submit a single job to the SLURM controller
         sbatch will return 0 on success or error code on failure.
         """
-
         def _add_line(string: str,
                       add: str,
                       header: str = '#SBATCH',
@@ -169,10 +175,9 @@ class SlurmController(JobController):
         loc = locals()
         params = {l: loc[l] for l in to_write}
 
-        print(params['partition'])
         if params['partition'][0] == '$':
             params['partition'] = os.environ[params['partition'][1:]]
-        print(params['partition'])
+
         # Start with bash
         string = '#!/bin/bash'
         for p, val in params.items():
@@ -184,8 +189,9 @@ class SlurmController(JobController):
         string = _add_line(string, '', '', '')
 
         # TODO: Add the real python command here
-        mods = 'module restore cellst376'
-        string = _add_line(string, mods, '', '')
+        if self.modules:
+            mods = f'module restore {self.modules}'
+            string = _add_line(string, mods, '', '')
 
         command = f'python3 -m cellst.pipeline -y {yaml_path}'
         string = _add_line(string, command, '', '')
@@ -193,4 +199,6 @@ class SlurmController(JobController):
         # Make the file
         with open(fname, 'w') as file:
             file.write(string)
+
+        self.logger.info(f'Created sbatch script at {fname}')
 
