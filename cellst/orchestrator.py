@@ -75,7 +75,7 @@ class Orchestrator():
         self._make_output_folder(self.overwrite)
         if log_file:
             self.logger = get_logger(self.__name__, self.output_folder,
-                                     overwrite=overwrite)
+                                     overwrite=overwrite, console_level='info')
         else:
             self.logger = get_console_logger()
 
@@ -185,6 +185,7 @@ class Orchestrator():
             self.add_operations(opers)
         except KeyError:
             raise KeyError(f'Failed to find Operations in {path}.')
+
     def build_experiment_file(self, arrays: Collection[Arr] = None) -> None:
         """
         Search folders in self.pipelines for hdf5 data frames
@@ -433,7 +434,9 @@ class Orchestrator():
 
     @classmethod
     def _build_from_cli(cls, args: argparse.Namespace) -> 'Orchestrator':
-        print(args)
+        """
+        Work in progress. Still needs to be finished.
+        """
         # Build the Orchestrator
         input_args = dict(
             yaml_folder=args.pipelines,
