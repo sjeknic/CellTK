@@ -35,7 +35,8 @@ class Pipeline():
                  'track_folder', 'array_folder',
                  'operation_index', 'file_extension',
                  'logger', 'timer', 'overwrite',
-                 'name', 'log_file', '_split_key')
+                 'name', 'log_file', '_split_key',
+                 'completed_ops')
 
     def __init__(self,
                  parent_folder: str = None,
@@ -110,6 +111,7 @@ class Pipeline():
 
         # Start a timer
         self.timer = time.time()
+        self.completed_ops = 0
 
         return self
 
@@ -123,13 +125,17 @@ class Pipeline():
         # Log time spent after enter
         try:
             self.logger.info(f'Total execution time: {time.time() - self.timer}')
-
-            # TODO: Can duplicate logger streams be removed here
-
             self.timer = None
         except TypeError:
             # KeyboardInterrupt now won't cause additional exceptions
             pass
+
+        # Log if pipeline was completed
+        if self.completed_ops == len(self.operations):
+            self.logger.info('>>>> PIPELINE COMPLETE <<<<')
+        else:
+            self.logger.info(f'Pipeline completed {self.completed_ops}/'
+                             f'{len(self.operations)} operations')
 
     def __str__(self) -> str:
         """
@@ -233,6 +239,8 @@ class Pipeline():
                     if oper.save:
                         self.save_images(oper.save_arrays,
                                          oper._output_type.__name__)
+
+                self.completed_ops += 1
 
         return oper_result
 

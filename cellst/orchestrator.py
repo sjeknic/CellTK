@@ -223,6 +223,8 @@ class Orchestrator():
                                for k, v in op_dict['extract'].items()}
                 op = {k: v for k, v in op_dict.items() if k != 'extract'}
                 op.update({'extract': new_extract})
+            else:
+                op = op_dict
 
             # First try to append operations before overwriting
             try:
@@ -459,7 +461,7 @@ class Orchestrator():
                 mem=args.mem,
                 name=args.job_name,
                 modules=args.modules,
-                maxjobs = args.maxjobs
+                maxjobs=args.maxjobs
             )
 
         except AttributeError:
