@@ -26,6 +26,9 @@ class SlurmController(JobController):
     """
     TODO:
         - Add ability to set maximum number of submissions
+        - Add ability to monitor jobs for completion
+        - Add ability to re-submit failed jobs
+        - Add output of summary statistics regularly.
 
     Shitty gurobi license error:
     'gurobipy.GurobiError: HostID mismatch (licensed to cab1ca21, hostid is 59bdde52)'
@@ -75,6 +78,8 @@ class SlurmController(JobController):
         else:
             self.logger.info(f'Using existing output directory: {self.output_dir}')
 
+        self.pipes_run = 0
+
     def __exit__(self, exc_type, exc_val, exc_tb) -> None:
         # if os.path.exists(self.working_dir):
         #     # This might raise an error if dir is not empty
@@ -86,6 +91,7 @@ class SlurmController(JobController):
         """This needs to run the individual pipelines"""
         # TODO: How to pass the pipeline yaml without making the file???
         #       or should I just accept it and always make the yaml in the output dir?
+        self.total_pipes = len(pipelines)
         batches = self._yield_working_sbatch(pipelines)
 
         _running = True
@@ -99,6 +105,7 @@ class SlurmController(JobController):
                                                       batches, partition)
 
             self.logger.info(f'Finished round of submissions. Waiting {10 * self._delay}s.')
+            self.logger.info(f'Submitted {self.pipes_run + 1} out of {self.total_pipes} pipelines.')
             sleep(10 * self._delay)
 
         self.logger.info('Finished running jobs.')
@@ -161,7 +168,7 @@ class SlurmController(JobController):
     def _yield_working_sbatch(self, pipelines: dict):
         self.logger.info(f'Building {len(pipelines)} pipelines: {list(pipelines.keys())}')
 
-        for pidx, (fol, kwargs) in enumerate(pipelines.items()):
+        for self.pipes_run, (fol, kwargs) in enumerate(pipelines.items()):
             # First load the pipeline, then save as yaml that can be accessed
             # TODO: Obviously could be more efficient - esp if Orchestrator made yamls
             _pipe = Pipeline._build_from_dict(kwargs)
