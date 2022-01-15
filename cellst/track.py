@@ -71,7 +71,7 @@ class Track(BaseTrack):
     @ImageHelper(by_frame=False)
     def simple_bayesian_track(self,
                               mask: Mask,
-                              config_path: str = 'bayes_config_2d.json',
+                              config_path: str = 'bayes_config.json',
                               update_method: str = 'exact',
                               ) -> Track:
         """

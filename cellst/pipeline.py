@@ -116,9 +116,6 @@ class Pipeline():
         # Log time spent after enter
         try:
             self.logger.info(f'Total execution time: {time.time() - self.timer}')
-
-            # TODO: Can duplicate logger streams be removed here
-
             self.timer = None
         except TypeError:
             # KeyboardInterrupt now won't cause additional exceptions
@@ -621,8 +618,7 @@ class Pipeline():
               else should be handled externally.
         """
         pipe = cls._build_from_dict(pipe_dict)
-        with pipe:
-            result = pipe.run()
+        result = pipe.run()
 
         # Remove from memory
         del pipe
