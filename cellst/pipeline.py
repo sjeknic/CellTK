@@ -49,6 +49,7 @@ class Pipeline():
                  overwrite: bool = True,
                  log_file: bool = True,
                  yaml_path: str = None,
+                 verbose: bool = False,
                  _split_key: str = '&'
                  ) -> None:
         """
@@ -77,8 +78,9 @@ class Pipeline():
 
         # Set up logger - defaults to output folder
         if log_file:
+            lev = 'info' if verbose else 'warning'
             self.logger = get_logger(self.__name__, self.output_folder,
-                                     overwrite=overwrite)
+                                     overwrite=overwrite, console_level=lev)
         else:
             self.logger = get_console_logger()
 
