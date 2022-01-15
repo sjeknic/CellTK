@@ -19,7 +19,7 @@ def save_yaml_file(data: dict, path: str, warning: bool = True) -> None:
         if warning:
             for warn in warning_text:
                 yf.write('# ' + warn + '\n')
-        yaml.dump(data, yf)
+        yaml.dump(data, yf, sort_keys=False)
 
 
 def save_operation_yaml(yaml_file: str,
@@ -39,4 +39,3 @@ def save_pipeline_yaml(yaml_file: str,
                        ) -> None:
     """Save a Pipeline in a yaml file"""
     save_yaml_file(pipeline, yaml_file, warning=True)
-

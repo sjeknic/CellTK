@@ -236,14 +236,18 @@ class Operation():
             if len(result) > 1:
                 # By default, use names of the results to identify outputs
                 # Remove self._split_key from keys
-                res_id = [o[0].split(self._split_key)[0] for o in output_key]
+                names = [o[0].split(self._split_key)[0] for o in output_key]
+                types = [o[1] for o in output_key]
 
                 # Overwrite the output_keys to ensure they are unique
-                if len(set([o[1] for o in output_key])) == len(output_key):
+                if len(set(names)) == len(output_key):
+                    res_id = names
+                elif len(set(types)) == len(output_key):
                     # Types of outputs are unique
-                    res_id = [o[1] for o in output_key]
-                elif len(set([o[1] for o in output_key])) != len(output_key):
+                    res_id = types
+                else:
                     # Neither names or types are unique
+                    res_id = names
                     self.logger.warn(f'Keys are not unique for {func.__name__}'
                                      '. Some outputs may be overwritten.')
 
@@ -255,7 +259,7 @@ class Operation():
                 elif last_func:
                     output_key = [(f'{self.output}{self._split_key}{r}', out[1])
                                   for out, r in zip(output_key, res_id)]
-                    save_folders = [os.path.join(save_name, r) for r in res_id]
+                    save_folders = [os.path.join(self.output, r) for r in res_id]
             else:
                 # Only one result, nothing fancy with the outputs
                 if save_name is not None:
