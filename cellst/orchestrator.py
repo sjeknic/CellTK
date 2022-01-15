@@ -49,7 +49,8 @@ class Orchestrator():
                  overwrite: bool = True,
                  log_file: bool = True,
                  save_master_df: bool = True,
-                 job_controller: JobController = None
+                 job_controller: JobController = None,
+                 verbose: bool = True,
                  ) -> None:
         """
         Args:
@@ -73,8 +74,9 @@ class Orchestrator():
         self._set_all_paths(yaml_folder, parent_folder, output_folder)
         self._make_output_folder(self.overwrite)
         if log_file:
+            lev = 'info' if verbose else 'warning'
             self.logger = get_logger(self.__name__, self.output_folder,
-                                     overwrite=overwrite, console_level='info')
+                                     overwrite=overwrite, console_level=lev)
         else:
             self.logger = get_console_logger()
 
