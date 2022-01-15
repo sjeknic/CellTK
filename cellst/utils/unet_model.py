@@ -153,9 +153,11 @@ class UNetModel():
 
         if not all(a == 0 for a in axes_deltas):
             # Divide by two because padding both sides
-            pads = [int(a / 2.) for a in axes_deltas]
+            pads = [int(a / 2) for a in axes_deltas]
+
             # Adjust for odds
-            pads = [(p, p + 1) if p % 2 else (p, p) for p in pads]
+            pads = [(p, p + 1) if a % 2 else (p, p)
+                    for (a, p) in zip(axes_deltas, pads)]
         else:
             pads = [(0, 0) * len(axes_deltas)]
 
