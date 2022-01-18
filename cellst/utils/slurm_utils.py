@@ -34,7 +34,6 @@ class SlurmController(JobController):
     'gurobipy.GurobiError: HostID mismatch (licensed to cab1ca21, hostid is 59bdde52)'
     """
     __name__ = 'SlurmController'
-    _line_offset = 1  # Number of lines squeue returns if n_jobs == 0
     _delay = 5  # Wait between commands in sec
 
     def __init__(self,
@@ -104,7 +103,7 @@ class SlurmController(JobController):
                 _running = self._submit_jobs_to_slurm(curr_jobs, self.maxjobs[pidx],
                                                       batches, partition)
 
-            self.logger.info(f'Finished round of submissions. Waiting {10 * self._delay}s.')
+            self.logger.info(f'Finished round of submissions. Sleeping {10 * self._delay}s.')
             self.logger.info(f'Submitted {self.pipes_run + 1} out of {self.total_pipes} pipelines.')
             sleep(10 * self._delay)
 
@@ -158,7 +157,7 @@ class SlurmController(JobController):
 
             # Run the sbatch
             subprocess.run([f"sbatch {sbatch_path}"], shell=True)
-            self.logger.info(f'Submitted {sbatch_path}. Waiting {self._delay}s.')
+            self.logger.info(f'Submitted {sbatch_path}. Sleeping {self._delay}s.')
             sleep(self._delay)
 
             curr_jobs += 1
@@ -195,10 +194,44 @@ class SlurmController(JobController):
         """
         # Count jobs using the number of lines - does not distinguish running or not
         self.logger.info(f'Checking jobs for {user} in {partition}.')
-        command = f'squeue -p {partition} -u {user} | wc -l'
-        result = subprocess.run([command], shell=True, stdout=subprocess.PIPE)  # what to do with stdout?
+        partition_jobs = self._get_slurm_info(['jobid'], partition, user)
 
-        return int(result.stdout) - self._line_offset
+        return len(partition_jobs)
+
+    def _get_slurm_info(self,
+                        keys: list = ['jobid'],
+                        partition: str = '$GROUP',
+                        user: str = '$USER'
+                        ) -> (str, int):
+        """
+        Gets information about SLURM jobs. Wrapper for squeue.
+        """
+        # Dictionary to translate keys to SLURM commands
+        key_to_format = dict(jobid='ArrayJobID',
+                             runtime='TimeUsed',
+                             cpu='cpus_per_task',
+                             exitcode='exit_code',
+                             state='StateCompact')
+        if isinstance(keys, str):
+            keys = [keys]
+
+        # jobid is always included in order to identify jobs
+        if 'jobid' not in keys:
+            keys.insert(0, 'label')
+        elif keys[0] != 'jobid':
+            keys.remove('label')
+            keys.insert(0, 'label')
+
+        # Generate the command string
+        format_string = ':>,'.join([key_to_format[k] for k in keys])
+        command = f'squeue -p {partition} -u {user} -h --Format="{format_string}"'
+
+        # Submit to shell and parse output
+        result = subprocess.run([command], shell=True, capture_output=True, text=True)
+        result = [r.rstrip().split('>') for r in result.stdout.split('\n')]
+        current_jobs = {r[0]: {k: v for k, v in zip(keys, r)}
+                               for r in result}
+        return current_jobs
 
     def _create_bash_script(self,
                             partition: str = '$GROUP',
