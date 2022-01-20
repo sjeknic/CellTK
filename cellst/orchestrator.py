@@ -6,7 +6,6 @@ import warnings
 from multiprocessing import Pool
 from typing import Dict, Collection
 from glob import glob
-from pprint import pp
 
 from cellst.operation import Operation
 from cellst.pipeline import Pipeline

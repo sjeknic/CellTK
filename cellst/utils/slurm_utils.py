@@ -3,7 +3,6 @@ import logging
 import os
 from time import sleep
 from typing import Collection, Generator, List
-from pprint import pp
 
 from cellst.utils.log_utils import get_console_logger
 from cellst.pipeline import Pipeline
