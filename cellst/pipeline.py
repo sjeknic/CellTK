@@ -94,7 +94,8 @@ class Pipeline():
         self.operations = []
 
         # Log relevant information and parameters
-        self.logger.info(f'Pipeline {repr(self)} initiated.')
+        self.logger.info(f'Pipeline initiated.')
+        self.logger.info(f'Pipeline: {repr(self)}.')
         self.logger.info(f'Parent folder: {self.parent_folder}')
         self.logger.info(f'Output folder: {self.output_folder}')
         self.logger.info(f'Image folder: {self.image_folder}')
@@ -132,10 +133,10 @@ class Pipeline():
 
         # Log if pipeline was completed
         if self.completed_ops == len(self.operations):
-            self.logger.info('>>>> PIPELINE COMPLETE <<<<')
+            self.logger.info('Pipeline completed.')
         else:
-            self.logger.info(f'Pipeline completed {self.completed_ops}/'
-                             f'{len(self.operations)} operations')
+            self.logger.info(f'{self.completed_ops} / {len(self.operations)} '
+                             'operations completed by Pipeline.')
 
     def __str__(self) -> str:
         """
