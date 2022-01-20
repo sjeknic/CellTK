@@ -1,11 +1,13 @@
 import subprocess
 import logging
 import os
+import time as time_module
 from time import sleep
 from typing import Collection, Generator, List
 from pprint import pp
 
 from cellst.utils.log_utils import get_console_logger
+from cellst.utils.yaml_utils import save_job_history_yaml, get_file_line, load_yaml
 from cellst.pipeline import Pipeline
 
 
@@ -26,15 +28,12 @@ class SlurmController(JobController):
     """
     TODO:
         - Add ability to set maximum number of submissions
-        - Add ability to monitor jobs for completion
         - Add ability to re-submit failed jobs
         - Add output of summary statistics regularly.
-
-    Shitty gurobi license error:
-    'gurobipy.GurobiError: HostID mismatch (licensed to cab1ca21, hostid is 59bdde52)'
     """
     __name__ = 'SlurmController'
-    _delay = 5  # Wait between commands in sec
+    _submit_delay = 5  # Wait between commands in sec
+    _update_delay = 15  # Wait time between allowing squeue commands
 
     def __init__(self,
                  partition: (list, str) = '$GROUP',
@@ -77,13 +76,12 @@ class SlurmController(JobController):
         else:
             self.logger.info(f'Using existing output directory: {self.output_dir}')
 
+        # Initialize some params that will be needed
         self.pipes_run = 0
+        self.job_history = {}
+        self.last_update_time = 0
 
     def __exit__(self, exc_type, exc_val, exc_tb) -> None:
-        # if os.path.exists(self.working_dir):
-        #     # This might raise an error if dir is not empty
-        #     os.rmdir(self.working_dir)
-        # del self.working_dir
         pass
 
     def run(self, pipelines: dict) -> None:
@@ -98,14 +96,17 @@ class SlurmController(JobController):
             for pidx, partition in enumerate(self.slurm_partitions):
                 part_name = partition['partition']
                 curr_jobs = self._check_user_jobs(part_name, self.user)
-                self.logger.info(f'Found {curr_jobs}. Max jobs allowed: {self.maxjobs[pidx]}')
+                self.logger.info(f'Found {curr_jobs}. Max '
+                                 f'jobs allowed: {self.maxjobs[pidx]}')
 
                 _running = self._submit_jobs_to_slurm(curr_jobs, self.maxjobs[pidx],
                                                       batches, partition)
 
-            self.logger.info(f'Finished round of submissions. Sleeping {10 * self._delay}s.')
-            self.logger.info(f'Submitted {self.pipes_run + 1} out of {self.total_pipes} pipelines.')
-            sleep(10 * self._delay)
+            self.logger.info('Finished round of submissions. '
+                             f'Sleeping {10 * self._submit_delay}s.')
+            self.logger.info(f'Submitted {self.pipes_run + 1} out '
+                             f'of {self.total_pipes} pipelines.')
+            sleep(10 * self._submit_delay)
 
         self.logger.info('Finished running jobs.')
 
@@ -156,9 +157,13 @@ class SlurmController(JobController):
                 return False
 
             # Run the sbatch
-            subprocess.run([f"sbatch {sbatch_path}"], shell=True)
-            self.logger.info(f'Submitted {sbatch_path}. Sleeping {self._delay}s.')
-            sleep(self._delay)
+            submitted = subprocess.run([f"sbatch {sbatch_path}"], shell=True,
+                                        capture_output=True, text=True)
+            self._record_job_history(submitted)
+
+            self.logger.info(f'Submitted {sbatch_path}. '
+                             f'Sleeping {self._submit_delay}s.')
+            sleep(self._submit_delay)
 
             curr_jobs += 1
 
@@ -185,6 +190,51 @@ class SlurmController(JobController):
             # Return path to the script
             yield _batch_path
 
+    def _record_job_history(self, submitted: str = None, update: bool = False) -> None:
+        """
+        Will record a new job (submitted) or update current record of jobs (update)
+        """
+        # Recorded keys
+        keys = ['jobid', 'state', 'exitcode', 'runtime']
+
+        if submitted:
+            # Parse the input yaml to get values
+            pth = submitted.args[0].split(' ')[-1]  # path to sbatch.sh
+            ypth = get_file_line(pth, -1).split(' ')[-1]  # path to input yaml
+            inpts = load_yaml(ypth)
+            output_dir = inpts['output_folder']
+            name = inpts['name']
+
+            # Save job info - state S - Submitted
+            job_id = ''.join((s for s in submitted.stdout if s.isdigit()))
+            self.job_history[job_id] = dict(jobid=job_id, state='S',
+                                            name=name, output=output_dir)
+
+        # Updates are slow, so don't do them often
+        update = True
+        if update:
+            if time_module.time() - self.last_update_time > self._update_delay:
+                current_jobs = self._get_slurm_info(keys)
+                self.last_update_time = time_module.time()
+                ended_jobs = [k for k in self.job_history
+                              if k not in current_jobs]
+                self._check_ended_job_status(ended_jobs)
+
+    def _check_ended_job_status(self, jobs: List[str]) -> None:
+        """
+        Check the logs of the given jobs to see if the Pipeline is complete.
+        """
+        for j in jobs:
+            logfile = os.path.join(self.job_history[j]['output'], 'log.txt')
+            last_line = get_file_line(logfile, -1)
+
+            if 'Pipeline completed.' in last_line:
+                self.job_history[j]['state'] = 'C'  # Complete
+            elif 'completed by Pipeline.' in last_line:
+                self.job_history[j]['state'] = 'P'  # Partial
+            else:
+                self.job_history[j]['state'] = 'K'  # Killed
+
     def _check_user_jobs(self,
                          partition: str = '$GROUP',
                          user: str = '$USER'
@@ -195,14 +245,13 @@ class SlurmController(JobController):
         # Count jobs using the number of lines - does not distinguish running or not
         self.logger.info(f'Checking jobs for {user} in {partition}.')
         partition_jobs = self._get_slurm_info(['jobid'], partition, user)
-
         return len(partition_jobs)
 
     def _get_slurm_info(self,
                         keys: list = ['jobid'],
                         partition: str = '$GROUP',
                         user: str = '$USER'
-                        ) -> (str, int):
+                        ) -> dict:
         """
         Gets information about SLURM jobs. Wrapper for squeue.
         """
@@ -222,13 +271,14 @@ class SlurmController(JobController):
             keys.remove('label')
             keys.insert(0, 'label')
 
-        # Generate the command string
+        # Generate the command string and submit to shell
         format_string = ':>,'.join([key_to_format[k] for k in keys])
         command = f'squeue -p {partition} -u {user} -h --Format="{format_string}"'
-
-        # Submit to shell and parse output
         result = subprocess.run([command], shell=True, capture_output=True, text=True)
-        result = [r.rstrip().split('>') for r in result.stdout.split('\n')]
+
+        # Parse the output string
+        result = [r.rstrip().split('>') for r in result.stdout.split('\n')
+                  if r != '']
         current_jobs = {r[0]: {k: v for k, v in zip(keys, r)}
                                for r in result}
         return current_jobs
@@ -247,6 +297,9 @@ class SlurmController(JobController):
         """
         Runs a bash script to submit a single job to the SLURM controller
         sbatch will return 0 on success or error code on failure.
+
+        TODO:
+            - Clean up
         """
         def _add_line(string: str,
                       add: str,
