@@ -6,7 +6,6 @@ import warnings
 from multiprocessing import Pool
 from typing import Dict, Collection
 from glob import glob
-from pprint import pp
 
 from cellst.operation import Operation
 from cellst.pipeline import Pipeline
@@ -33,7 +32,8 @@ class Orchestrator():
                  'parent_folder', 'output_folder',
                  'operation_index', 'file_extension', 'name',
                  'overwrite', 'save', 'condition_map',
-                 'logger', 'controller')
+                 'logger', 'controller', 'log_file', 'verbose',
+                 '__dict__')
 
     def __init__(self,
                  yaml_folder: str = None,
@@ -50,7 +50,8 @@ class Orchestrator():
                  overwrite: bool = True,
                  log_file: bool = True,
                  save_master_df: bool = True,
-                 job_controller: JobController = None
+                 job_controller: JobController = None,
+                 verbose: bool = True,
                  ) -> None:
         """
         Args:
@@ -69,13 +70,16 @@ class Orchestrator():
         self.save = save_master_df
         self.condition_map = condition_map
         self.controller = job_controller
+        self.log_file = log_file
+        self.verbose = verbose
 
         # Set paths and start logging
         self._set_all_paths(yaml_folder, parent_folder, output_folder)
         self._make_output_folder(self.overwrite)
         if log_file:
+            lev = 'info' if verbose else 'warning'
             self.logger = get_logger(self.__name__, self.output_folder,
-                                     overwrite=overwrite, console_level='info')
+                                     overwrite=overwrite, console_level=lev)
         else:
             self.logger = get_console_logger()
 
@@ -375,6 +379,8 @@ class Orchestrator():
                     # Add miscellaneous options
                     self.pipelines[fol]['file_extension'] = self.file_extension
                     self.pipelines[fol]['overwrite'] = self.overwrite
+                    self.pipelines[fol]['log_file'] = self.log_file
+                    self.pipelines[fol]['verbose'] = self.verbose
 
         self.logger.info(f'Loaded {len(self)} pipelines')
 

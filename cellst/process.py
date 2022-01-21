@@ -1,13 +1,13 @@
 import numpy as np
 import SimpleITK as sitk
-from skimage.registration import phase_cross_correlation
-from skimage.restoration import rolling_ball
-from skimage.filters import gaussian
-from skimage.segmentation import inverse_gaussian_gradient
-from scipy.ndimage import gaussian_laplace
+import skimage.registration as regi
+import skimage.restoration as rest
+import skimage.filters as filt
+import skimage.segmentation as segm
+import scipy.ndimage as ndi
 
 from cellst.operation import BaseProcess
-from cellst.utils._types import Image, Mask, Track, Arr, Same
+from cellst.utils._types import Image, Mask, Track, Same
 from cellst.utils.utils import ImageHelper
 from cellst.utils.operation_utils import (sliding_window_generator,
                                           shift_array, crop_array)
@@ -21,6 +21,7 @@ TODO:
     - Add sobel filter
 """
 
+
 class Process(BaseProcess):
     @ImageHelper(by_frame=False, as_tuple=True)
     def align_by_cross_correlation(self,
@@ -31,7 +32,7 @@ class Process(BaseProcess):
                                    crop: bool = True
                                    ) -> Same:
         """
-        Shifts and crops images based on phase_cross_correlation.
+        Shifts and crops images based on regi.phase_cross_correlation.
         """
         # Image that aligning will be based on - first img in align_with
         to_align = locals()[align_with][0]
@@ -43,8 +44,8 @@ class Process(BaseProcess):
         shifts = []
         for idx, frames in enumerate(frame_generator):
             # frame_generator yields array of shape (overlap, y, x)
-            shifts.append(phase_cross_correlation(frames[0, ...],
-                                                  frames[1, ...])[0])
+            shifts.append(regi.phase_cross_correlation(frames[0, ...],
+                                                       frames[1, ...])[0])
 
         # Get all shifts relative to the first image (cumulative)
         shifts = np.vstack(shifts)
@@ -84,7 +85,7 @@ class Process(BaseProcess):
             - Test applying to a stack with sigma = (s1, s1, 0)
             - SimpleITK implementation should be faseter
         """
-        return gaussian(image, sigma)
+        return filt.gaussian(image, sigma)
 
     @ImageHelper(by_frame=True)
     def gaussian_laplace_filter(self,
@@ -98,7 +99,7 @@ class Process(BaseProcess):
             - Test applying to a stack with sigma = (s1, s1, 0)
             - SimpleITK implementation should be faster
         """
-        return gaussian_laplace(image, sigma)
+        return ndi.gaussian_laplace(image, sigma)
 
     @ImageHelper(by_frame=True)
     def rolling_ball_background_subtraction(self,
@@ -113,7 +114,8 @@ class Process(BaseProcess):
         TODO:
             - Check CellTK, this function did a lot more for some reason
         """
-        bg = rolling_ball(image, radius=radius, kernel=kernel, nansafe=nansafe)
+        bg = rest.rolling_ball(image, radius=radius,
+                               kernel=kernel, nansafe=nansafe)
         return image - bg
 
     @ImageHelper(by_frame=True)
@@ -124,7 +126,7 @@ class Process(BaseProcess):
                                   ) -> Image:
         """
         """
-        return inverse_gaussian_gradient(image, alpha, sigma)
+        return segm.inverse_gaussian_gradient(image, alpha, sigma)
 
     @ImageHelper(by_frame=True, overlap=1)
     def histogram_matching(self,
