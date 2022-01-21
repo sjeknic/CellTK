@@ -1,16 +1,16 @@
 from typing import Dict, Generator, Tuple
 
 import numpy as np
-from numpy.lib.stride_tricks import sliding_window_view
-from skimage.morphology import dilation, remove_small_holes, thin
-from skimage.measure import label
-from skimage.segmentation import find_boundaries
-from scipy.ndimage import binary_dilation, distance_transform_edt
-from scipy.optimize import linear_sum_assignment
-from mahotas.segmentation import gvoronoi
+import numpy.lib.stride_tricks as stricks
+import skimage.morphology as morph
+import skimage.measure as meas
+import skimage.segmentation as segm
+import scipy.ndimage as ndi
+import scipy.optimize as opti
+import mahotas.segmenation as mahotas_seg
 import SimpleITK as sitk
 
-from cellst.utils._types import Image, Mask, Track, Arr
+from cellst.utils._types import Mask, Track
 
 # TODO: Add label by parent function
 
@@ -25,9 +25,9 @@ def remove_small_holes_keep_labels(image: np.ndarray,
     TODO:
         - Confirm correct selem to use or make option
     """
-    dilated = dilation(image, selem=np.ones((3, 3)))
-    fill = remove_small_holes(image, area_threshold=size,
-                              connectivity=2, in_place=False)
+    dilated = morph.dilation(image, selem=np.ones((3, 3)))
+    fill = morph.remove_small_holes(image, area_threshold=size,
+                                    connectivity=2, in_place=False)
     return np.where(fill > 0, dilated, 0)
 
 
@@ -37,12 +37,12 @@ def gray_fill_holes_celltk(labels):
     """
     fil = sitk.GrayscaleFillholeImageFilter()
     filled = sitk.GetArrayFromImage(fil.Execute(sitk.GetImageFromArray(labels)))
-    holes = label(filled != labels)
+    holes = meas.label(filled != labels)
     for idx in np.unique(holes):
         if idx == 0:
             continue
         hole = holes == idx
-        surrounding_values = labels[binary_dilation(hole) & ~hole]
+        surrounding_values = labels[ndi.binary_dilation(hole) & ~hole]
         uniq = np.unique(surrounding_values)
         if len(uniq) == 1:
             labels[hole > 0] = uniq[0]
@@ -73,9 +73,9 @@ def track_to_mask(track: Track, idx: np.ndarray = None) -> Mask:
     See https://stackoverflow.com/questions/3662361/
     """
     if idx is None: idx = track < 0
-    ind = distance_transform_edt(idx,
-                                 return_distances=False,
-                                 return_indices=True)
+    ind = ndi.distance_transform_edt(idx,
+                                     return_distances=False,
+                                     return_indices=True)
     # Cast to int to simplify indexing
     return track[tuple(ind)].astype(np.uint16)
 
@@ -154,7 +154,7 @@ def sliding_window_generator(arr: np.ndarray, overlap: int = 0) -> Generator:
     # Shapes are all the same
     shape = (overlap + 1, *arr.shape[1:])
     # Create a generator, returns each cut of the array
-    yield from [np.squeeze(s) for s in sliding_window_view(arr, shape)]
+    yield from [np.squeeze(s) for s in stricks.sliding_window_view(arr, shape)]
 
 
 # TODO: Test including @numba.njit here
@@ -246,10 +246,10 @@ def voronoi_boundaries(seed: np.ndarray, thinner: bool = False) -> np.ndarray:
     """
     Calculate voronoi boundaries, and return as mask to set pixels to 0.
     """
-    bound = find_boundaries(gvoronoi(seed))
+    bound = segm.find_boundaries(mahotas_seg.gvoronoi(seed))
 
     if thinner:
-        bound = thin(bound)
+        bound = morph.thin(bound)
 
     return bound
 
@@ -282,7 +282,7 @@ def match_labels_linear(source: np.ndarray, dest: np.ndarray) -> np.ndarray:
                 cost_matrix[x, dest_idx[l]] = -o
 
     # These are the indices of the lowest cost assignment
-    s_idx, d_idx = linear_sum_assignment(cost_matrix)
+    s_idx, d_idx = opti.linear_sum_assignment(cost_matrix)
 
     # Check if all dest labels were labeled
     # TODO: Should add option to check source labels
