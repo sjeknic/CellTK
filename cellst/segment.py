@@ -1,10 +1,6 @@
 import numpy as np
-from skimage.measure import label
-from skimage.segmentation import (clear_border, random_walker,
-                                  relabel_sequential, watershed,
-                                  find_boundaries, expand_labels,
-                                  morphological_chan_vese,
-                                  morphological_geodesic_active_contour)
+import skimage.measure as meas
+import skimage.segmentation as segm
 from skimage.morphology import remove_small_objects, opening, binary_erosion
 from skimage.filters import threshold_otsu
 from scipy.ndimage import gaussian_filter, watershed_ift
@@ -49,7 +45,7 @@ class Segment(BaseSegment):
         """
         # Fill in holes and remove border-connected objects
         labels = remove_small_holes_keep_labels(mask, np.pi * min_radius ** 2)
-        labels = clear_border(labels, buffer_size=2)
+        labels = segm.clear_border(labels, buffer_size=2)
 
         # Remove small and large objects and open
         min_area, max_area = np.pi * np.array((min_radius, max_radius)) ** 2
@@ -60,11 +56,11 @@ class Segment(BaseSegment):
 
         # Relabel the labels to separate non-contiguous objects
         if relabel:
-            labels = label(labels, connectivity=connectivity)
+            labels = meas.label(labels, connectivity=connectivity)
 
         # Make labels sequential if needed
         if sequential:
-            labels = relabel_sequential(labels)[0]
+            labels = segm.relabel_sequential(labels)[0]
 
         return labels
 
@@ -83,7 +79,7 @@ class Segment(BaseSegment):
         else:
             test_arr = image >= thres
 
-        return label(test_arr, connectivity=connectivity)
+        return meas.label(test_arr, connectivity=connectivity)
 
     @ImageHelper(by_frame=True)
     def adaptive_thres(self,
@@ -98,7 +94,7 @@ class Segment(BaseSegment):
         """
         filt = gaussian_filter(image, sigma)
         filt = image > filt * (1 + relative_thres)
-        return label(filt, connectivity=connectivity)
+        return meas.label(filt, connectivity=connectivity)
 
     @ImageHelper(by_frame=True)
     def otsu_thres(self,
@@ -111,7 +107,7 @@ class Segment(BaseSegment):
         above the threshold are labeled
         """
         thres = threshold_otsu(image, nbins=nbins)
-        return label(image > thres, connectivity=connectivity)
+        return meas.label(image > thres, connectivity=connectivity)
 
     @ImageHelper(by_frame=True)
     def random_walk_segmentation(self,
@@ -134,15 +130,15 @@ class Segment(BaseSegment):
         """
         # Generate seeds
         if seeds is None:
-            seeds = label(image >= seed_thres)
+            seeds = meas.label(image >= seed_thres)
 
         if seed_min_size is not None:
             seeds = remove_small_objects(seeds, seed_min_size)
 
         # Anisotropic diffusion from each seed
-        probs = random_walker(image, seeds,
-                              beta=beta, tol=tol,
-                              return_full_prob=True)
+        probs = segm.random_walker(image, seeds,
+                                   beta=beta, tol=tol,
+                                   return_full_prob=True)
 
         # Label seeds based on probability threshold
         mask = probs >= seg_thres
@@ -196,11 +192,11 @@ class Segment(BaseSegment):
             cand_mask = np.logical_or(seeds > 0, cand_mask > 0)
 
             # Watershed and save as seeds for the next iteration
-            seeds = watershed(image, seeds, mask=cand_mask,
-                              watershed_line=True, compactness=compact)
+            seeds = segm.watershed(image, seeds, mask=cand_mask,
+                                   watershed_line=True, compactness=compact)
             _old_perc = _perc
 
-        return label(seeds, connectivity=connectivity)
+        return meas.label(seeds, connectivity=connectivity)
 
     @ImageHelper(by_frame=True)
     def watershed_ift_segmentation(self,
@@ -217,7 +213,7 @@ class Segment(BaseSegment):
         """
         # Generate seeds based on constant threshold
         if seeds is None:
-            seeds = label(image >= seed_thres)
+            seeds = meas.label(image >= seed_thres)
 
         if seed_min_size is not None:
             seeds = remove_small_objects(seeds, seed_min_size, connectivity=2)
@@ -253,12 +249,12 @@ class Segment(BaseSegment):
         vor_mask = voronoi_boundaries(seeds, thinner=True)
 
         # Propagate shapes
-        regions = morphological_chan_vese(image, iterations, seeds, smoothing,
-                                          lambda1, lambda2)
+        regions = segm.morphological_chan_vese(image, iterations, seeds,
+                                               smoothing, lambda1, lambda2)
 
         # Remove voronoi boundaries and label objects
         regions[vor_mask] = 0
-        regions = label(regions, connectivity=connectivity)
+        regions = meas.label(regions, connectivity=connectivity)
 
         # # If seed mask is provided, transfer labels
         if isinstance(seeds, np.ndarray):
@@ -281,9 +277,9 @@ class Segment(BaseSegment):
         TODO:
             - Add preprocess options - sobel, inverse gaussian
         """
-        return morphological_geodesic_active_contour(image, iterations,
-                                                     seeds, smoothing,
-                                                     threshold, balloon)
+        return segm.morphological_geodesic_active_contour(image, iterations,
+                                                          seeds, smoothing,
+                                                          threshold, balloon)
 
     @ImageHelper(by_frame=True)
     def find_boundaries(self,
@@ -294,8 +290,8 @@ class Segment(BaseSegment):
         """
         Outlines the objects in mask and preserves labels.
         """
-        boundaries = find_boundaries(mask, connectivity=connectivity,
-                                     mode=mode)
+        boundaries = segm.find_boundaries(mask, connectivity=connectivity,
+                                          mode=mode)
 
         return np.where(boundaries, mask, 0)
 
@@ -364,7 +360,7 @@ class Segment(BaseSegment):
             However, remove_nuc_from_Cyto requires two inputs... So I need to figure out how to handle that
             but probably not right now...
         """
-        return expand_labels(mask, distance)
+        return segm.expand_labels(mask, distance)
 
     @ImageHelper(by_frame=True)
     def remove_nuc_from_cyto(self,
