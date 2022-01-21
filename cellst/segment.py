@@ -1,9 +1,9 @@
 import numpy as np
 import skimage.measure as meas
 import skimage.segmentation as segm
-from skimage.morphology import remove_small_objects, opening, binary_erosion
-from skimage.filters import threshold_otsu
-from scipy.ndimage import gaussian_filter, watershed_ift
+import skimage.morphology as morph
+import skimage.filters as filt
+import scipy.ndimage as ndi
 
 from cellst.operation import BaseSegment
 from cellst.utils._types import Image, Mask
@@ -49,10 +49,12 @@ class Segment(BaseSegment):
 
         # Remove small and large objects and open
         min_area, max_area = np.pi * np.array((min_radius, max_radius)) ** 2
-        pos = remove_small_objects(labels, min_area, connectivity=connectivity)
-        neg = remove_small_objects(labels, max_area, connectivity=connectivity)
+        pos = morph.remove_small_objects(labels, min_area,
+                                         connectivity=connectivity)
+        neg = morph.remove_small_objects(labels, max_area,
+                                         connectivity=connectivity)
         pos[neg > 0] = 0
-        labels = opening(pos, np.ones((open_size, open_size)))
+        labels = morph.opening(pos, np.ones((open_size, open_size)))
 
         # Relabel the labels to separate non-contiguous objects
         if relabel:
@@ -92,7 +94,7 @@ class Segment(BaseSegment):
         Applies Gaussian blur to the image and selects pixels that
         are relative_thres brighter than the blurred image.
         """
-        filt = gaussian_filter(image, sigma)
+        filt = ndi.gaussian_filter(image, sigma)
         filt = image > filt * (1 + relative_thres)
         return meas.label(filt, connectivity=connectivity)
 
@@ -106,7 +108,7 @@ class Segment(BaseSegment):
         Uses Otsu's method to determine the threshold. All pixels
         above the threshold are labeled
         """
-        thres = threshold_otsu(image, nbins=nbins)
+        thres = filt.threshold_otsu(image, nbins=nbins)
         return meas.label(image > thres, connectivity=connectivity)
 
     @ImageHelper(by_frame=True)
@@ -133,7 +135,7 @@ class Segment(BaseSegment):
             seeds = meas.label(image >= seed_thres)
 
         if seed_min_size is not None:
-            seeds = remove_small_objects(seeds, seed_min_size)
+            seeds = morph.remove_small_objects(seeds, seed_min_size)
 
         # Anisotropic diffusion from each seed
         probs = segm.random_walker(image, seeds,
@@ -180,7 +182,8 @@ class Segment(BaseSegment):
             seeds = image >= seed_thres
 
         if seed_min_size is not None:
-            seeds = remove_small_objects(seeds, seed_min_size, connectivity=2)
+            seeds = morph.remove_small_objects(seeds, seed_min_size,
+                                               connectivity=2)
 
         # Iterate through pixel values and add using watershed
         _old_perc = agglom_max
@@ -216,7 +219,7 @@ class Segment(BaseSegment):
             seeds = meas.label(image >= seed_thres)
 
         if seed_min_size is not None:
-            seeds = remove_small_objects(seeds, seed_min_size, connectivity=2)
+            seeds = morph.remove_small_objects(seeds, seed_min_size, connectivity=2)
 
         # Convert background pixels to negative
         seeds = seeds.astype(np.int16)  # convert to signed integers
@@ -225,7 +228,7 @@ class Segment(BaseSegment):
         struct = np.ones((3, 3))
 
         # Watershed and remove negatives
-        out = watershed_ift(image, seeds, struct)
+        out = ndi.watershed_ift(image, seeds, struct)
         out[out < 0] = 0
 
         return out
@@ -385,7 +388,7 @@ class Segment(BaseSegment):
 
         if erosion:
             binary_img = new_cyto_mask.astype(bool)
-            eroded_img = binary_erosion(binary_img)
+            eroded_img = morph.binary_erosion(binary_img)
             new_cyto_mask = np.where(eroded_img, new_cyto_mask, 0)
 
         return new_cyto_mask
