@@ -5,7 +5,6 @@ import numpy as np
 import pandas as pd
 
 from cellst.utils._types import Image, Mask
-
 from kit_sch_ge.tracker.tracking import (TrackingConfig, MultiCellTracker,
                                          Tracklet)
 from kit_sch_ge.tracker.export import (ExportResults, catch_tra_issues,
