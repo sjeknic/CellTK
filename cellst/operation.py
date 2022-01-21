@@ -6,7 +6,7 @@ import time
 import inspect
 
 import numpy as np
-from skimage.measure import regionprops_table
+import skimage.measure as meas
 
 from cellst.utils._types import (Image, Mask, Track, Arr,
                                  ImageContainer, INPT_NAMES)
@@ -716,9 +716,9 @@ class BaseExtract(Operation):
 
         for frame in range(image.shape[0]):
             # Extract metrics from each region in frame
-            rp = regionprops_table(mask[frame], image[frame],
-                                   properties=metrics,
-                                   extra_properties=extra_metrics)
+            rp = meas.regionprops_table(mask[frame], image[frame],
+                                        properties=metrics,
+                                        extra_properties=extra_metrics)
             # frame_data.shape is (len(metrics), len(cells))
             frame_data = np.row_stack(tuple(rp.values()))
 
