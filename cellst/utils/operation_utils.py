@@ -7,7 +7,7 @@ import skimage.measure as meas
 import skimage.segmentation as segm
 import scipy.ndimage as ndi
 import scipy.optimize as opti
-import mahotas.segmenation as mahotas_seg
+import mahotas.segmentation as mahotas_seg
 import SimpleITK as sitk
 
 from cellst.utils._types import Mask, Track
