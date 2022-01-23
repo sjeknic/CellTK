@@ -186,10 +186,6 @@ class ImageHelper():
         """
         This func is for sorting the input types and selecting the correct
         types that should get passed to the function.
-
-        TODO:
-            - This could be changed to allow different orders of img, msk, trk, etc.
-              This would allow certain functions to say, require mask, but have image optional
         """
         # First check if user specified names
         img_container, kwargs = self._name_helper(img_container, **kwargs)
@@ -208,8 +204,11 @@ class ImageHelper():
         keys = []
         pass_to_func = []
         inpt_size_type = []
-        for inpt, typ in zip([imgs, msks, trks, arrs], INPT_NAMES):
-            if inpt:
+        comb_inputs = zip([imgs, msks, trks, arrs],
+                          inpt_bools,
+                          INPT_NAMES)
+        for inpt, incl, typ in comb_inputs:
+            if incl:
                 # Check how inputs are to be passed
                 if self.as_tuple:
                     # Inputs are not trimmed or sorted if passed as tuple
@@ -218,7 +217,6 @@ class ImageHelper():
                     # Trim the input based on the number to be passed
                     # Reverse order so most recent entry is passed first
                     inpt = inpt[-self.expected_numbers[typ]:][::-1]
-
                     pass_to_func.extend([i[1] for i in inpt])
 
                 # These are just used for naming and logging, so always flat
