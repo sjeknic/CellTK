@@ -4,7 +4,6 @@ import os
 import time as time_module
 from time import sleep
 from typing import Collection, Generator, List
-from pprint import pp
 
 from cellst.utils.log_utils import get_console_logger
 from cellst.utils.yaml_utils import save_job_history_yaml, get_file_line, load_yaml
@@ -389,4 +388,3 @@ class SlurmController(JobController):
             file.write(string)
 
         self.logger.info(f'Created sbatch script at {fname}')
-
