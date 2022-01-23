@@ -1,17 +1,21 @@
-from typing import Collection, Tuple
+from typing import Tuple
 
 import numpy as np
 import btrack
+import btrack.utils as butils
+import btrack.constants as bconstants
 
 from cellst.operation import BaseTrack
 from cellst.utils._types import Image, Mask, Track
 from cellst.utils.utils import ImageHelper, stdout_redirected
+from cellst.utils.operation_utils import lineage_to_track
 
-# Needed for Track.kit_sch_ge_track
+# Tracking algorithm specific imports
 from kit_sch_ge.tracker.extract_data import get_indices_pandas
 from cellst.utils.kit_sch_ge_utils import (TrackingConfig, MultiCellTracker,
                                            ExportResults)
-from cellst.utils.operation_utils import lineage_to_track, bayes_track_to_mask
+from cellst.utils.bayes_utils import (bayes_extract_tracker_data,
+                                      bayes_update_mask)
 
 
 class Track(BaseTrack):
@@ -57,7 +61,7 @@ class Track(BaseTrack):
 
         tracker = MultiCellTracker(config)
         # Add context management to supress printing to terminal
-        # TODO: make this optional
+        # TODO: make this optional, log to file
         with stdout_redirected():
             tracks = tracker()
 
@@ -67,53 +71,40 @@ class Track(BaseTrack):
 
         return lineage_to_track(mask, lineage)
 
-
     @ImageHelper(by_frame=False)
     def simple_bayesian_track(self,
                               mask: Mask,
-                              config_path: str = 'bayes_config.json',
+                              config_path: str = './config/bayes_config.json',
                               update_method: str = 'exact',
                               ) -> Track:
         """
-        update_method can be EXACT or APPROXIMATE
+        Wraps BayesianTracker: https://github.com/quantumjot/BayesianTracker
 
-        Wrapper for btrack.
-
-        QUESTIONS:
-            - Why is max_lost in the config file? Seems an arbitrary limit,
-              that would also depend on the experiment/data.
-            - Same for prob_not_assign, apopotosis_rate, segmentation_miss_rate, etc.
-            - Can properties given to segmentation_to_objects() be used in
-              the model. i.e. can I give them a state and incorporate them
-              in the matrices somehow? How would they get used?
-            - Do I always have to provide 3 coordinates? Can I give more???
+        TODO:
+            - Set values in config_file
+            - Speed up bayes_extract_tracker_data
+            - Add display with navari
+            - Supress output with stdout_redirected()
         """
         # Convert mask to useable objects in btrack
-        # TODO: Does adding extra measurements help here?
-        objects = btrack.utils.segmentation_to_objects(mask)
+        objects = butils.segmentation_to_objects(mask,
+                                                 use_weighted_centroid=False)
+        bayes_id_mask = bayes_update_mask(mask, objects)
 
+        # Track as shown in btrack example
         with btrack.BayesianTracker() as tracker:
-            # TODO: Put config.json in a reasonable place
             tracker.configure_from_file(config_path)
-
-            # TOOD: This should be an input option
-            if update_method == 'approximate':
-                tracker.update_method = btrack.constants.BayesianUpdates.APPROXIMATE
-            else:
-                tracker.update_method = btrack.constants.BayesianUpdates.EXACT
-
+            tracker.update_method = getattr(bconstants.BayesianUpdates,
+                                            update_method.upper())
             tracker.append(objects)
-            tracker.track_interactive()
+            tracker.track()
             tracker.optimize()
 
-            # Get the completed tracks
+            # Get the completed lineage
             # Order: label, frame0, frame1, parent, parent_track, tree depth
             lineage = np.vstack(tracker.lbep)[:, :4]
 
-            # data is an array of label, frame, y, x
-            data, properties, graph = tracker.to_napari(ndim=2)
-            mask = bayes_track_to_mask(mask, data)
+            # Convert mask labels before writing lineage
+            new_mask = bayes_extract_tracker_data(bayes_id_mask, tracker)
 
-        return lineage_to_track(mask, lineage)
-
-
+        return lineage_to_track(new_mask, lineage)

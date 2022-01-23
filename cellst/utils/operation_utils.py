@@ -9,7 +9,7 @@ from scipy.ndimage import binary_dilation, distance_transform_edt
 from scipy.optimize import linear_sum_assignment
 from mahotas.segmentation import gvoronoi
 import SimpleITK as sitk
-from numba import njit
+import btrack
 
 from cellst.utils._types import Image, Mask, Track, Arr
 
@@ -126,6 +126,9 @@ def lineage_to_track(mask: Mask,
     """
     Each mask in each frame should have a pixel == -1 * parent
 
+    See CellTrackingChallenge and BayesianTracker.ldep for possible
+    formats of the lineage array.
+
     TODO:
         - This won't work if area(region) <= ~6, depending on shape
         - Also might not work for discontinuous regions
@@ -140,29 +143,6 @@ def lineage_to_track(mask: Mask,
             x = int(np.floor(np.sum(lab_pxl[0]) / len(lab_pxl[0])))
             y = int(np.floor(np.sum(lab_pxl[1]) / len(lab_pxl[1])))
             out[app, x, y] = -1 * par
-
-    return out
-
-
-def bayes_track_to_mask(mask: Mask,
-                        data: np.ndarray
-                        ) -> Mask:
-    """
-    mask - original mask that was used for tracking
-    data - list of cell ID and coordinates
-    """
-    out = np.zeros_like(mask)
-    # Rows are ID, frame, y, x
-    for (_id, fr, y, x) in data:
-        # All entries are used for indexing
-        _id, fr = int(_id), int(fr)
-        y, x = round(y), round(x)
-
-        # Find the value of the pixel in mask and change it to ID
-        # If missing, likely cell not in that frame
-        targ_val = mask[fr, y, x]
-        if targ_val:
-            out[fr, ...][mask[fr, ...] == targ_val] = _id
 
     return out
 
