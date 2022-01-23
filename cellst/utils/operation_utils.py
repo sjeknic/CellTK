@@ -9,6 +9,7 @@ import scipy.ndimage as ndi
 import scipy.optimize as opti
 import mahotas.segmentation as mahotas_seg
 import SimpleITK as sitk
+import btrack
 
 from cellst.utils._types import Mask, Track
 
@@ -125,12 +126,16 @@ def lineage_to_track(mask: Mask,
     """
     Each mask in each frame should have a pixel == -1 * parent
 
+    See CellTrackingChallenge and BayesianTracker.ldep for possible
+    formats of the lineage array.
+
     TODO:
         - This won't work if area(region) <= ~6, depending on shape
+        - Also might not work for discontinuous regions
     """
     out = mask.copy().astype(np.int16)
     for (lab, app, dis, par) in lineage:
-        if par:
+        if par and par != lab:  # Had to change to accomodate bayes track
             # Get all pixels in the label
             lab_pxl = np.where(mask[app, ...] == lab)
 
