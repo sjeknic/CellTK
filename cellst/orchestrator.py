@@ -6,7 +6,6 @@ import warnings
 from multiprocessing import Pool
 from typing import Dict, Collection
 from glob import glob
-from pprint import pp
 
 from cellst.operation import Operation
 from cellst.pipeline import Pipeline
@@ -121,6 +120,7 @@ class Orchestrator():
         else:
             results = []
             for fol, kwargs in self.pipelines.items():
+                self.logger.info(f'Starting Pipeline {fol}')
                 results.append(Pipeline._run_single_pipe(kwargs))
 
         if self.save:
