@@ -568,6 +568,7 @@ class BaseExtract(Operation):
                  regions: Collection[str] = [],
                  lineages: Collection[np.ndarray] = [],
                  condition: str = '',
+                 position_id: int = None,
                  min_trace_length: int = 0,
                  remove_parent: bool = True,
                  output: str = 'data_frame',
@@ -623,7 +624,7 @@ class BaseExtract(Operation):
         # These kwargs get passed to self.extract_data_from_image
         kwargs = dict(channels=channels, regions=regions, lineages=lineages,
                       condition=condition, min_trace_length=min_trace_length,
-                      remove_parent=remove_parent)
+                      remove_parent=remove_parent, position_id=position_id)
         # Automatically add extract_data_from_image
         # Name is always None, because gets saved in Pipeline as output
         self.functions = [tuple(['extract_data_from_image', None, [], kwargs, None])]

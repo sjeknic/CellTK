@@ -19,6 +19,7 @@ class Extract(BaseExtract):
                                 regions: Collection[str] = [],
                                 lineages: Collection[np.ndarray] = [],
                                 condition: str = 'default',
+                                position_id: int = None,
                                 min_trace_length: int = 0,
                                 remove_parent: bool = True,
                                 parent_track: int = 0
@@ -104,7 +105,7 @@ class Extract(BaseExtract):
 
         # Initialize data structure
         array = Condition(regions, channels, all_measures, cells, frames,
-                          name=condition)
+                          name=condition, pos_id=position_id)
 
         # Extract data for all channels and regions individually
         for c_idx, cnl in enumerate(channels):
@@ -131,5 +132,4 @@ class Extract(BaseExtract):
         mask = array.remove_short_traces(min_trace_length)
         array.filter_cells(mask, delete=True)
 
-        # Does not need to return type to Extract.run_operation
         return array
