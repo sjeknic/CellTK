@@ -3,11 +3,13 @@ import logging
 import os
 import sys
 import signal
+import itertools
 import time as time_module
 from time import sleep
+from pprint import pprint
 from typing import Collection, Generator, List, Callable
 
-from cellst.utils.log_utils import get_console_logger
+from cellst.utils.log_utils import get_console_logger, get_null_logger
 from cellst.utils.yaml_utils import save_job_history_yaml, get_file_line, load_yaml
 from cellst.pipeline import Pipeline
 
@@ -16,31 +18,46 @@ class JobController():
     __name__ = 'JobController'
 
     class SignalHandler():
+        __name__ = 'SignalHandler'
         def __init__(self,
                      sig: str = 'SIGINT',
-                     func: Callable = None
+                     func: Callable = None,
+                     logger: logging.Logger = None,
                      ) -> None:
             # Get definition of signal and save
             sig = getattr(signal, sig.upper(), None)
             if sig:
                 self.signal = sig
+                self._orig_handler = signal.getsignal(sig)
             else:
                 self.signal = None
                 warnings.warn('Did not understand input signal name. '
                               'No signal monitoring will happen.')
 
+            # Save the function to be the custom handler
             if func:
                 self.signal_handler = func
             else:
                 self.signal_handler = None
 
+            if logger:
+                self.logger = logging.getLogger(
+                    f'{logger.name}.{self.__name__}'
+                )
+            else:
+                self.logger = get_null_logger()
+
         def __enter__(self) -> None:
+            # Start signal monitoring
             if self.signal and self.signal_handler:
-                # Start signal monitoring
+                self.logger.info(f'Intercepting {self.signal}...')
                 signal.signal(self.signal, self.signal_handler)
 
         def __exit__(self, exc_type, exc_val, exc_tb) -> None:
-            pass
+            # Restore signal monitoring to the original handler
+            if self.signal:
+                self.logger.info(f'Returning {self.signal} to normal handler...')
+                signal.signal(self.signal, self._orig_handler)
 
     def set_logger(self, logger: logging.Logger) -> None:
         """
@@ -96,7 +113,8 @@ class SlurmController(JobController):
         self.logger = get_console_logger()
 
         # Set up signal handler
-        self.signal_handler = self.SignalHandler(func=self.user_controls_center)
+        self.signal_handler = self.SignalHandler(func=self.user_controls_center,
+                                                 logger=self.logger)
 
     def __enter__(self):
         if not os.path.exists(self.working_dir):
