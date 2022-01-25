@@ -1,4 +1,5 @@
 import warnings
+import itertools
 from typing import NewType, Collection, Tuple, Callable, Dict
 
 import h5py
@@ -16,7 +17,7 @@ class Condition():
     ax 4 - frames
     """
     __slots__ = ('_arr', 'name', 'time', 'coords', '_arr_dim', '_dim_idxs',
-                 '_key_dim_pairs', '_key_coord_pairs', 'masks')
+                 '_key_dim_pairs', '_key_coord_pairs', 'masks', 'pos_id')
 
     def __init__(self,
                  regions: Collection[str] = ['nuc'],
@@ -25,7 +26,8 @@ class Condition():
                  cells: Collection[int] = [0],
                  frames: Collection[int] = [0],
                  name: str = 'default',
-                 time: float = None
+                 time: float = None,
+                 pos_id: int = None
                  ) -> None:
         """
         TODO:
@@ -41,6 +43,7 @@ class Condition():
 
         # Save some values
         self.name = name
+        self.pos_id = pos_id
         self.masks = {}
 
         # Set _arr_dim based on input values - this can't change
@@ -112,12 +115,16 @@ class Condition():
 
         TODO:
             - Add checking for path and overwrite options
+            - Can time be saved as an attribute
         """
         f = h5py.File(path, 'w')
         f.create_dataset(self.name, data=self._arr)
         for coord in self.coords:
             # Axis names and coords stored as attributes
             f[self.name].attrs[coord] = self.coords[coord]
+
+        f[self.name].attrs['pos_id'] = self.pos_id
+        f[self.name].attrs['time'] = self.time
 
         f.close()
 
@@ -307,6 +314,26 @@ class Condition():
             for a in all_poss
         }
 
+    def set_position_id(self, pos: int = None) -> None:
+        """
+        Adds unique identifiers for cells in Condition
+
+        TODO:
+            - Catch TypeError, ValueError for non-digit pos
+        """
+        pos = pos if pos else int(self.pos_id)
+
+        # Create the position id
+        arr = np.ones((self._arr_dim[self._dim_idxs['cells']],
+                       self._arr_dim[self._dim_idxs['frames']]))
+        arr *= pos
+
+        # Expand metric by 1
+        if 'position_id' not in self.coords['metrics']:
+            self.add_metric_slots('position_id')
+
+        self.__setitem__('position_id', arr)
+
     def add_metric_slots(self, name: Collection[str]) -> None:
         """
         This needs to expand self._arr along the metric axis
@@ -493,7 +520,7 @@ class Condition():
         if time is None:
             self.time = self.coords['frames']
         else:
-            self.time = np.arange(self.coords['frames']) * time
+            self.time = np.arange(len(self.coords['frames'])) * time
 
     def set_condition(self, condition: str) -> None:
         """
@@ -507,7 +534,6 @@ class Experiment():
     TODO:
         - Add Typing hints when the imports are fixed
     """
-
     __slots__ = ('name', 'attrs', 'sites', 'masks')
 
     def __init__(self,
@@ -619,14 +645,29 @@ class Experiment():
             for k, v in self.sites:
                 v.set_condition(k)
 
-    def load_condition(self, path: str, name: str = None) -> None:
+    def load_condition(self,
+                       path: str,
+                       name: str = None,
+                       pos_id: int = None,
+                       ) -> None:
         """
         Used to add a Condition to experiment directly from an hdf5 file
-        """
-        arr = Condition.load(path)
-        name = arr.name if name is None else name
+        Saves as name + pos_id
 
-        self.__setitem__(name, arr)
+        TODO:
+            - Add function to walk dirs, and load hdf5 files, with uniq names
+                See Orchestrator.build_experiment_file()
+        """
+        # Get array and key
+        arr = Condition.load(path)
+        name = name if name else arr.name
+        pos_id = pos_id if pos_id else arr.pos_id
+        if pos_id:
+            key = f'{name}{pos_id}'
+        else:
+            key = name
+
+        self.__setitem__(key, arr)
 
     def save(self, path: str) -> None:
         """
@@ -718,6 +759,64 @@ class Experiment():
                for msk, arr in zip(mask, self.sites.values())]
 
         return out
+
+    def merge_conditions(self, keys: list = None) -> None:
+        """
+        Concatenate Conditions with matching conditions
+
+        TODO:
+            - Add a way to pass lists of keys to merge
+            - Difflib might be a way to handle this...
+            - Saved masks should also be concatenated and saved
+        """
+        # Get the unique conditions and respective arrs
+        _nm = lambda x: x.name
+        uniq_conds = []
+        cond_arr_grps = []
+        for k, g in itertools.groupby(sorted(self.values(), key=_nm), _nm):
+            uniq_conds.append(k)
+            cond_arr_grps.append(list(g))
+
+        need_merge = len(uniq_conds) != len(self)
+        if need_merge:
+            for cond, cond_arrs in zip(uniq_conds, cond_arr_grps):
+                if len(cond_arrs) <= 1:
+                    # Skip merging for these conditions
+                    continue
+
+                if len(set([c.pos_id for c in cond_arrs])) < len(cond_arrs):
+                    for n, c in enumerate(cond_arrs):
+                        # Try to guess pos_id, or just count
+                        try:
+                            pos = int(c.name[len(cond):])
+                        except ValueError:
+                            # TODO: Probably raise a warning here
+                            pos = n
+
+                        c.set_position_id(n)
+
+                coords = cond_arrs[0].coords
+                # TODO: Kinda messy and takes a while... - is there a better place
+                if 'position_id' not in coords['metrics']:
+                    [c.set_position_id() for c in cond_arrs]
+
+                # cells are always indexed by integer, so make new list
+                coords['cells'] = range(sum((len(c.coords['cells'])
+                                             for c in cond_arrs)))
+
+                # Concatenate the arrays along cell axis
+                ax = cond_arrs[0]._dim_idxs['cells']
+                new_arr = np.concatenate([c._arr for c in cond_arrs], axis=ax)
+
+                # Delete old arrays
+                keys_to_delete = [k for k in self.keys() if cond in k]
+                for k in keys_to_delete:
+                    self.sites.pop(k, None)
+
+                # Save new one
+                self.sites[cond] = Condition(**coords, name=cond,
+                                             time=cond_arrs[0].time)
+                self.sites[cond][:] = new_arr
 
     @classmethod
     def _build_from_file(cls, f: h5py.File) -> 'Experiment':
