@@ -371,12 +371,12 @@ class Operation():
             func_defs[key] = {}
             func_defs[key]['func'] = func
             if output_type is not None:
-                func_defs[func]['output_type'] = output_type.__name__
+                func_defs[key]['output_type'] = output_type.__name__
             else:
-                func_defs[func]['output_type'] = output_type
-            func_defs[func]['name'] = name
-            func_defs[func]['args'] = args
-            func_defs[func]['kwargs'] = kwargs
+                func_defs[key]['output_type'] = output_type
+            func_defs[key]['name'] = name
+            func_defs[key]['args'] = args
+            func_defs[key]['kwargs'] = kwargs
 
         # Save in original dictionary
         op_defs['_functions'] = func_defs
