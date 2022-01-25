@@ -179,7 +179,7 @@ class SlurmController(JobController):
         print('\n ')
 
         user_options = dict(c='continue', q='quit', s='status', r='rerun',
-                            i='info', l='logs', e='error')
+                            i='info', l='logs', h='help')
         for k, v in user_options.items():
             print(f'{k}: {v} \n')
 
@@ -269,9 +269,9 @@ class SlurmController(JobController):
                             pass
                     if jobs:
                         pprint(self._get_slurm_logs_from_jobs(jobs))
-            elif command in ('e', 'error'):
-                # Show error information from slurm logs
-                pass
+            elif command in ('h', 'help'):
+                for k, v in user_options.items():
+                    print(f'{k}: {v} \n')
             else:
                 print(f'Did not understand input {command}... \n')
 
