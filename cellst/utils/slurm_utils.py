@@ -1,9 +1,11 @@
 import subprocess
 import logging
 import os
+import sys
+import signal
 import time as time_module
 from time import sleep
-from typing import Collection, Generator, List
+from typing import Collection, Generator, List, Callable
 
 from cellst.utils.log_utils import get_console_logger
 from cellst.utils.yaml_utils import save_job_history_yaml, get_file_line, load_yaml
@@ -13,6 +15,33 @@ from cellst.pipeline import Pipeline
 class JobController():
     __name__ = 'JobController'
 
+    class SignalHandler():
+        def __init__(self,
+                     sig: str = 'SIGINT',
+                     func: Callable = None
+                     ) -> None:
+            # Get definition of signal and save
+            sig = getattr(signal, sig.upper(), None)
+            if sig:
+                self.signal = sig
+            else:
+                self.signal = None
+                warnings.warn('Did not understand input signal name. '
+                              'No signal monitoring will happen.')
+
+            if func:
+                self.signal_handler = func
+            else:
+                self.signal_handler = None
+
+        def __enter__(self) -> None:
+            if self.signal and self.signal_handler:
+                # Start signal monitoring
+                signal.signal(self.signal, self.signal_handler)
+
+        def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+            pass
+
     def set_logger(self, logger: logging.Logger) -> None:
         """
         """
@@ -21,6 +50,10 @@ class JobController():
 
         # This logs to same file, but records the Operation name
         self.logger = logging.getLogger(f'{log_name}.{self.__name__}')
+
+    @property
+    def status(self) -> str:
+        return f'No status available for {self}'
 
 
 class SlurmController(JobController):
@@ -62,6 +95,9 @@ class SlurmController(JobController):
         # Set up default logger
         self.logger = get_console_logger()
 
+        # Set up signal handler
+        self.signal_handler = self.SignalHandler(func=self.user_controls_center)
+
     def __enter__(self):
         if not os.path.exists(self.working_dir):
             os.makedirs(self.working_dir)
@@ -90,26 +126,61 @@ class SlurmController(JobController):
         self.total_pipes = len(pipelines)
         batches = self._yield_working_sbatch(pipelines)
 
-        _running = True
-        while _running:
-            for pidx, partition in enumerate(self.slurm_partitions):
-                part_name = partition['partition']
-                curr_jobs = self._check_user_jobs(part_name, self.user)
-                self.logger.info(f'Found {curr_jobs}. Max '
-                                 f'jobs allowed: {self.maxjobs[pidx]}')
+        with self.signal_handler:
+            _running = True
+            while _running:
+                for pidx, partition in enumerate(self.slurm_partitions):
+                    part_name = partition['partition']
+                    curr_jobs = self._check_user_jobs(part_name, self.user)
+                    self.logger.info(f'Found {curr_jobs}. Max '
+                                     f'jobs allowed: {self.maxjobs[pidx]}')
 
-                _running = self._submit_jobs_to_slurm(curr_jobs, self.maxjobs[pidx],
-                                                      batches, partition)
+                    _running = self._submit_jobs_to_slurm(curr_jobs, self.maxjobs[pidx],
+                                                          batches, partition)
 
-            self.logger.info('Finished round of submissions. '
-                             f'Sleeping {10 * self._submit_delay}s.')
-            self.logger.info(f'Submitted {self.pipes_run + 1} out '
-                             f'of {self.total_pipes} pipelines.')
-            sleep(10 * self._submit_delay)
-            self._record_job_history(update=True)
-            self.logger.info(f'Current state: \n{self.status}')
+                self.logger.info('Finished round of submissions. '
+                                 f'Sleeping {10 * self._submit_delay}s.')
+                self.logger.info(f'Submitted {self.pipes_run + 1} out '
+                                 f'of {self.total_pipes} pipelines.')
+                sleep(10 * self._submit_delay)
+                self._record_job_history(update=True)
+                self.logger.info(f'Current state: \n{self.status}')
 
         self.logger.info('Finished running jobs.')
+
+    def user_controls_center(self, *args) -> (str, int):
+        """
+        """
+        self.logger.info('Pausing for user input...')
+        print('\n \n')
+
+        user_options = dict(c='continue', q='quit', s='status', r='rerun')
+        for k, v in user_options.items():
+            print(f'{k}: {v} \t')
+
+        cont = False
+        while not cont:
+            # Get user input - args are space delimited
+            user_input = input('-->').split(' ')
+            command = user_input[0]
+            inputs = user_input[1:]
+
+            # Run option
+            if command in ('c', 'continue'):
+                cont = True
+            elif command in ('q', 'quit'):
+                print('Quitting... \n')
+                sys.exit()
+            elif command in ('s', 'status'):
+                print('Updating status of jobs... \n')
+                self._record_job_history(update=True)
+                print(self.status)
+            elif command in ('r', 'rerun'):
+                pass
+            else:
+                print(f'Did not understand input {command}... \n')
+
+        self.logger.info('Continuing running Pipelines...')
 
     @property
     def status(self) -> str:
