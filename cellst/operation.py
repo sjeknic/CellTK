@@ -363,7 +363,8 @@ class Operation():
         for func, output_type, args, kwargs, name in self.functions:
             # Rename if already in dictionary
             count = 1
-            while func in func_defs:
+            key = func
+            while key in func_defs:
                 key = func + f'_{count}'
                 count += 1
 
