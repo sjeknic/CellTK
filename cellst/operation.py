@@ -190,10 +190,13 @@ class Operation():
 
             # Set up the function run
             self.logger.info(f'Starting function {func.__name__}')
-            self.logger.info('All Inputs: '
-                             f'{[(key, inpt.shape, inpt.dtype) for key, inpt in inputs.items()]}')
+            self.logger.info(
+                'All Inputs: '
+                f'{[(key, inpt.shape, inpt.dtype) for key, inpt in inputs.items()]}'
+            )
             self.logger.info(f'args / kwargs: {args} {kwargs}')
-            self.logger.info(f'User set output type: {expec_type}. Save name: {save_name}')
+            self.logger.info(f'User set output type: {expec_type}. '
+                             f'Save name: {save_name}')
 
             # Check if input is already loaded
             if not self.force_rerun:
@@ -210,7 +213,7 @@ class Operation():
                 else:
                     _check_key = (None, None)
 
-                # The output already exists
+                # The output already exists - skip the function
                 # TODO: Add ability to use keys with _split_key
                 if _check_key in inputs:
                     self.logger.info(f'Output already loaded: {_check_key} '
@@ -219,7 +222,7 @@ class Operation():
                     self.logger.info(f'Skipping {func.__name__}.')
                     continue
 
-            # Get outputs and overwrite type if needed
+            # Run function, get outputs, and overwrite type if needed
             exec_timer = time.time()
             output_key, result = func(inputs, *args, **kwargs)
             output_key = [out if expec_type is None else (out[0], expec_type)
@@ -227,14 +230,11 @@ class Operation():
             self.logger.info(f'Returned: {[o for o in output_key]}, '
                              f'{[(r.shape, r.dtype) for r in result]}')
 
-            # Outputs written to inputs ImageContainer before keys are changed
-            # for out, res in zip(output_key, result):
-            #     inputs[out] = res
-
-            # Update the keys before saving images
+            # Change keys for saving if needed
+            ret_to_pipe = save_name or last_func
             save_folders = []
             if len(result) > 1:
-                # By default, use names of the results to identify outputs
+                # Use names of the results to identify outputs
                 # Remove self._split_key from keys
                 names = [o[0].split(self._split_key)[0] for o in output_key]
                 types = [o[1] for o in output_key]
@@ -251,7 +251,8 @@ class Operation():
                     self.logger.warn(f'Keys are not unique for {func.__name__}'
                                      '. Some outputs may be overwritten.')
 
-                if save_name is not None:
+                # Create new output_keys if needed
+                if save_name:
                     # Will save in sub-directories in folder save_name
                     output_key = [(f'{save_name}{self._split_key}{r}', out[1])
                                   for out, r in zip(output_key, res_id)]
@@ -259,20 +260,28 @@ class Operation():
                 elif last_func:
                     output_key = [(f'{self.output}{self._split_key}{r}', out[1])
                                   for out, r in zip(output_key, res_id)]
-                    save_folders = [os.path.join(self.output, r) for r in res_id]
+                    if self.save:
+                        save_folders = [os.path.join(self.output, r)
+                                        for r in res_id]
             else:
                 # Only one result, nothing fancy with the outputs
-                if save_name is not None:
+                if save_name:
                     output_key = [(save_name, output_key[0][1])]
                     save_folders = [save_name]
                 elif last_func:
                     output_key = [(self.output, output_key[0][1])]
-                    save_folders = [self.output]
+                    if self.save:
+                        save_folders = [self.output]
 
             # Check if any images need to be saved
             for ridx, (out, res) in enumerate(zip(output_key, result)):
-                # Save all outputs
+                # Put outputs in input container for future functions
                 inputs[out] = res
+
+                if ret_to_pipe:
+                    self.logger.info(f'Returning to the Pipeline: '
+                                     f'{out}, {res.shape}')
+                    return_container[out] = res
 
                 if save_folders:
                     # Save images if save_name is not None
@@ -281,15 +290,13 @@ class Operation():
                                      f'{out[1]}, {res.shape}')
                     self.save_arrays[save_folders[ridx]] = out[1], res
 
-                    self.logger.info(f'Returning to the Pipeline: '
-                                     f'{out}, {res.shape}')
-                    return_container[out] = res
-
             self.logger.info(f'{func.__name__} execution time: '
                              f'{time.time() - exec_timer}')
 
-        self.logger.info('Returning to pipeline: '
-                         f'{[(k, v.shape) for k, v in return_container.items()]}')
+        self.logger.info(
+            'Returning to pipeline: '
+            f'{[(k, v.shape) for k, v in return_container.items()]}'
+        )
         yield from return_container.items()
 
     def set_logger(self, logger: logging.Logger) -> None:
