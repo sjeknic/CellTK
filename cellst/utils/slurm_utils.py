@@ -227,20 +227,25 @@ class SlurmController(JobController):
             # Save job info - state S - Submitted
             job_id = ''.join((s for s in submitted.stdout if s.isdigit()))
             self.job_history[job_id] = dict(jobid=job_id, state='S',
-                                            name=name, output=output_dir)
+                                            name=name, output=output_dir,
+                                            slurm_path=pth, yaml_path=ypth)
 
         # Updates are slow, so don't do them often
         if update:
             if time_module.time() - self.last_update_time > self._update_delay:
-                # Parse status from current jobs - only R should update
+                # Parse status from current jobs and update
                 current_jobs = self._get_slurm_info(keys)
                 current_jobs = self._use_only_valid_states(current_jobs)
-                self.job_history.update(current_jobs)
-                self.last_update_time = time_module.time()
+                for c, v in current_jobs.items():
+                    if c in self.job_history:
+                        self.job_history[c].update(v)
 
+                # Check jobs that are complete
                 ended_jobs = [k for k in self.job_history
                               if k not in current_jobs]
                 self._check_ended_job_status(ended_jobs)
+
+                self.last_update_time = time_module.time()
 
     def _check_ended_job_status(self, jobs: List[str]) -> None:
         """
@@ -319,8 +324,6 @@ class SlurmController(JobController):
                 jobs[j]['state'] = 'R'
             elif val['state'] in ('R'):
                 pass
-            else:
-                print('STATE NOT UNDERSTOOD')
 
         return jobs
 
