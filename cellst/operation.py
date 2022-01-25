@@ -25,7 +25,7 @@ class Operation():
 
     def __init__(self,
                  output: str,
-                 save: bool = False,
+                 save: bool = True,
                  force_rerun: bool = False,
                  _output_id: Tuple[str] = None,
                  _split_key: str = '&',
@@ -412,7 +412,7 @@ class BaseProcess(Operation):
                  input_images: Collection[str] = [],
                  input_masks = [],
                  output: str = 'process',
-                 save: bool = False,
+                 save: bool = True,
                  force_rerun: bool = False,
                  _output_id: Tuple[str] = None,
                  ) -> None:
@@ -454,7 +454,7 @@ class BaseSegment(Operation):
                  input_images: Collection[str] = [],
                  input_masks: Collection[str] = [],
                  output: str = 'mask',
-                 save: bool = False,
+                 save: bool = True,
                  force_rerun: bool = False,
                  _output_id: Tuple[str] = None,
                  ) -> None:
@@ -496,7 +496,7 @@ class BaseTrack(Operation):
                  input_images: Collection[str] = [],
                  input_masks: Collection[str] = [],
                  output: str = 'track',
-                 save: bool = False,
+                 save: bool = True,
                  force_rerun: bool = False,
                  _output_id: Tuple[str] = None,
                  ) -> None:
@@ -844,7 +844,7 @@ class BaseEvaluate(Operation):
     def __init__(self,
                  input_arrays: Collection[str] = [],
                  output: str = 'evaluate',
-                 save: bool = False,
+                 save: bool = True,
                  force_rerun: bool = False,
                  _output_id: Tuple[str] = None,
                  ) -> None:
