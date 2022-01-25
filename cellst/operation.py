@@ -200,13 +200,13 @@ class Operation():
 
             # Check if input is already loaded
             if not self.force_rerun:
-                if expec_type is None:
-                    _out_type = self._get_func_output_type(func)
-                else:
+                if expec_type:
                     _out_type = expec_type
+                else:
+                    _out_type = self._get_func_output_type(func)
 
                 # Only checks for functions that are expected to be saved
-                if save_name is not None:
+                if save_name:
                     _check_key = (save_name, _out_type)
                 elif last_func:
                     _check_key = (self.output, _out_type)
@@ -361,7 +361,14 @@ class Operation():
         # Save function definitions
         func_defs = {}
         for func, output_type, args, kwargs, name in self.functions:
-            func_defs[func] = {}
+            # Rename if already in dictionary
+            count = 1
+            while func in func_defs:
+                key = func + f'_{count}'
+                count += 1
+
+            func_defs[key] = {}
+            func_defs[key]['func'] = func
             if output_type is not None:
                 func_defs[func]['output_type'] = output_type.__name__
             else:

@@ -52,7 +52,7 @@ def _dict_to_operation(oper_dict: Dict) -> Operation:
 
     # Add the functions to the operation
     for key, val in oper_dict['_functions'].items():
-        func = key
+        func = val['func']
         name, args, kwargs = val['name'], val['args'], val['kwargs']
 
         # Get the type if custom type
