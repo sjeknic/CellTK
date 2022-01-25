@@ -83,6 +83,8 @@ class SlurmController(JobController):
     __name__ = 'SlurmController'
     _submit_delay = 5  # Wait between commands in sec
     _update_delay = 15  # Wait time between allowing squeue commands
+    _states = dict(S='Submitted', R='Running', C='Complete',
+                   F='Failed', K='Killed', P='Pending')
 
     def __init__(self,
                  partition: (list, str) = '$GROUP',
@@ -170,30 +172,63 @@ class SlurmController(JobController):
         """
         """
         self.logger.info('Pausing for user input...')
-        print('\n \n')
+        print('\n ')
 
-        user_options = dict(c='continue', q='quit', s='status', r='rerun')
+        user_options = dict(c='continue', q='quit', s='status', r='rerun',
+                            i='info', l='logs', e='error')
         for k, v in user_options.items():
-            print(f'{k}: {v} \t')
+            print(f'{k}: {v} \n')
 
-        cont = False
-        while not cont:
+        while True:
             # Get user input - args are space delimited
-            user_input = input('-->').split(' ')
+            user_input = input('\n -->  ').split(' ')
             command = user_input[0]
             inputs = user_input[1:]
 
             # Run option
             if command in ('c', 'continue'):
-                cont = True
+                # Return to launching pipelines
+                break
             elif command in ('q', 'quit'):
-                print('Quitting... \n')
+                # Quit the Controller/Orchestrator
+                print('Quitting... \t')
                 sys.exit()
             elif command in ('s', 'status'):
+                # Run status update and print results
                 print('Updating status of jobs... \n')
                 self._record_job_history(update=True)
                 print(self.status)
+            elif command in ('i', 'info'):
+                # Show detailed job information
+                if not inputs:
+                    pprint(self._get_info_from_jobs())
+                elif 'all' in inputs:
+                    # Display all available job information
+                    pprint(self.job_history)
+                elif any([i in self._states for i in inputs]):
+                    # Print detailed information for each job in state
+                    for i in inputs:
+                        jobs = self._get_jobs_by_state(i)
+                        if jobs:
+                            print(f'Jobs in state {i} \n')
+                            pprint(jobs)
+                elif any([i in self.job_history for i in inputs]):
+                    # Print detailed information for specific jobs
+                    jobs = {}
+                    for i in inputs:
+                        try:
+                            jobs[i] = self.job_history[i]
+                        except KeyError:
+                            pass
+                    pprint(jobs)
             elif command in ('r', 'rerun'):
+                # Rerun specific jobs or states
+                pass
+            elif command in ('l', 'logs'):
+                # Show paths to slurm logs
+                pass
+            elif command in ('e', 'error'):
+                # Show error information from slurm logs
                 pass
             else:
                 print(f'Did not understand input {command}... \n')
@@ -203,12 +238,9 @@ class SlurmController(JobController):
     @property
     def status(self) -> str:
         """"""
-        states = dict(S='Submitted', R='Running', C='Complete',
-                      F='Failed', K='Killed')
-
-        display_string = f'Total: {self.total_pipes} \n'
+        display_string = ''
         total = 0
-        for key, state in states.items():
+        for key, state in self._states.items():
             num = len([v for v in self.job_history.values()
                        if v['state'] == key])
             display_string += f'{state}: {num} \n'
@@ -402,6 +434,20 @@ class SlurmController(JobController):
                                for r in result}
 
         return current_jobs
+
+    def _get_jobs_by_state(self, state: str) -> dict:
+        """Return only jobs of a specific state"""
+        if state in self._states:
+            return {k: v for k, v in self.job_history.items()
+                    if v['state'] == state}
+
+    def _get_info_from_jobs(self, info_keys: list = None) -> dict:
+        """Returns only the specified keys"""
+        _default_info = ['jobid', 'name', 'state']
+        info_keys = info_keys if info_keys else _default_info
+
+        return {k: {i: v[i] for i in info_keys}
+                for k, v in self.job_history.items()}
 
     def _use_only_valid_states(self, jobs: dict) -> dict:
         """Remove states (e.g.CF) that aren't in self.status"""
