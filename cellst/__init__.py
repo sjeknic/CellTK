@@ -22,3 +22,4 @@ of utils is warranted. Hopefully I can get around to that tonight.
 from .utils import _types as cst_types
 from .utils._types import Image, Mask, Track, Arr, Same
 from .utils._types import Condition, Experiment
+from .utils.slurm_utils import SlurmController

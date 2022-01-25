@@ -2,9 +2,10 @@ import os
 import sys
 import argparse
 import yaml
+import itertools
 import warnings
 from multiprocessing import Pool
-from typing import Dict, Collection
+from typing import Dict, Collection, Callable
 from glob import glob
 
 from cellst.operation import Operation
@@ -33,7 +34,7 @@ class Orchestrator():
                  'operation_index', 'file_extension', 'name',
                  'overwrite', 'save', 'condition_map',
                  'logger', 'controller', 'log_file', 'verbose',
-                 '__dict__')
+                 'position_map', '__dict__')
 
     def __init__(self,
                  yaml_folder: str = None,
@@ -69,6 +70,7 @@ class Orchestrator():
         self.overwrite = overwrite
         self.save = save_master_df
         self.condition_map = condition_map
+        self.position_map = self._set_position_map(condition_map)
         self.controller = job_controller
         self.log_file = log_file
         self.verbose = verbose
@@ -191,9 +193,14 @@ class Orchestrator():
         except KeyError:
             raise KeyError(f'Failed to find Operations in {path}.')
 
-    def build_experiment_file(self, arrays: Collection[Arr] = None) -> None:
+    def build_experiment_file(self,
+                              arrays: Collection[Arr] = None
+                              ) -> None:
         """
         Search folders in self.pipelines for hdf5 data frames
+
+        TODO:
+            - Increase efficiency by grouping sites by condition before loading
         """
         # Make Experiment array to hold data
         out = Experiment(name=self.name)
@@ -205,6 +212,9 @@ class Orchestrator():
             # NOTE: if df.name is already in Experiment, will be overwritten
             for df in glob(os.path.join(otpt_fol, '*.hdf5')):
                 out.load_condition(df)
+
+        # Merge conditions - does nothing if all are unique
+        out.merge_conditions()
 
         # Save the master df file
         save_path = os.path.join(self.output_folder, f'{self.name}.hdf5')
@@ -223,10 +233,29 @@ class Orchestrator():
         for pipe, kwargs in self.pipelines.items():
             # If Extract is in operations, update the condition
             # TODO: This won't work for multiple Extract operations
-            if 'extract' in op_dict and op_dict['extract']['condition'] == 'default':
-                condition = kwargs['name']
-                new_extract = {k: (v if k != 'condition' else pipe)
-                               for k, v in op_dict['extract'].items()}
+            if 'extract' in op_dict:
+                if op_dict['extract']['condition'] == 'default':
+                    condition = kwargs['name']
+                else:
+                    condition = op_dict['extract']['condition']
+
+                # Get position if needed
+                if self.position_map:
+                    pos = self.position_map[pipe]
+                else:
+                    pos = None
+
+                # Make new extract dictionary
+                new_extract = {}
+                for k, v in op_dict['extract'].items():
+                    if k == 'condition':
+                        new_extract[k] = condition
+                    elif k == 'position_id':
+                        new_extract[k] = pos
+                    else:
+                        new_extract[k] = v
+
+                # Copy values to new operation dictionary
                 op = {k: v for k, v in op_dict.items() if k != 'extract'}
                 op.update({'extract': new_extract})
             else:
@@ -305,6 +334,24 @@ class Orchestrator():
         self.logger.info(f"Saving condition_map at {path}")
         save_yaml_file(self.condition_map, path, warning=False)
 
+    def _set_position_map(self, condition_map: dict) -> dict:
+        """
+        Given the condition map, save a unique identifier as needed,
+
+        TODO:
+            - Make id_func something that the user can set
+        """
+        # Check for duplicate conditions
+        uniq_conds = tuple(itertools.groupby(condition_map.values()))
+        need_merge = len(uniq_conds) != len(condition_map)
+        if need_merge:
+            # By default, take digits after last _
+            id_func = lambda x: x.split('_')[-1]
+            position_map = {k: id_func(k) for k in condition_map}
+            return position_map
+        else:
+            return
+
     def _load_cond_map_from_yaml(self, path: str) -> dict:
         with open(path, 'r') as yf:
             cond_map = yaml.load(yf, Loader=yaml.Loader)
@@ -330,7 +377,7 @@ class Orchestrator():
             # Load all yamls as dictionaries
             for f in files:
                 with open(f, 'r') as yf:
-                    pipe = yaml.load(yf, Loader=yaml.FullLoader)
+                    pipe = yaml.load(yf, Loader=yaml.Loader)
                     try:
                         fol = folder_name(pipe['parent_folder'])
                         self.pipelines[fol] = pipe

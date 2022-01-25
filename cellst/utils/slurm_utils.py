@@ -1,17 +1,63 @@
 import subprocess
 import logging
 import os
+import sys
+import signal
+import itertools
 import time as time_module
 from time import sleep
-from typing import Collection, Generator, List
+from pprint import pprint
+from typing import Collection, Generator, List, Callable
 
-from cellst.utils.log_utils import get_console_logger
+from cellst.utils.log_utils import get_console_logger, get_null_logger
 from cellst.utils.yaml_utils import save_job_history_yaml, get_file_line, load_yaml
 from cellst.pipeline import Pipeline
 
 
 class JobController():
     __name__ = 'JobController'
+
+    class SignalHandler():
+        __name__ = 'SignalHandler'
+        def __init__(self,
+                     sig: str = 'SIGINT',
+                     func: Callable = None,
+                     logger: logging.Logger = None,
+                     ) -> None:
+            # Get definition of signal and save
+            sig = getattr(signal, sig.upper(), None)
+            if sig:
+                self.signal = sig
+                self._orig_handler = signal.getsignal(sig)
+            else:
+                self.signal = None
+                warnings.warn('Did not understand input signal name. '
+                              'No signal monitoring will happen.')
+
+            # Save the function to be the custom handler
+            if func:
+                self.signal_handler = func
+            else:
+                self.signal_handler = None
+
+            if logger:
+                self.logger = logging.getLogger(
+                    f'{logger.name}.{self.__name__}'
+                )
+            else:
+                self.logger = get_null_logger()
+
+        def __enter__(self) -> None:
+            # Start signal monitoring
+            if self.signal and self.signal_handler:
+                self.logger.info(f'Intercepting {self.signal}...')
+                signal.signal(self.signal, self.signal_handler)
+
+        def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+            # Restore signal monitoring to the original handler
+            if self.signal:
+                self.logger.info(f'Returning {self.signal} to normal handler...')
+                signal.signal(self.signal, self._orig_handler)
 
     def set_logger(self, logger: logging.Logger) -> None:
         """
@@ -21,6 +67,10 @@ class JobController():
 
         # This logs to same file, but records the Operation name
         self.logger = logging.getLogger(f'{log_name}.{self.__name__}')
+
+    @property
+    def status(self) -> str:
+        return f'No status available for {self}'
 
 
 class SlurmController(JobController):
@@ -33,6 +83,8 @@ class SlurmController(JobController):
     __name__ = 'SlurmController'
     _submit_delay = 5  # Wait between commands in sec
     _update_delay = 15  # Wait time between allowing squeue commands
+    _states = dict(S='Submitted', R='Running', C='Complete',
+                   F='Failed', K='Killed', P='Pending')
 
     def __init__(self,
                  partition: (list, str) = '$GROUP',
@@ -62,6 +114,10 @@ class SlurmController(JobController):
         # Set up default logger
         self.logger = get_console_logger()
 
+        # Set up signal handler
+        self.signal_handler = self.SignalHandler(func=self.user_controls_center,
+                                                 logger=self.logger)
+
     def __enter__(self):
         if not os.path.exists(self.working_dir):
             os.makedirs(self.working_dir)
@@ -78,6 +134,7 @@ class SlurmController(JobController):
         # Initialize some params that will be needed
         self.pipes_run = 0
         self.job_history = {}
+        self.batches = ()
         self.last_update_time = 0
 
     def __exit__(self, exc_type, exc_val, exc_tb) -> None:
@@ -88,38 +145,144 @@ class SlurmController(JobController):
         # TODO: How to pass the pipeline yaml without making the file???
         #       or should I just accept it and always make the yaml in the output dir?
         self.total_pipes = len(pipelines)
-        batches = self._yield_working_sbatch(pipelines)
+        self.batches = self._yield_working_sbatch(pipelines)
 
-        _running = True
-        while _running:
-            for pidx, partition in enumerate(self.slurm_partitions):
-                part_name = partition['partition']
-                curr_jobs = self._check_user_jobs(part_name, self.user)
-                self.logger.info(f'Found {curr_jobs}. Max '
-                                 f'jobs allowed: {self.maxjobs[pidx]}')
+        with self.signal_handler:
+            _running = True
+            while _running:
+                for pidx, partition in enumerate(self.slurm_partitions):
+                    part_name = partition['partition']
+                    curr_jobs = self._check_user_jobs(part_name, self.user)
+                    self.logger.info(f'Found {curr_jobs}. Max '
+                                     f'jobs allowed: {self.maxjobs[pidx]}')
 
-                _running = self._submit_jobs_to_slurm(curr_jobs, self.maxjobs[pidx],
-                                                      batches, partition)
+                    _running = self._submit_jobs_to_slurm(curr_jobs, self.maxjobs[pidx],
+                                                          self.batches, partition)
 
-            self.logger.info('Finished round of submissions. '
-                             f'Sleeping {10 * self._submit_delay}s.')
-            self.logger.info(f'Submitted {self.pipes_run + 1} out '
-                             f'of {self.total_pipes} pipelines.')
-            sleep(10 * self._submit_delay)
-            self._record_job_history(update=True)
-            self.logger.info(f'Current state: \n{self.status}')
+                self.logger.info('Finished round of submissions. '
+                                 f'Sleeping {10 * self._submit_delay}s.')
+                self.logger.info(f'Submitted {self.pipes_run} out '
+                                 f'of {self.total_pipes} pipelines.')
+                sleep(10 * self._submit_delay)
+                self._record_job_history(update=True)
+                self.logger.info(f'Current state: \n{self.status}')
 
         self.logger.info('Finished running jobs.')
+
+    def user_controls_center(self, *args) -> (str, int):
+        """
+
+        TODO:
+            - Handling user inputs could be consolidated
+        """
+        self.logger.info('Pausing for user input...')
+        print('\n ')
+
+        user_options = dict(c='continue', q='quit', s='status', r='rerun',
+                            i='info', l='logs', h='help')
+        for k, v in user_options.items():
+            print(f'{k}: {v} \n')
+
+        while True:
+            # Get user input - args are space delimited
+            user_input = input('\n -->  ').split(' ')
+            command = user_input[0]
+            inputs = user_input[1:]
+
+            # Run option
+            if command in ('c', 'continue'):
+                # Return to launching pipelines
+                break
+            elif command in ('q', 'quit'):
+                # Quit the Controller/Orchestrator
+                print('Quitting... \t')
+                sys.exit()
+            elif command in ('s', 'status'):
+                # Run status update and print results
+                print('Updating status of jobs... \n')
+                self._record_job_history(update=True)
+                print(self.status)
+            elif command in ('i', 'info'):
+                # Show detailed job information
+                print('Updating status of jobs... \n')
+                self._record_job_history(update=True)
+
+                if not inputs:
+                    pprint(self._get_info_from_jobs())
+                elif 'all' in inputs:
+                    # Display all available job information
+                    pprint(self.job_history)
+                elif any([i in self._states for i in inputs]):
+                    # Print detailed information for each job in state
+                    for i in inputs:
+                        jobs = self._get_jobs_by_state(i)
+                        if jobs:
+                            print(f'Jobs in state {i} \n')
+                            pprint(jobs)
+                elif any([i in self.job_history for i in inputs]):
+                    # Print detailed information for specific jobs
+                    jobs = {}
+                    for i in inputs:
+                        try:
+                            jobs[i] = self.job_history[i]
+                        except KeyError:
+                            pass
+                    pprint(jobs)
+            elif command in ('r', 'rerun'):
+                # Rerun specific jobs or states
+                if not inputs:
+                    print('State or job id must be provided...')
+                elif any([i in self._states for i in inputs]):
+                    # Rerun all jobs in state
+                    for i in inputs:
+                        jobs = self._get_jobs_by_state(i)
+                        if jobs:
+                            self._set_jobs_to_rerun(jobs)
+                elif any([i in self.job_history for i in inputs]):
+                    # Rerun specified jobs
+                    jobs = {}
+                    for i in inputs:
+                        try:
+                            jobs[i] = self.job_history[i]
+                        except KeyError:
+                            pass
+                    if jobs:
+                        self._set_jobs_to_rerun(jobs)
+            elif command in ('l', 'logs'):
+                # Show paths to slurm logs
+                if not inputs:
+                    pprint(self._get_slurm_logs_from_jobs(self.job_history))
+                elif any([i in self._states for i in inputs]):
+                    # Show logs for jobs in specific states
+                    for i in inputs:
+                        jobs = self._get_jobs_by_state(i)
+                        if jobs:
+                            print(f'State {i} \n')
+                            pprint(self._get_slurm_logs_from_jobs(jobs))
+                elif any([i in self.job_history for i in inputs]):
+                    # Show logs for specific jobs
+                    jobs = {}
+                    for i in inputs:
+                        try:
+                            jobs[i] = self.job_history[i]
+                        except KeyError:
+                            pass
+                    if jobs:
+                        pprint(self._get_slurm_logs_from_jobs(jobs))
+            elif command in ('h', 'help'):
+                for k, v in user_options.items():
+                    print(f'{k}: {v} \n')
+            else:
+                print(f'Did not understand input {command}... \n')
+
+        self.logger.info('Continuing running Pipelines...')
 
     @property
     def status(self) -> str:
         """"""
-        states = dict(S='Submitted', R='Running', C='Complete',
-                      F='Failed', K='Killed')
-
-        display_string = f'Total: {self.total_pipes} \n'
+        display_string = ''
         total = 0
-        for key, state in states.items():
+        for key, state in self._states.items():
             num = len([v for v in self.job_history.values()
                        if v['state'] == key])
             display_string += f'{state}: {num} \n'
@@ -191,7 +354,7 @@ class SlurmController(JobController):
     def _yield_working_sbatch(self, pipelines: dict) -> str:
         self.logger.info(f'Building {len(pipelines)} pipelines: {list(pipelines.keys())}')
 
-        for self.pipes_run, (fol, kwargs) in enumerate(pipelines.items()):
+        for fol, kwargs in pipelines.items():
             # First load the pipeline, then save as yaml that can be accessed
             # TODO: Obviously could be more efficient - esp if Orchestrator made yamls
             _pipe = Pipeline._build_from_dict(kwargs)
@@ -207,6 +370,7 @@ class SlurmController(JobController):
                                      yaml_path=_y_path, job_name=job_name)
 
             # Return path to the script
+            self.pipes_run += 1
             yield _batch_path
 
     def _record_job_history(self, submitted: str = None, update: bool = False) -> None:
@@ -227,20 +391,25 @@ class SlurmController(JobController):
             # Save job info - state S - Submitted
             job_id = ''.join((s for s in submitted.stdout if s.isdigit()))
             self.job_history[job_id] = dict(jobid=job_id, state='S',
-                                            name=name, output=output_dir)
+                                            name=name, output=output_dir,
+                                            slurm_path=pth, yaml_path=ypth)
 
         # Updates are slow, so don't do them often
         if update:
             if time_module.time() - self.last_update_time > self._update_delay:
-                # Parse status from current jobs - only R should update
+                # Parse status from current jobs and update
                 current_jobs = self._get_slurm_info(keys)
                 current_jobs = self._use_only_valid_states(current_jobs)
-                self.job_history.update(current_jobs)
-                self.last_update_time = time_module.time()
+                for c, v in current_jobs.items():
+                    if c in self.job_history:
+                        self.job_history[c].update(v)
 
+                # Check jobs that are complete
                 ended_jobs = [k for k in self.job_history
                               if k not in current_jobs]
                 self._check_ended_job_status(ended_jobs)
+
+                self.last_update_time = time_module.time()
 
     def _check_ended_job_status(self, jobs: List[str]) -> None:
         """
@@ -248,7 +417,7 @@ class SlurmController(JobController):
         """
         for j in jobs:
             # Check if already recorded
-            if self.job_history[j]['state'] not in ('C', 'F', 'K'):
+            if self.job_history[j]['state'] not in ('C', 'F', 'K', 'P'):
                 # Check log file for state of the Pipeline
                 logfile = os.path.join(self.job_history[j]['output'],
                                        'log.txt')
@@ -309,6 +478,83 @@ class SlurmController(JobController):
 
         return current_jobs
 
+    def _get_jobs_by_state(self, state: str) -> dict:
+        """Return only jobs of a specific state"""
+        if state in self._states:
+            return {k: v for k, v in self.job_history.items()
+                    if v['state'] == state}
+
+    def _get_info_from_jobs(self, info_keys: list = []) -> dict:
+        """Returns only the specified keys"""
+        _default_info = ['jobid', 'name', 'state']
+        info_keys = info_keys if info_keys else _default_info
+
+        return {k: {i: v[i] for i in info_keys}
+                for k, v in self.job_history.items()}
+
+    def _get_slurm_logs_from_jobs(self, jobs: dict) -> dict:
+        """Parses sbatch and returns path to slurm files"""
+        # Get path to sbatch file
+        slurm_logs = {}
+        for j, val in jobs.items():
+            slurm_logs[j] = {'_name': val['name']}
+            try:
+                path = val['slurm_path']
+                with open(path, 'r') as f:
+                    lines = f.readlines()
+
+                for l in lines:
+                    if '#SBATCH' in l:
+                        if '--output=' in l:
+                            log_path = l.split('--output=')[-1].rstrip()
+                            log_path = log_path.replace('"%j"', j)
+                            slurm_logs[j]['out'] = log_path
+                        elif '--error=' in l:
+                            err_path = l.split('--error=')[-1].rstrip()
+                            err_path = err_path.replace('"%j"', j)
+                            slurm_logs[j]['error'] = err_path
+            except (KeyError, IOError):
+                pass
+
+        return slurm_logs
+
+    def _set_jobs_to_rerun(self, jobs: dict = {}) -> None:
+        """"""
+        self.logger.info(f'Setting jobs {list(jobs.keys())} to rerun.')
+
+        # Update old jobs and decrement count
+        to_rerun = {}
+        for j in jobs:
+            to_rerun[j] = self.job_history[j]
+            self.job_history[j]['state'] = 'P'
+            self.pipes_run -= 1
+
+        # Append the new Generator to self.batches
+        rerun_batches = self._rerun_existing_sbatch(to_rerun)
+        self.batches = self._add_to_batches(rerun_batches)
+
+    def _add_to_batches(self, batches: Generator) -> Generator:
+        """Appends new batches to self.batches"""
+        for batch in (self.batches, batches):
+            yield from batch
+
+    def _rerun_existing_sbatch(self, job_paths: dict) -> Generator:
+        """Uses same API as batches, but only returns sbatch path"""
+
+        # Yield the paths provided
+        for job, path in job_paths.items():
+            # Needs to be able to receive sent values
+            _ = yield
+
+            self.pipes_run += 1
+            yield path['slurm_path']
+
+            # Remove the old job when new one is given
+            for j, val in self.job_history.items():
+                if val['slurm_path'] == path and j != job:
+                    del self.job_history[j]
+                    break
+
     def _use_only_valid_states(self, jobs: dict) -> dict:
         """Remove states (e.g.CF) that aren't in self.status"""
         for j, val in jobs.items():
@@ -319,8 +565,6 @@ class SlurmController(JobController):
                 jobs[j]['state'] = 'R'
             elif val['state'] in ('R'):
                 pass
-            else:
-                print('STATE NOT UNDERSTOOD')
 
         return jobs
 
