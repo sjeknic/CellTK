@@ -8,7 +8,7 @@ import numpy as np
 import cellst.utils.filter_utils as filt
 
 
-class Condition():
+class ConditionArray():
     """
     ax 0 - cell locations (nuc, cyto, population, etc.)
     ax 1 - channels (TRITC, FITC, etc.)
@@ -17,7 +17,8 @@ class Condition():
     ax 4 - frames
     """
     __slots__ = ('_arr', 'name', 'time', 'coords', '_arr_dim', '_dim_idxs',
-                 '_key_dim_pairs', '_key_coord_pairs', 'masks', 'pos_id')
+                 '_key_dim_pairs', '_key_coord_pairs', 'masks', 'pos_id',
+                 '__dict__')
 
     def __init__(self,
                  regions: List[str] = ['nuc'],
@@ -111,7 +112,7 @@ class Condition():
 
     def save(self, path: str) -> None:
         """
-        Saves Condition to an hdf5 file.
+        Saves ConditionArray to an hdf5 file.
 
         TODO:
             - Add checking for path and overwrite options
@@ -140,15 +141,15 @@ class Condition():
         return cls._build_from_file(f)
 
     @classmethod
-    def _build_from_file(cls, f: h5py.File) -> 'Condition':
+    def _build_from_file(cls, f: h5py.File) -> 'ConditionArray':
         """
-        Given an hdf5 file, returns a Condition instance
+        Given an hdf5 file, returns a ConditionArray instance
         """
         if len(f) != 1:
             raise TypeError('Did not understand hdf5 file format.')
 
         for key in f:
-            _arr = Condition(**f[key].attrs, name=key)
+            _arr = ConditionArray(**f[key].attrs, name=key)
             _arr[:] = f[key]
 
         return _arr
@@ -316,7 +317,7 @@ class Condition():
 
     def set_position_id(self, pos: int = None) -> None:
         """
-        Adds unique identifiers for cells in Condition
+        Adds unique identifiers for cells in ConditionArray
 
         TODO:
             - Catch TypeError, ValueError for non-digit pos
@@ -524,12 +525,12 @@ class Condition():
 
     def set_condition(self, condition: str) -> None:
         """
-        Updates name of the Condition array.
+        Updates name of the ConditionArray.
         """
         self.name = condition
 
 
-class Experiment():
+class ExperimentArray():
     """
     TODO:
         - Add Typing hints when the imports are fixed
@@ -537,7 +538,7 @@ class Experiment():
     __slots__ = ('name', 'attrs', 'sites', 'masks')
 
     def __init__(self,
-                 arrays: List[Condition] = None,
+                 arrays: List[ConditionArray] = None,
                  name: str = None,
                  time: float = None,
                  ) -> None:
@@ -553,10 +554,10 @@ class Experiment():
         self.masks = {k: {} for k in self.sites}
 
     def __setitem__(self, key, value):
-        # All values must be Condition
-        if not isinstance(value, Condition):
-            raise TypeError('All values in Experiment must be'
-                            f'type Condition. Got {type(value)}.')
+        # All values must be ConditionArray
+        if not isinstance(value, ConditionArray):
+            raise TypeError('All values in ExperimentArray must be'
+                            f'type ConditionArray. Got {type(value)}.')
 
         self.sites[key] = value
 
@@ -659,7 +660,7 @@ class Experiment():
                 See Orchestrator.build_experiment_file()
         """
         # Get array and key
-        arr = Condition.load(path)
+        arr = ConditionArray.load(path)
         name = name if name else arr.name
         pos_id = pos_id if pos_id else arr.pos_id
         if pos_id:
@@ -814,19 +815,19 @@ class Experiment():
                     self.sites.pop(k, None)
 
                 # Save new one
-                self.sites[cond] = Condition(**coords, name=cond,
-                                             time=cond_arrs[0].time)
+                self.sites[cond] = ConditionArray(**coords, name=cond,
+                                                  time=cond_arrs[0].time)
                 self.sites[cond][:] = new_arr
 
     @classmethod
-    def _build_from_file(cls, f: h5py.File) -> 'Experiment':
+    def _build_from_file(cls, f: h5py.File) -> 'ExperimentArray':
         """
         Given an hdf5 file, returns a Experiment instance
         """
-        pos = Experiment()
+        pos = ExperimentArray()
         for key in f:
             # Attrs define the coords and axes
-            _arr = Condition(**f[key].attrs, name=key)
+            _arr = ConditionArray(**f[key].attrs, name=key)
             # f[key] holds the actual array data
             _arr[:] = f[key]
             pos[key] = _arr

@@ -13,7 +13,7 @@ import numpy as np
 from cellst.utils._types import (Image, Mask, Track,
                                  Arr, ImageContainer,
                                  INPT_NAMES)
-from cellst.core.arrays import Condition, Experiment
+from cellst.core.arrays import ConditionArray, ExperimentArray
 from cellst.utils.operation_utils import sliding_window_generator
 from cellst.utils.log_utils import get_null_logger
 
@@ -289,7 +289,7 @@ class ImageHelper():
         # Store stack as list if not already
         if isinstance(stack, np.ndarray):
             stack = [stack]
-        elif isinstance(stack, (Condition, Experiment)):
+        elif isinstance(stack, (ConditionArray, ExperimentArray)):
             stack = [stack]
             # Assume only one output key - set to output id
             try:

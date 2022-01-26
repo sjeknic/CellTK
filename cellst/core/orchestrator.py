@@ -10,7 +10,7 @@ from glob import glob
 
 from cellst.operation import Operation
 from cellst.core.pipeline import Pipeline
-from cellst.core.arrays import Experiment
+from cellst.core.arrays import ExperimentArray
 from cellst.utils._types import Arr
 from cellst.utils.process_utils import condense_operations, extract_operations
 from cellst.utils.utils import folder_name
@@ -203,8 +203,8 @@ class Orchestrator():
         TODO:
             - Increase efficiency by grouping sites by condition before loading
         """
-        # Make Experiment array to hold data
-        out = Experiment(name=self.name)
+        # Make ExperimentArray to hold data
+        out = ExperimentArray(name=self.name)
 
         # Search for all dfs in all pipeline folders
         for fol in self.pipelines:

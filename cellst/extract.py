@@ -6,7 +6,7 @@ import numpy as np
 from cellst.operation import BaseExtractor
 from cellst.utils.utils import ImageHelper
 from cellst.utils._types import Image, Mask, Track, Arr
-from cellst.core.arrays import Condition
+from cellst.core.arrays import ConditionArray
 from cellst.utils.operation_utils import lineage_to_track, parents_from_track
 
 
@@ -101,18 +101,20 @@ class Extractor(BaseExtractor):
         frames = range(max([i.shape[0] for i in images]))
 
         # Initialize data structure
-        array = Condition(regions, channels, all_measures, cells, frames,
-                          name=condition, pos_id=position_id)
+        array = ConditionArray(regions, channels, all_measures, cells, frames,
+                               name=condition, pos_id=position_id)
 
         # Extract data for all channels and regions individually
         for c_idx, cnl in enumerate(channels):
             for r_idx, rgn in enumerate(regions):
-                cr_data = self._extract_data_with_track(images[c_idx],
-                                                        tracks_to_use[r_idx],
-                                                        metrics,
-                                                        extra_funcs,
-                                                        cell_index)
-            array[rgn, cnl, :, :, :] = cr_data
+                cnl_rgn_data = self._extract_data_with_track(
+                    images[c_idx],
+                    tracks_to_use[r_idx],
+                    metrics,
+                    extra_funcs,
+                    cell_index
+                )
+            array[rgn, cnl, :, :, :] = cnl_rgn_data
 
         if remove_parent:
             # Get parent information from a single track

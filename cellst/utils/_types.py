@@ -2,7 +2,7 @@ from typing import NewType
 
 import numpy as np
 
-from cellst.core.arrays import Condition
+from cellst.core.arrays import ConditionArray
 
 
 class ImageContainer(dict):
@@ -21,7 +21,7 @@ class ImageContainer(dict):
 Image = NewType('image', np.ndarray)
 Mask = NewType('mask', np.ndarray)
 Track = NewType('track', np.ndarray)
-Arr = NewType('array', Condition)  # For Condition/Experiment
+Arr = NewType('array', ConditionArray)  # For ConditionArray/ExperimentArray
 Same = NewType('same', np.ndarray)  # Allows functions to return multiple types
 
 # Save input names and types

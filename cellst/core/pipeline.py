@@ -4,7 +4,6 @@ import argparse
 import yaml
 import warnings
 import time
-import shutil
 from typing import Dict, List, Collection, Tuple
 
 import numpy as np
@@ -13,7 +12,6 @@ import imageio as iio
 
 from cellst.operation import Operation
 from cellst.utils._types import Image, Mask, Track, Arr, ImageContainer
-from cellst.core.arrays import Experiment
 from cellst.utils.process_utils import condense_operations, extract_operations
 from cellst.utils.utils import folder_name
 from cellst.utils.log_utils import get_logger, get_console_logger
