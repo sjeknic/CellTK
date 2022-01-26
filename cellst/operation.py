@@ -9,9 +9,9 @@ import numpy as np
 import skimage.measure as meas
 
 from cellst.utils._types import (Image, Mask, Track, Arr,
-                                 ImageContainer, INPT_NAMES)
-from cellst.utils.operation_utils import (track_to_mask, parents_from_track,
-                                          RandomNameProperty)
+                                 ImageContainer, INPT_NAMES,
+                                 RandomNameProperty)
+from cellst.utils.operation_utils import track_to_mask, parents_from_track
 from cellst.utils.log_utils import get_console_logger
 import cellst.utils.metric_utils as metric_utils
 

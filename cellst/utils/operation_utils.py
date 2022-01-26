@@ -310,25 +310,3 @@ def match_labels_linear(source: np.ndarray, dest: np.ndarray) -> np.ndarray:
         out[dest == d] = s
 
     return out
-
-
-class RandomNameProperty():
-    """
-    This class is to be used with skimage.regionprops_table.
-    Every extra property passed to regionprops_table must
-    have a unique name, however, I want to use several as a
-    placeholder, so that I can get the right size array, but fill
-    in the values later. So, this assigns a random __name__.
-
-    NOTE:
-        - This does not guarantee a unique name, so getting IndexError
-          in Extractor is still possible.
-    """
-    def __init__(self, *args) -> None:
-        rng = np.random.default_rng()
-        # Make it extremely unlikely to get the same int
-        self.__name__ = str(rng.integers(999999))
-
-    @staticmethod
-    def __call__(empty):
-        return np.nan
