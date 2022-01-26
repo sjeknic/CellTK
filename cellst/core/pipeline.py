@@ -14,7 +14,7 @@ from cellst.operation import Operation
 from cellst.utils._types import Image, Mask, Track, Arr, ImageContainer
 from cellst.utils.process_utils import condense_operations, extract_operations
 from cellst.utils.log_utils import get_logger, get_console_logger
-from cellst.utils.yaml_utils import (save_operation_yaml, save_pipeline_yaml,
+from cellst.utils.file_utils import (save_operation_yaml, save_pipeline_yaml,
                                      folder_name)
 
 
@@ -321,7 +321,7 @@ class Pipeline():
             os.makedirs(path)
         path = os.path.join(path, fname)
 
-        # Save using yaml_utils
+        # Save using file_utils
         self.logger.info(f"Saving Operations at {path}")
         save_operation_yaml(path, self.operations)
 

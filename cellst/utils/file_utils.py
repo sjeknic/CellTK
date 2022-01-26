@@ -26,7 +26,7 @@ def save_yaml_file(data: dict, path: str, warning: bool = True) -> None:
                     'To generate a new file use the methods of Pipeline '
                     'or Orchestrator.',
                     'Or use the save_operation_yaml and save_pipeline_yaml '
-                    'functions in cellst.utils.yaml_utils.')
+                    'functions in cellst.utils.file_utils.')
     with open(path, 'w') as yf:
         if warning:
             for warn in warning_text:
