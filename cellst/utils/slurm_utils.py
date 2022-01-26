@@ -624,7 +624,7 @@ class SlurmController(JobController):
             mods = f'module restore {self.modules}'
             string = _add_line(string, mods, '', '')
 
-        command = f'python3 -m cellst.pipeline -y {yaml_path}'
+        command = f'python3 -m cellst.core.pipeline -y {yaml_path}'
         string = _add_line(string, command, '', '')
 
         # Make the file
