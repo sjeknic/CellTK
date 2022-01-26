@@ -13,10 +13,9 @@ from cellst.core.pipeline import Pipeline
 from cellst.core.arrays import ExperimentArray
 from cellst.utils._types import Arr
 from cellst.utils.process_utils import condense_operations, extract_operations
-from cellst.utils.utils import folder_name
 from cellst.utils.log_utils import get_logger, get_console_logger
 from cellst.utils.yaml_utils import (save_operation_yaml, save_pipeline_yaml,
-                                     save_yaml_file)
+                                     save_yaml_file, folder_name)
 from cellst.utils.slurm_utils import JobController, SlurmController
 from cellst.utils.cli_utils import CLIParser
 
