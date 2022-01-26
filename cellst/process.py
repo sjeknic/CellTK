@@ -6,23 +6,22 @@ import skimage.filters as filt
 import skimage.segmentation as segm
 import scipy.ndimage as ndi
 
-from cellst.operation import BaseProcess
+from cellst.operation import BaseProcessor
 from cellst.utils._types import Image, Mask, Track, Same
 from cellst.utils.utils import ImageHelper
 from cellst.utils.operation_utils import (sliding_window_generator,
                                           shift_array, crop_array)
 
-"""
-TODO:
-    - Add stand-alone crop function
-    - Add optical-flow registration
-    - Add faster bg subtract (wavelet hazen)
-    - Add unet_predict here
-    - Add sobel filter
-"""
 
-
-class Process(BaseProcess):
+class Processor(BaseProcessor):
+    """
+    TODO:
+        - Add stand-alone crop function
+        - Add optical-flow registration
+        - Add faster bg subtract (wavelet hazen)
+        - Add unet_predict here
+        - Add sobel filter
+    """
     @ImageHelper(by_frame=False, as_tuple=True)
     def align_by_cross_correlation(self,
                                    image: Image,

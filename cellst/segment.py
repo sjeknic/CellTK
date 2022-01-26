@@ -5,27 +5,26 @@ import skimage.morphology as morph
 import skimage.filters as filt
 import scipy.ndimage as ndi
 
-from cellst.operation import BaseSegment
+from cellst.operation import BaseSegmenter
 from cellst.utils._types import Image, Mask
 from cellst.utils.utils import ImageHelper
 from cellst.utils.operation_utils import (remove_small_holes_keep_labels,
                                           dilate_sitk, voronoi_boundaries,
                                           match_labels_linear)
 
-"""
-TODO:
-    - Test Taka's CellTK functions (find_boundaries, cytoring)
-    - fix expand_cytoring
-    - Add more cytoring functions (thres, adaptive_thres, etc.)
-    - Add more bg subtract functions (bg_subtract_wavelet_hazen)
-    - Add morphsnakes segmentation and test
-    - Add levelset segmentation
-    - Test eSJ69 segmentation
-    - Add mahotas/watershed_distance
-"""
 
-
-class Segment(BaseSegment):
+class Segmenter(BaseSegmenter):
+    """
+    TODO:
+        - Test Taka's CellTK functions (find_boundaries, cytoring)
+        - fix expand_cytoring
+        - Add more cytoring functions (thres, adaptive_thres, etc.)
+        - Add more bg subtract functions (bg_subtract_wavelet_hazen)
+        - Add morphsnakes segmentation and test
+        - Add levelset segmentation
+        - Test eSJ69 segmentation
+        - Add mahotas/watershed_distance
+    """
     @ImageHelper(by_frame=True)
     def clean_labels(self,
                      mask: Mask,

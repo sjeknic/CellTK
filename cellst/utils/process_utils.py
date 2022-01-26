@@ -67,7 +67,7 @@ def _dict_to_operation(oper_dict: Dict) -> Operation:
             operation.add_function_to_operation(func, exp_type, name,
                                                 *args, **kwargs)
         except NotImplementedError:
-            # Extract already has function added, but needs other info
+            # Extractor already has function added, but needs other info
             operation.set_metric_list(val['metrics'])
             for k, v in val['extra_props'].items():
                 operation.add_extra_metric(k, v)

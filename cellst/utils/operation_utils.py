@@ -322,7 +322,7 @@ class RandomNameProperty():
 
     NOTE:
         - This does not guarantee a unique name, so getting IndexError
-          in Extract is still possible.
+          in Extractor is still possible.
     """
     def __init__(self, *args) -> None:
         rng = np.random.default_rng()

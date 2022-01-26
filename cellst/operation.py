@@ -418,8 +418,8 @@ class Operation():
         return f'{fname}({passed})'
 
 
-class BaseProcess(Operation):
-    __name__ = 'Process'
+class BaseProcessor(Operation):
+    __name__ = 'Processor'
     _input_type = (Image,)
     _output_type = Image
 
@@ -460,8 +460,8 @@ class BaseProcess(Operation):
         return super()._operation_to_dict(op_slots)
 
 
-class BaseSegment(Operation):
-    __name__ = 'Segment'
+class BaseSegmenter(Operation):
+    __name__ = 'Segmenter'
     _input_type = (Image,)
     _output_type = Mask
 
@@ -502,8 +502,8 @@ class BaseSegment(Operation):
         return super()._operation_to_dict(op_slots)
 
 
-class BaseTrack(Operation):
-    __name__ = 'Track'
+class BaseTracker(Operation):
+    __name__ = 'Tracker'
     _input_type = (Image, Mask)
     _output_type = Track
 
@@ -544,9 +544,9 @@ class BaseTrack(Operation):
         return super()._operation_to_dict(op_slots)
 
 
-class BaseExtract(Operation):
+class BaseExtractor(Operation):
     """TODO: Include add_derived_metrics"""
-    __name__ = 'Extract'
+    __name__ = 'Extractor'
     _input_type = (Image, Mask, Track)
     _output_type = Arr
     # This is directly from skimage.regionprops
@@ -824,10 +824,10 @@ class BaseExtract(Operation):
                                   **kwargs
                                   ) -> None:
         """
-        Extract currently only supports one function due to how
+        Extractor currently only supports one function due to how
         extract_data_from_images expects the inputs.
         """
-        raise NotImplementedError('Adding new functions to Extract is '
+        raise NotImplementedError('Adding new functions to Extractor is '
                                   'not currently supported. '
                                   'extract_data_from_image is included '
                                   'by default.')
@@ -841,7 +841,7 @@ class BaseExtract(Operation):
         # Get inputs that were saved during __init__
         _, expec_type, args, kwargs, name = self.functions[0]
 
-        # Extract needs separate logging here
+        # Log inputs to Extractor
         self.logger.info(f"Channels: {list(zip(kwargs['channels'], self.input_images))}")
         self.logger.info(f"Regions: {list(zip(kwargs['regions'], self.input_tracks + self.input_masks))}")
         self.logger.info(f"Metrics: {self._metrics}")
@@ -851,8 +851,8 @@ class BaseExtract(Operation):
         return super().run_operation(inputs)
 
 
-class BaseEvaluate(Operation):
-    __name__ = 'Evaluate'
+class BaseEvaluator(Operation):
+    __name__ = 'Evaluator'
     _input_type = (Arr,)
     _output_type = Arr
 

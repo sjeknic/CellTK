@@ -3,13 +3,13 @@ import warnings
 
 import numpy as np
 
-from cellst.operation import BaseExtract
+from cellst.operation import BaseExtractor
 from cellst.utils.utils import ImageHelper
 from cellst.utils._types import Image, Mask, Track, Arr, Condition
 from cellst.utils.operation_utils import lineage_to_track, parents_from_track
 
 
-class Extract(BaseExtract):
+class Extractor(BaseExtractor):
     @ImageHelper(by_frame=False, as_tuple=True)
     def extract_data_from_image(self,
                                 images: Image,
@@ -40,10 +40,6 @@ class Extract(BaseExtract):
             - remove_parent - if true, use a track to connect par_daught
                               and remove parents
             - parent_track - if remove_parent, track to use for lineage info
-
-        NOTE: Extract takes in all inputs, so no need for decorator
-        NOTE: Inputs are optional so that __call__ can use either mask
-              or track
 
         TODO:
             - Allow an option for caching or not in regionprops

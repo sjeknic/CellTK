@@ -231,8 +231,8 @@ class Orchestrator():
         self.logger.info(f'Adding Operations {operations} '
                          f'to {len(self)} Pipelines.')
         for pipe, kwargs in self.pipelines.items():
-            # If Extract is in operations, update the condition
-            # TODO: This won't work for multiple Extract operations
+            # If Extractor is in operations, update the condition
+            # TODO: This won't work for multiple Extractor operations
             if 'extract' in op_dict:
                 if op_dict['extract']['condition'] == 'default':
                     condition = kwargs['name']
