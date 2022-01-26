@@ -11,7 +11,7 @@ from .extract import Extractor
 from .evaluate import Evaluator
 
 # Import important types
-from .utils import _types as cst_types
-from .utils._types import Image, Mask, Track, Arr, Same
 from .core.arrays import ConditionArray, ExperimentArray
+from .utils import ImageHelper
+from .utils._types import Image, Mask, Track, Arr, Same
 from .utils.slurm_utils import SlurmController
