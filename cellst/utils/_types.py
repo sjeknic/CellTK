@@ -123,7 +123,6 @@ class Condition():
             # Axis names and coords stored as attributes
             f[self.name].attrs[coord] = self.coords[coord]
 
-        import ipdb; ipdb.set_trace()
         f[self.name].attrs['pos_id'] = self.pos_id
         f[self.name].attrs['time'] = self.time
 

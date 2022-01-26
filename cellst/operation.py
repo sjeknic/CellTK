@@ -583,7 +583,7 @@ class BaseExtract(Operation):
                  regions: Collection[str] = [],
                  lineages: Collection[np.ndarray] = [],
                  condition: str = '',
-                 position_id: int = None,
+                 position_id: int = 0,
                  min_trace_length: int = 0,
                  remove_parent: bool = True,
                  output: str = 'data_frame',
