@@ -12,6 +12,6 @@ from .evaluate import Evaluator
 
 # Import important types
 from .core.arrays import ConditionArray, ExperimentArray
-from .utils import ImageHelper
+from .utils.utils import ImageHelper
 from .utils._types import Image, Mask, Track, Arr, Same
 from .utils.slurm_utils import SlurmController

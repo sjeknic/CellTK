@@ -43,10 +43,10 @@ class Operation():
         self.func_index = {}
 
         # Will be overwritten by inheriting class if they are used
-        self.input_images = []
-        self.input_masks = []
-        self.input_tracks = []
-        self.input_arrays = []
+        self.images = []
+        self.masks = []
+        self.tracks = []
+        self.arrays = []
 
         # Create a class to save intermediate arrays for saving
         self.save_arrays = {}
@@ -66,9 +66,9 @@ class Operation():
         op_id = f'{self.__name__} at {hex(id(self))}'
 
         # Get the names of the inputs
-        inputs = tuple([f"{name[0]}:{getattr(self, f'input_{name}s')}"
+        inputs = tuple([f"{name[0]}:{getattr(self, f'{name}s')}"
                         for name in INPT_NAMES
-                        if getattr(self, f'input_{name}s')])
+                        if hasattr(self, f'{name}s')])
 
         # Format each function as a str
         funcs = []
@@ -114,8 +114,8 @@ class Operation():
                          f'{hex(id(self))} entered.')
         # Log requests for each data type
         for name in INPT_NAMES:
-            if getattr(self, f'input_{name}s'):
-                self.logger.info(f"input_{name}:{getattr(self, f'input_{name}s')}")
+            if getattr(self, f'{name}s'):
+                self.logger.info(f"{name}:{getattr(self, f'{name}s')}")
         self.logger.info(f"Output ID: {self.output_id}")
 
         return self
@@ -324,7 +324,7 @@ class Operation():
         # Get all the inputs that were passed to __init__
         inputs = []
         for i in INPT_NAMES:
-            inputs.extend([(g, i) for g in getattr(self, f'input_{i}s')])
+            inputs.extend([(g, i) for g in getattr(self, f'{i}s')])
 
         inputs += f_keys_for_inputs + [self.output_id]
 
@@ -420,8 +420,8 @@ class BaseProcessor(Operation):
     _output_type = Image
 
     def __init__(self,
-                 input_images: Collection[str] = [],
-                 input_masks = [],
+                 images: Collection[str] = [],
+                 masks = [],
                  output: str = 'process',
                  save: bool = True,
                  force_rerun: bool = False,
@@ -430,15 +430,15 @@ class BaseProcessor(Operation):
         super().__init__(output, save, force_rerun, _output_id)
 
         # TODO: For every operation, these should be set in BaseOperation
-        if isinstance(input_images, str):
-            self.input_images = [input_images]
+        if isinstance(images, str):
+            self.images = [images]
         else:
-            self.input_images = input_images
+            self.images = images
 
-        if isinstance(input_masks, str):
-            self.input_masks = [input_masks]
+        if isinstance(masks, str):
+            self.masks = [masks]
         else:
-            self.input_masks = input_masks
+            self.masks = masks
 
         self.output = output
 
@@ -452,7 +452,7 @@ class BaseProcessor(Operation):
         return self.run_operation(images, [], [], [])
 
     def _operation_to_dict(self) -> Dict:
-        op_slots = ['input_images']
+        op_slots = ['images']
         return super()._operation_to_dict(op_slots)
 
 
@@ -462,8 +462,8 @@ class BaseSegmenter(Operation):
     _output_type = Mask
 
     def __init__(self,
-                 input_images: Collection[str] = [],
-                 input_masks: Collection[str] = [],
+                 images: Collection[str] = [],
+                 masks: Collection[str] = [],
                  output: str = 'mask',
                  save: bool = True,
                  force_rerun: bool = False,
@@ -471,15 +471,15 @@ class BaseSegmenter(Operation):
                  ) -> None:
         super().__init__(output, save, force_rerun, _output_id)
 
-        if isinstance(input_images, str):
-            self.input_images = [input_images]
+        if isinstance(images, str):
+            self.images = [images]
         else:
-            self.input_images = input_images
+            self.images = images
 
-        if isinstance(input_masks, str):
-            self.input_masks = [input_masks]
+        if isinstance(masks, str):
+            self.masks = [masks]
         else:
-            self.input_masks = input_masks
+            self.masks = masks
 
         self.output = output
 
@@ -494,7 +494,7 @@ class BaseSegmenter(Operation):
         return self.run_operation(images, masks, [], [])
 
     def _operation_to_dict(self) -> Dict:
-        op_slots = ['input_images', 'input_masks']
+        op_slots = ['images', 'masks']
         return super()._operation_to_dict(op_slots)
 
 
@@ -504,8 +504,8 @@ class BaseTracker(Operation):
     _output_type = Track
 
     def __init__(self,
-                 input_images: Collection[str] = [],
-                 input_masks: Collection[str] = [],
+                 images: Collection[str] = [],
+                 masks: Collection[str] = [],
                  output: str = 'track',
                  save: bool = True,
                  force_rerun: bool = False,
@@ -513,15 +513,15 @@ class BaseTracker(Operation):
                  ) -> None:
         super().__init__(output, save, force_rerun, _output_id)
 
-        if isinstance(input_images, str):
-            self.input_images = [input_images]
+        if isinstance(images, str):
+            self.images = [images]
         else:
-            self.input_images = input_images
+            self.images = images
 
-        if isinstance(input_masks, str):
-            self.input_masks = [input_masks]
+        if isinstance(masks, str):
+            self.masks = [masks]
         else:
-            self.input_masks = input_masks
+            self.masks = masks
 
         self.output = output
 
@@ -536,7 +536,7 @@ class BaseTracker(Operation):
         return self.run_operation(images, masks, [], [])
 
     def _operation_to_dict(self) -> Dict:
-        op_slots = ['input_images', 'input_masks']
+        op_slots = ['images', 'masks']
         return super()._operation_to_dict(op_slots)
 
 
@@ -572,9 +572,9 @@ class BaseExtractor(Operation):
     _props_to_add = {}
 
     def __init__(self,
-                 input_images: Collection[str] = [],
-                 input_masks: Collection[str] = [],
-                 input_tracks: Collection[str] = [],
+                 images: Collection[str] = [],
+                 masks: Collection[str] = [],
+                 tracks: Collection[str] = [],
                  channels: Collection[str] = [],
                  regions: Collection[str] = [],
                  lineages: Collection[np.ndarray] = [],
@@ -594,20 +594,20 @@ class BaseExtractor(Operation):
 
         super().__init__(output, save, force_rerun, _output_id)
 
-        if isinstance(input_images, str):
-            self.input_images = [input_images]
+        if isinstance(images, str):
+            self.images = [images]
         else:
-            self.input_images = input_images
+            self.images = images
 
-        if isinstance(input_masks, str):
-            self.input_masks = [input_masks]
+        if isinstance(masks, str):
+            self.masks = [masks]
         else:
-            self.input_masks = input_masks
+            self.masks = masks
 
-        if isinstance(input_tracks, str):
-            self.input_tracks = [input_tracks]
+        if isinstance(tracks, str):
+            self.tracks = [tracks]
         else:
-            self.input_tracks = input_tracks
+            self.tracks = tracks
 
 
         if isinstance(regions, str):
@@ -617,14 +617,14 @@ class BaseExtractor(Operation):
 
 
         if len(channels) == 0:
-            channels = input_images
+            channels = images
 
         # Prefer tracks for naming
         if len(regions) == 0:
-            if len(self.input_tracks) > 0:
-                regions = input_tracks
+            if len(self.tracks) > 0:
+                regions = tracks
             else:
-                regions = input_masks
+                regions = masks
 
         # Name must be given
         if condition is None or condition == '':
@@ -765,7 +765,7 @@ class BaseExtractor(Operation):
         return np.moveaxis(out, 0, -1)
 
     def _operation_to_dict(self) -> Dict:
-        op_slots = ['input_images', 'input_masks', 'input_tracks']
+        op_slots = ['images', 'masks', 'tracks']
         op_dict = super()._operation_to_dict(op_slots)
 
         # Add the kwargs for extract_data_from_image
@@ -838,8 +838,8 @@ class BaseExtractor(Operation):
         _, expec_type, args, kwargs, name = self.functions[0]
 
         # Log inputs to Extractor
-        self.logger.info(f"Channels: {list(zip(kwargs['channels'], self.input_images))}")
-        self.logger.info(f"Regions: {list(zip(kwargs['regions'], self.input_tracks + self.input_masks))}")
+        self.logger.info(f"Channels: {list(zip(kwargs['channels'], self.images))}")
+        self.logger.info(f"Regions: {list(zip(kwargs['regions'], self.tracks + self.masks))}")
         self.logger.info(f"Metrics: {self._metrics}")
         self.logger.info(f"Added metrics: {list(self._props_to_add.keys())}")
         self.logger.info(f"Condition: {kwargs['condition']}")
@@ -853,7 +853,7 @@ class BaseEvaluator(Operation):
     _output_type = Arr
 
     def __init__(self,
-                 input_arrays: Collection[str] = [],
+                 arrays: Collection[str] = [],
                  output: str = 'evaluate',
                  save: bool = True,
                  force_rerun: bool = False,
@@ -861,10 +861,10 @@ class BaseEvaluator(Operation):
                  ) -> None:
         super().__init__(output, save, force_rerun, _output_id)
 
-        if isinstance(input_arrays, str):
-            self.input_arrays = [input_arrays]
+        if isinstance(arrays, str):
+            self.arrays = [arrays]
         else:
-            self.input_arrays = input_arrays
+            self.arrays = arrays
 
     def __call__(self,
                  arrs: Collection[Arr]
@@ -876,5 +876,5 @@ class BaseEvaluator(Operation):
         return self.run_operation([], [], [], arrs)
 
     def _operation_to_dict(self) -> Dict:
-        op_slots = ['input_arrays']
+        op_slots = ['arrays']
         return super()._operation_to_dict(op_slots)
