@@ -11,7 +11,7 @@ from typing import Collection, Generator, List, Callable
 
 from cellst.utils.log_utils import get_console_logger, get_null_logger
 from cellst.utils.yaml_utils import save_job_history_yaml, get_file_line, load_yaml
-from cellst.pipeline import Pipeline
+from cellst.core.pipeline import Pipeline
 
 
 class JobController():

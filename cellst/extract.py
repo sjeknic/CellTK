@@ -5,7 +5,8 @@ import numpy as np
 
 from cellst.operation import BaseExtractor
 from cellst.utils.utils import ImageHelper
-from cellst.utils._types import Image, Mask, Track, Arr, Condition
+from cellst.utils._types import Image, Mask, Track, Arr
+from cellst.core.arrays import Condition
 from cellst.utils.operation_utils import lineage_to_track, parents_from_track
 
 

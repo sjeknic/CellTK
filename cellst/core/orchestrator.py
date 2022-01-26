@@ -9,8 +9,9 @@ from typing import Dict, Collection, Callable
 from glob import glob
 
 from cellst.operation import Operation
-from cellst.pipeline import Pipeline
-from cellst.utils._types import Arr, Experiment
+from cellst.core.pipeline import Pipeline
+from cellst.core.arrays import Experiment
+from cellst.utils._types import Arr
 from cellst.utils.process_utils import condense_operations, extract_operations
 from cellst.utils.utils import folder_name
 from cellst.utils.log_utils import get_logger, get_console_logger

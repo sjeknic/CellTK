@@ -12,8 +12,8 @@ import numpy as np
 
 from cellst.utils._types import (Image, Mask, Track,
                                  Arr, ImageContainer,
-                                 Condition, Experiment,
                                  INPT_NAMES)
+from cellst.core.arrays import Condition, Experiment
 from cellst.utils.operation_utils import sliding_window_generator
 from cellst.utils.log_utils import get_null_logger
 
