@@ -27,7 +27,7 @@ class Condition():
                  frames: Collection[int] = [0],
                  name: str = 'default',
                  time: float = None,
-                 pos_id: int = None
+                 pos_id: int = 0
                  ) -> None:
         """
         TODO:
@@ -123,6 +123,7 @@ class Condition():
             # Axis names and coords stored as attributes
             f[self.name].attrs[coord] = self.coords[coord]
 
+        import ipdb; ipdb.set_trace()
         f[self.name].attrs['pos_id'] = self.pos_id
         f[self.name].attrs['time'] = self.time
 

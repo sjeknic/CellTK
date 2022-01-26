@@ -243,7 +243,7 @@ class Orchestrator():
                 if self.position_map:
                     pos = self.position_map[pipe]
                 else:
-                    pos = None
+                    pos = 0
 
                 # Make new extract dictionary
                 new_extract = {}
