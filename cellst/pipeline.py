@@ -261,10 +261,7 @@ class Pipeline():
             - There is no way to pass dtype to this function currently
         """
         for name, (otpt_type, arr) in save_arrays.items():
-            # Make output directory if needed
             save_folder = os.path.join(self.output_folder, name)
-            if not os.path.exists(save_folder):
-                os.makedirs(save_folder)
 
             # Save CellArray separately
             if oper_output == 'array':
@@ -274,6 +271,10 @@ class Pipeline():
                 self.logger.info(f'Saved data frame at {name}. '
                                  f'shape: {arr.shape}, type: {arr.dtype}.')
             else:
+                # Make output directory if needed
+                if not os.path.exists(save_folder):
+                    os.makedirs(save_folder)
+
                 save_dtype = arr.dtype if img_dtype is None else img_dtype
                 if arr.ndim != 3:
                     warnings.warn("Expected stack with 3 dimensions."
