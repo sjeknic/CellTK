@@ -18,10 +18,6 @@ import cellst.utils.metric_utils as metric_utils
 
 class Operation():
     __name__ = 'Operation'
-    __slots__ = ('save', 'output', 'functions', 'func_index', 'input_images',
-                 'input_masks', 'input_tracks', 'input_arrays', 'save_arrays',
-                 'output_id', 'logger', 'timer', '_split_key', 'force_rerun',
-                 '_input_type', '_output_type')
 
     def __init__(self,
                  output: str,

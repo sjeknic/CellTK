@@ -535,7 +535,7 @@ class ExperimentArray():
     TODO:
         - Add Typing hints when the imports are fixed
     """
-    __slots__ = ('name', 'attrs', 'sites', 'masks')
+    __slots__ = ('name', 'attrs', 'sites', 'masks', '__dict__')
 
     def __init__(self,
                  arrays: List[ConditionArray] = None,

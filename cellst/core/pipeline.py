@@ -33,7 +33,7 @@ class Pipeline():
                  'operation_index', 'file_extension',
                  'logger', 'timer', 'overwrite',
                  'name', 'log_file', '_split_key',
-                 'completed_ops')
+                 'completed_ops', '__dict__')
 
     def __init__(self,
                  parent_folder: str = None,

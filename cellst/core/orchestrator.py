@@ -25,7 +25,6 @@ class Orchestrator():
     """
     TODO:
         - Add __str__ method
-        - Add function for submitting jobs to SLURM
     """
     file_location = os.path.dirname(os.path.realpath(__file__))
 
