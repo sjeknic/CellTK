@@ -20,12 +20,15 @@ class Operation():
     __name__ = 'Operation'
 
     def __init__(self,
-                 output: str,
+                 images: Collection[str] = [],
+                 masks: Collection[str] = [],
+                 tracks: Collection[str] = [],
+                 arrays: Collection[str] = [],
+                 output: str = 'out',
                  save: bool = True,
                  force_rerun: bool = False,
                  _output_id: Tuple[str] = None,
                  _split_key: str = '&',
-                 **kwargs
                  ) -> None:
         """
         """
@@ -42,11 +45,26 @@ class Operation():
         self.functions = []
         self.func_index = {}
 
-        # Will be overwritten by inheriting class if they are used
-        self.images = []
-        self.masks = []
-        self.tracks = []
-        self.arrays = []
+        # These inputs will be [] if not used
+        if isinstance(images, str):
+            self.images = [images]
+        else:
+            self.images = images
+
+        if isinstance(masks, str):
+            self.masks = [masks]
+        else:
+            self.masks = masks
+
+        if isinstance(tracks, str):
+            self.tracks = [tracks]
+        else:
+            self.tracks = tracks
+
+        if isinstance(arrays, str):
+            self.arrays = [arrays]
+        else:
+            self.arrays = arrays
 
         # Create a class to save intermediate arrays for saving
         self.save_arrays = {}
@@ -328,7 +346,7 @@ class Operation():
 
         inputs += f_keys_for_inputs + [self.output_id]
 
-        # TODO: This is also possibly inaccurate because save_name overwrites output
+        # TODO: Possibly inaccurate because save_name overwrites output
         outputs = f_keys + [self.output_id]
 
         return inputs, outputs
@@ -420,27 +438,10 @@ class BaseProcessor(Operation):
     _output_type = Image
 
     def __init__(self,
-                 images: Collection[str] = [],
-                 masks = [],
                  output: str = 'process',
-                 save: bool = True,
-                 force_rerun: bool = False,
-                 _output_id: Tuple[str] = None,
+                 **kwargs
                  ) -> None:
-        super().__init__(output, save, force_rerun, _output_id)
-
-        # TODO: For every operation, these should be set in BaseOperation
-        if isinstance(images, str):
-            self.images = [images]
-        else:
-            self.images = images
-
-        if isinstance(masks, str):
-            self.masks = [masks]
-        else:
-            self.masks = masks
-
-        self.output = output
+        super().__init__(output=output, **kwargs)
 
     def __call__(self,
                  images: Collection[Image] = [],
@@ -462,26 +463,10 @@ class BaseSegmenter(Operation):
     _output_type = Mask
 
     def __init__(self,
-                 images: Collection[str] = [],
-                 masks: Collection[str] = [],
                  output: str = 'mask',
-                 save: bool = True,
-                 force_rerun: bool = False,
-                 _output_id: Tuple[str] = None,
+                 **kwargs
                  ) -> None:
-        super().__init__(output, save, force_rerun, _output_id)
-
-        if isinstance(images, str):
-            self.images = [images]
-        else:
-            self.images = images
-
-        if isinstance(masks, str):
-            self.masks = [masks]
-        else:
-            self.masks = masks
-
-        self.output = output
+        super().__init__(output=output, **kwargs)
 
     def __call__(self,
                  images: Collection[Image] = [],
@@ -504,26 +489,10 @@ class BaseTracker(Operation):
     _output_type = Track
 
     def __init__(self,
-                 images: Collection[str] = [],
-                 masks: Collection[str] = [],
                  output: str = 'track',
-                 save: bool = True,
-                 force_rerun: bool = False,
-                 _output_id: Tuple[str] = None,
+                 **kwargs
                  ) -> None:
-        super().__init__(output, save, force_rerun, _output_id)
-
-        if isinstance(images, str):
-            self.images = [images]
-        else:
-            self.images = images
-
-        if isinstance(masks, str):
-            self.masks = [masks]
-        else:
-            self.masks = masks
-
-        self.output = output
+        super().__init__(output=output, **kwargs)
 
     def __call__(self,
                  images: Collection[Image] = [],
@@ -585,36 +554,20 @@ class BaseExtractor(Operation):
                  output: str = 'data_frame',
                  save: bool = True,
                  force_rerun: bool = True,
-                 _output_id: Tuple[str] = None
+                 _output_id: Tuple[str] = None,
+                 **kwargs
                  ) -> None:
         """
-        channels and regions should be the names that will get saved in the final df
-        with the images and masks they correspond to.
         """
-
-        super().__init__(output, save, force_rerun, _output_id)
-
-        if isinstance(images, str):
-            self.images = [images]
-        else:
-            self.images = images
-
-        if isinstance(masks, str):
-            self.masks = [masks]
-        else:
-            self.masks = masks
-
-        if isinstance(tracks, str):
-            self.tracks = [tracks]
-        else:
-            self.tracks = tracks
-
+        super().__init__(images, masks, tracks,
+                         output=output, save=save,
+                         force_rerun=force_rerun,
+                         _output_id=_output_id, **kwargs)
 
         if isinstance(regions, str):
             regions = [regions]
         if isinstance(channels, str):
             channels = [channels]
-
 
         if len(channels) == 0:
             channels = images
@@ -853,18 +806,10 @@ class BaseEvaluator(Operation):
     _output_type = Arr
 
     def __init__(self,
-                 arrays: Collection[str] = [],
                  output: str = 'evaluate',
-                 save: bool = True,
-                 force_rerun: bool = False,
-                 _output_id: Tuple[str] = None,
+                 **kwargs
                  ) -> None:
-        super().__init__(output, save, force_rerun, _output_id)
-
-        if isinstance(arrays, str):
-            self.arrays = [arrays]
-        else:
-            self.arrays = arrays
+        super().__init__(output=output, **kwargs)
 
     def __call__(self,
                  arrs: Collection[Arr]
