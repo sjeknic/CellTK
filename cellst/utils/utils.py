@@ -32,13 +32,6 @@ def nan_helper_2d(arr: np.ndarray) -> np.ndarray:
         temp[n, :] = y
 
 
-def folder_name(path: str) -> str:
-    """Returns name of last folder in a path
-    TODO: Doesn't work if path points to file - returns file name, not folder name
-    """
-    return os.path.basename(os.path.normpath(path))
-
-
 # Functions to block output to Terminal
 def fileno(file_or_fd):
     fd = getattr(file_or_fd, 'fileno', lambda: file_or_fd)()
