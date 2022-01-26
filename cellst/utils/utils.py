@@ -40,22 +40,6 @@ def folder_name(path: str) -> str:
     return os.path.basename(os.path.normpath(path))
 
 
-# Decorator that end users can use to add custom functions
-# to Operations.
-# TODO: Needs to wrap in ImageHelper
-def custom_function(operation):
-    def decorator(func):
-        func = types.MethodType(func, operation)
-
-        if not hasattr(operation, func.__name__):
-            setattr(operation, func.__name__, func)
-        else:
-            raise ValueError(f'Function {func} already exists in {operation}.')
-
-        return func
-    return decorator
-
-
 # Functions to block output to Terminal
 def fileno(file_or_fd):
     fd = getattr(file_or_fd, 'fileno', lambda: file_or_fd)()
