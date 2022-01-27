@@ -11,6 +11,13 @@ from cellst.utils.operation_utils import lineage_to_track, parents_from_track
 
 
 class Extractor(BaseExtractor):
+    _metrics = ['label', 'area', 'convex_area', 'filled_area', 'bbox',
+                'centroid', 'mean_intensity', 'max_intensity', 'min_intensity',
+                'minor_axis_length', 'major_axis_length',
+                'orientation', 'perimeter', 'solidity']
+    _extra_properties = ['division_frame', 'parent_id', 'total_intensity',
+                         'median_intensity']
+
     @ImageHelper(by_frame=False, as_tuple=True)
     def extract_data_from_image(self,
                                 images: Image,
