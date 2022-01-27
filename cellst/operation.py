@@ -89,9 +89,8 @@ class Operation():
                         if hasattr(self, f'{name}s')])
 
         # Format each function as a str
-        funcs = []
-        for (func, otpt, args, kwargs, name) in self.functions:
-            funcs.append(self._format_function_string(func, args, kwargs))
+        funcs = [self._format_function_string(func, kwargs)
+                 for (func, _, _, kwargs) in self.functions]
         fstr = ' -> '.join(funcs)
 
         # Get the name of the output
@@ -155,42 +154,25 @@ class Operation():
             pass
 
     def add_function_to_operation(self,
-                                  func: str,
-                                  output_type: type = None,
-                                  save_name: str = None,
-                                  *args,
+                                  func: str, *,
+                                  save_as: str = None,
+                                  output_type: str = None,
                                   **kwargs
                                   ) -> None:
         """
-        args and kwargs are passed directly to the function.
-        if save_name is not None, the files will be saved in a separate folder
-
         TODO:
             - Add option for func to be a Callable
-            - Is func_index needed at all?
         """
         if hasattr(self, func):
             # Save func as string for dictionaries
-            # TODO: Output type should be input after args, kwargs
-            self.functions.append(tuple([func, output_type,
-                                         args, kwargs, save_name]))
+            self.functions.append(tuple([func, save_as, output_type, kwargs]))
         else:
             raise AttributeError(f"Function {func} not found in {self}.")
-
-        self.func_index = {i: f for i, f in enumerate(self.functions)}
 
     def run_operation(self,
                       inputs: ImageContainer
                       ) -> ImageContainer:
         """
-        Rules for operation functions:
-            Must take in at least one of image, mask, track
-            Can take in as many of each, but must be a separate positional argument
-            Either name or type hint must match the types above
-            If multiple, must be present in above order
-
-        TODO:
-            - Update rules above
         """
         # By default, return all inputs of output type
         return_container = ImageContainer()
@@ -198,54 +180,50 @@ class Operation():
                                  if k[1] == self._output_type.__name__})
 
         # fidx is function index
-        for fidx, (func, expec_type, args, kwargs, save_name) in enumerate(self.functions):
+        for fidx, (func, save_as, user_type, kwargs) in enumerate(self.functions):
             func = getattr(self, func)
+            out_type = user_type if user_type else self._get_func_output_type(func)
             last_func = fidx + 1 == len(self.functions)
 
-            # Set up the function run
+            # Set up the function
             self.logger.info(f'Starting function {func.__name__}')
             self.logger.info(
                 'All Inputs: '
                 f'{[(key, inpt.shape, inpt.dtype) for key, inpt in inputs.items()]}'
             )
-            self.logger.info(f'args / kwargs: {args} {kwargs}')
-            self.logger.info(f'User set output type: {expec_type}. '
-                             f'Save name: {save_name}')
+            self.logger.info(f'kwargs: {kwargs}')
+            self.logger.info(f'output type: {out_type}. '
+                             f'save as: {save_as}')
 
             # Check if input is already loaded
             if not self.force_rerun:
-                if expec_type:
-                    _out_type = expec_type
-                else:
-                    _out_type = self._get_func_output_type(func)
-
                 # Only checks for functions that are expected to be saved
-                if save_name:
-                    _check_key = (save_name, _out_type)
+                if save_as:
+                    check_key = (save_as, out_type)
                 elif last_func:
-                    _check_key = (self.output, _out_type)
+                    check_key = (self.output, out_type)
                 else:
-                    _check_key = (None, None)
+                    check_key = (None, None)
 
                 # The output already exists - skip the function
                 # TODO: Add ability to use keys with _split_key
-                if _check_key in inputs:
-                    self.logger.info(f'Output already loaded: {_check_key} '
-                                     f'{inputs[_check_key].shape}, '
-                                     f'{inputs[_check_key].dtype}.')
+                if check_key in inputs:
+                    self.logger.info(f'Output already loaded: {check_key} '
+                                     f'{inputs[check_key].shape}, '
+                                     f'{inputs[check_key].dtype}.')
                     self.logger.info(f'Skipping {func.__name__}.')
                     continue
 
             # Run function, get outputs, and overwrite type if needed
             exec_timer = time.time()
-            output_key, result = func(inputs, *args, **kwargs)
-            output_key = [out if expec_type is None else (out[0], expec_type)
+            output_key, result = func(inputs, **kwargs)
+            output_key = [out if not user_type else (out[0], user_type)
                           for out in output_key]
             self.logger.info(f'Returned: {[o for o in output_key]}, '
                              f'{[(r.shape, r.dtype) for r in result]}')
 
             # Change keys for saving if needed
-            ret_to_pipe = save_name or last_func
+            ret_to_pipe = save_as or last_func
             save_folders = []
             if len(result) > 1:
                 # Use names of the results to identify outputs
@@ -266,11 +244,11 @@ class Operation():
                                      '. Some outputs may be overwritten.')
 
                 # Create new output_keys if needed
-                if save_name:
-                    # Will save in sub-directories in folder save_name
-                    output_key = [(f'{save_name}{self._split_key}{r}', out[1])
+                if save_as:
+                    # Will save in sub-directories in folder save_as
+                    output_key = [(f'{save_as}{self._split_key}{r}', out[1])
                                   for out, r in zip(output_key, res_id)]
-                    save_folders = [os.path.join(save_name, r) for r in res_id]
+                    save_folders = [os.path.join(save_as, r) for r in res_id]
                 elif last_func:
                     output_key = [(f'{self.output}{self._split_key}{r}', out[1])
                                   for out, r in zip(output_key, res_id)]
@@ -279,9 +257,9 @@ class Operation():
                                         for r in res_id]
             else:
                 # Only one result, nothing fancy with the outputs
-                if save_name:
-                    output_key = [(save_name, output_key[0][1])]
-                    save_folders = [save_name]
+                if save_as:
+                    output_key = [(save_as, output_key[0][1])]
+                    save_folders = [save_as]
                 elif last_func:
                     output_key = [(self.output, output_key[0][1])]
                     if self.save:
@@ -298,7 +276,7 @@ class Operation():
                     return_container[out] = res
 
                 if save_folders:
-                    # Save images if save_name is not None
+                    # Save images if save_as is not None
                     self.logger.info(f'Adding to save container: '
                                      f'{save_folders[ridx]} '
                                      f'{out[1]}, {res.shape}')
@@ -324,20 +302,18 @@ class Operation():
 
     def get_inputs_and_outputs(self) -> List[List[tuple]]:
         """
-        Returns all inputs and outputs to Pipeline._input_output_handler
+        Returns all possible inputs and outputs expectetd.
 
-        # TODO:
-            - This must also change when order of inputs to add_func changes
+        Needed for Pipeline._input_output_handler
         """
-        # Get all keys for the functions in Operation with save_name
-        # f = (func, output_type, args, kwargs, save_name)
-        f_keys = [(f[-1], f[1]) if f[1] is not None
-                  else (f[-1], self._get_func_output_type(f[0]))
-                  for f in self.functions]
+        # Get all keys for the functions in Operation with save_as
+        f_keys = [(svname, usr_typ) if usr_typ
+                  else (svname, self._get_func_output_type(fnc))
+                  for (fnc, svname, usr_typ, _) in self.functions]
 
         # f_keys for inputs should not be included if no function follows
-        f_keys_for_inputs = [f for f in f_keys[:-1] if f[0] is not None]
-        f_keys = [f for f in f_keys if f[0] is not None]
+        f_keys_for_inputs = [f for f in f_keys[:-1] if f[0]]
+        f_keys = [f for f in f_keys if f[0]]
 
         # Get all the inputs that were passed to __init__
         inputs = []
@@ -346,7 +322,7 @@ class Operation():
 
         inputs += f_keys_for_inputs + [self.output_id]
 
-        # TODO: Possibly inaccurate because save_name overwrites output
+        # TODO: Possibly inaccurate because save_as overwrites output
         outputs = f_keys + [self.output_id]
 
         return inputs, outputs
@@ -372,7 +348,9 @@ class Operation():
 
         # Save function definitions
         func_defs = {}
-        for func, output_type, args, kwargs, name in self.functions:
+
+        #for func, output_type, args, kwargs, name in self.functions:
+        for (func, save_as, user_type, kwargs) in self.functions:
             # Rename if already in dictionary
             count = 1
             key = func
@@ -382,12 +360,11 @@ class Operation():
 
             func_defs[key] = {}
             func_defs[key]['func'] = func
-            if output_type is not None:
-                func_defs[key]['output_type'] = output_type.__name__
-            else:
-                func_defs[key]['output_type'] = output_type
-            func_defs[key]['name'] = name
-            func_defs[key]['args'] = args
+            try:
+                func_defs[key]['output_type'] = user_type.__name__
+            except AttributeError:
+                func_defs[key]['output_type'] = user_type
+            func_defs[key]['name'] = save_as
             func_defs[key]['kwargs'] = kwargs
 
         # Save in original dictionary
@@ -397,7 +374,6 @@ class Operation():
 
     def _format_function_string(self,
                                 fname: str,
-                                args: tuple,
                                 kwargs: dict
                                 ) -> str:
         """
@@ -405,29 +381,13 @@ class Operation():
 
         TODO: is there a way to neatly include type and save name?
         """
-        # Format args and kwargs to str
-        if len(args) > 0:
-            str_args = ', '.join(tuple([str(a) for a in args]))
-        else:
-            str_args = ''
-
+        # Format kwargs to str
         if len(kwargs) > 0:
             str_kwargs = ', '.join(tuple([f'{k}={v}'
                                           for k, v in kwargs.items()]))
         else:
             str_kwargs = ''
-
-        # Format the arg strings nicely
-        if not str_args and not str_kwargs:
-            passed = ''
-        elif not str_args and str_kwargs:
-            passed = str_kwargs
-        elif str_args and not str_kwargs:
-            passed = str_args
-        else:
-            passed = f'{str_args}, {str_kwargs}'
-
-        return f'{fname}({passed})'
+        return f'{fname}({str_kwargs})'
 
 
 class BaseProcessor(Operation):
@@ -533,7 +493,7 @@ class BaseExtractor(Operation):
                  channels: Collection[str] = [],
                  regions: Collection[str] = [],
                  lineages: Collection[np.ndarray] = [],
-                 condition: str = '',
+                 condition: str = 'condition',
                  position_id: int = 0,
                  min_trace_length: int = 0,
                  remove_parent: bool = True,
@@ -565,20 +525,13 @@ class BaseExtractor(Operation):
             else:
                 regions = masks
 
-        # Name must be given
-        if condition is None or condition == '':
-            warnings.warn('Name of CellArray cannot be None or empty string.',
-                          UserWarning)
-            condition = 'default'
-
         # These kwargs get passed to self.extract_data_from_image
         kwargs = dict(channels=channels, regions=regions, lineages=lineages,
                       condition=condition, min_trace_length=min_trace_length,
                       remove_parent=remove_parent, position_id=position_id)
-        # Automatically add extract_data_from_image
-        # Name is always None, because gets saved in Pipeline as output
-        self.functions = [tuple(['extract_data_from_image', None, [], kwargs, None])]
-        self.func_index = {i: f for i, f in enumerate(self.functions)}
+        # Add extract_data_from_image
+        # functions are expected to be (func, save_as, user_type, kwargs)
+        self.functions = [tuple(['extract_data_from_image', output, Arr, kwargs])]
 
         # Add division_frame and parent_id
         for m in self._extra_properties:
@@ -608,7 +561,7 @@ class BaseExtractor(Operation):
 
     @property
     def extract_kwargs(self) -> dict:
-        return self.functions[0][3]  # index for kwargs passed to extract_data
+        return self.functions[0][-1]  # index for kwargs passed to extract_data
 
     def _correct_metric_dim(self, met_list: List[str]) -> List[str]:
         """
@@ -746,15 +699,14 @@ class BaseExtractor(Operation):
         self._metrics = allowed
 
         # Raise warning for the rest
-        if len(not_allowed) > 0:
-            warnings.warn(f'Metrics {[not_allowed]} are not supported by skimage. '
-                          'Use CellArray.add_extra_metric to add custom metrics.')
+        if not_allowed:
+            warnings.warn(f'Metrics {[not_allowed]} are not supported. Use '
+                          'CellArray.add_extra_metric to add custom metrics.')
 
     def add_function_to_operation(self,
-                                  func: str,
-                                  output_type: type = None,
+                                  func: str, *,
+                                  output_type: str = None,
                                   name: str = None,
-                                  *args,
                                   **kwargs
                                   ) -> None:
         """
@@ -773,7 +725,7 @@ class BaseExtractor(Operation):
         Add more detailed logging information
         """
         # Get inputs that were saved during __init__
-        _, expec_type, args, kwargs, name = self.functions[0]
+        kwargs = self.functions[0][-1]
 
         # Log inputs to Extractor
         self.logger.info(f"Channels: {list(zip(kwargs['channels'], self.images))}")

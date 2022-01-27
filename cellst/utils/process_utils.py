@@ -52,8 +52,7 @@ def _dict_to_operation(oper_dict: Dict) -> Operation:
 
     # Add the functions to the operation
     for key, val in oper_dict['_functions'].items():
-        func = val['func']
-        name, args, kwargs = val['name'], val['args'], val['kwargs']
+        func, name, kwargs = val['func'], val['name'], val['kwargs']
 
         # Get the type if custom type
         exp_type = val['output_type']
@@ -64,8 +63,7 @@ def _dict_to_operation(oper_dict: Dict) -> Operation:
 
         try:
             # Add the functions to the operation
-            operation.add_function_to_operation(func, exp_type, name,
-                                                *args, **kwargs)
+            operation.add_function_to_operation(func, save_as=name, output_type=exp_type, **kwargs)
         except NotImplementedError:
             # Extractor already has function added, but needs other info
             operation.set_metric_list(val['metrics'])
