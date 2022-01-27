@@ -358,16 +358,14 @@ class Operation():
 
         return inspect.signature(func).return_annotation.__name__
 
-    def _operation_to_dict(self, op_slots: Collection[str] = None) -> Dict:
+    def _operation_to_dict(self) -> Dict:
         """
         Returns a dictionary that fully defines the operation
         """
-        # Get attributes to lookup
-        base_slots = ['__name__', '__module__', 'save', 'output',
-                      'force_rerun', '_output_id']
-        if op_slots is not None: base_slots.extend(op_slots)
-
-        # Save in dictionary
+        # Get attributes to lookup and save in dictionary
+        base_slots = ('__name__', '__module__', 'images', 'masks',
+                      'tracks', 'arrays', 'save', 'output',
+                      'force_rerun', '_output_id', '_split_key')
         op_defs = {}
         for att in base_slots:
             op_defs[att] = getattr(self, att, None)
@@ -452,10 +450,6 @@ class BaseProcessor(Operation):
         """
         return self.run_operation(images, [], [], [])
 
-    def _operation_to_dict(self) -> Dict:
-        op_slots = ['images']
-        return super()._operation_to_dict(op_slots)
-
 
 class BaseSegmenter(Operation):
     __name__ = 'Segmenter'
@@ -478,10 +472,6 @@ class BaseSegmenter(Operation):
         """
         return self.run_operation(images, masks, [], [])
 
-    def _operation_to_dict(self) -> Dict:
-        op_slots = ['images', 'masks']
-        return super()._operation_to_dict(op_slots)
-
 
 class BaseTracker(Operation):
     __name__ = 'Tracker'
@@ -503,10 +493,6 @@ class BaseTracker(Operation):
         used independently of Pipeline.
         """
         return self.run_operation(images, masks, [], [])
-
-    def _operation_to_dict(self) -> Dict:
-        op_slots = ['images', 'masks']
-        return super()._operation_to_dict(op_slots)
 
 
 class BaseExtractor(Operation):
@@ -718,8 +704,7 @@ class BaseExtractor(Operation):
         return np.moveaxis(out, 0, -1)
 
     def _operation_to_dict(self) -> Dict:
-        op_slots = ['images', 'masks', 'tracks']
-        op_dict = super()._operation_to_dict(op_slots)
+        op_dict = super()._operation_to_dict()
 
         # Add the kwargs for extract_data_from_image
         op_dict.update(self.extract_kwargs)
@@ -819,7 +804,3 @@ class BaseEvaluator(Operation):
         used independently of Pipeline.
         """
         return self.run_operation([], [], [], arrs)
-
-    def _operation_to_dict(self) -> Dict:
-        op_slots = ['arrays']
-        return super()._operation_to_dict(op_slots)

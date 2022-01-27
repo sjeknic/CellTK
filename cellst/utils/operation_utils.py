@@ -9,7 +9,6 @@ import scipy.ndimage as ndi
 import scipy.optimize as opti
 import mahotas.segmentation as mahotas_seg
 import SimpleITK as sitk
-import btrack
 
 from cellst.utils._types import Mask, Track
 
