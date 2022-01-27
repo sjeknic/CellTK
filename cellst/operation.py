@@ -8,6 +8,7 @@ import inspect
 import numpy as np
 import skimage.measure as meas
 
+from cellst.core.arrays import ConditionArray
 from cellst.utils._types import (Image, Mask, Track, Arr,
                                  ImageContainer, INPT_NAMES,
                                  RandomNameProperty)
@@ -484,6 +485,7 @@ class BaseExtractor(Operation):
                 'orientation', 'perimeter', 'solidity']
     _extra_properties = ['division_frame', 'parent_id', 'total_intensity',
                          'median_intensity']
+    _derived_metrics = []
 
     # _props_to_add is what actually gets used to decide on extra metrics
     _props_to_add = {}
@@ -614,7 +616,7 @@ class BaseExtractor(Operation):
         # Organize metrics and get indices for custom ones
         all_metrics = metrics + list(self._props_to_add.keys())
         all_metrics = self._correct_metric_dim(all_metrics)
-        metric_idx = {k: i for i, k in enumerate(all_metrics)}
+        self._metric_idx = {k: i for i, k in enumerate(all_metrics)}
 
         # Build output
         out = np.empty((image.shape[0], len(all_metrics), len(cell_index)))
@@ -647,12 +649,12 @@ class BaseExtractor(Operation):
 
                     # Add division data to frame_data before saving
                     try:
-                        frame_data[metric_idx['division_frame'], n] = frame
+                        frame_data[self._metric_idx['division_frame'], n] = frame
                     except KeyError:
                         pass
 
                     try:
-                        frame_data[metric_idx['parent_id'], n] = par
+                        frame_data[self._metric_idx['parent_id'], n] = par
                     except KeyError:
                         pass
 
@@ -675,12 +677,34 @@ class BaseExtractor(Operation):
 
         return op_dict
 
+    def _calculate_derived_metrics(self, array: ConditionArray) -> None:
+        """
+        Does the actual computations from add_derived_metric
+        """
+        for name, func, keys, args, kwargs in self._derived_metrics:
+            # NOTE: Only two arrays for now
+            arrs = [array[tuple(k)] for k in keys]
+
+            # Assume the function takes two arrays for now
+            result = func(arrs[0], arrs[1], *args, **kwargs)
+            inv_result = func(arrs[1], arrs[0], *args, **kwargs)
+
+            # Get channel and region from keys for saving
+            save_key = [name] + [k for k in keys[0]
+                                 if k not in self._metric_idx]
+            inv_save_key = [name] + [k for k in keys[1]
+                                     if k not in self._metric_idx]
+
+            # Metric slots should already by in Condition array
+            array[tuple(save_key)] = result
+            array[tuple(inv_save_key)] = inv_result
+
     def add_extra_metric(self, name: str, func: Callable = None) -> None:
         """
         Allows for adding custom metrics. If function is none, value will just
         be nan.
         """
-        if func is None:
+        if not func:
             if name in self._possible_metrics:
                 self._metrics.append(name)
             else:
@@ -689,8 +713,38 @@ class BaseExtractor(Operation):
                 except AttributeError:
                     # Function not implemented by me
                     func = RandomNameProperty()
+        else:
+            assert isinstance(func, Callable)
 
         self._props_to_add[name] = func
+
+    def add_derived_metric(self,
+                           metric_name: str,
+                           keys: Collection[Tuple[str]],
+                           func: Callable = np.sum,
+                           *args, **kwargs
+                           ) -> None:
+        """
+        Calculates additional metrics based on information already in array
+
+        TODO: Add ability to have more than 2 arrays
+        TODO: Add ability to propagate results to other keys
+        TODO: Add keys to save this in yaml dictionary
+        """
+        # Check the inputs now before calculation
+        # Only two inputs allowed for now
+        assert len(keys) == 2
+        # Assert that keys include channel, region, and metric
+        for key in keys:
+            assert len(key) == 3
+        assert isinstance(func, Callable)
+
+        # Save to calculated metrics to get added after extract is done
+        self._derived_metrics.append(tuple([metric_name, func, keys,
+                                            args, kwargs]))
+
+        # Fill in the metric with just nan for now
+        self._props_to_add[metric_name] = RandomNameProperty()
 
     def set_metric_list(self, metrics: Collection[str]) -> None:
         """

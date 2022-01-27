@@ -35,7 +35,7 @@ class RandomNameProperty():
         self.__name__ = str(rng.integers(999999))
 
     @staticmethod
-    def __call__(*args, **kwargs):
+    def __call__(empty):
         return np.nan
 
 
