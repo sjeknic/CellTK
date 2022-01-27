@@ -1,3 +1,5 @@
+from typing import Tuple
+
 import numpy as np
 import skimage.measure as meas
 import skimage.segmentation as segm
@@ -10,7 +12,8 @@ from cellst.utils._types import Image, Mask
 from cellst.utils.utils import ImageHelper
 from cellst.utils.operation_utils import (remove_small_holes_keep_labels,
                                           dilate_sitk, voronoi_boundaries,
-                                          match_labels_linear)
+                                          match_labels_linear,
+                                          skimage_level_set)
 
 
 class Segmenter(BaseSegmenter):
@@ -247,8 +250,13 @@ class Segmenter(BaseSegmenter):
 
         # rename
         """
-        # Get Voronoi boundaries to use to separate objects
-        vor_mask = voronoi_boundaries(seeds, thinner=True)
+        # Get level_set mask if needed - dont use voronoi boundaries
+        if not isinstance(seeds, np.ndarray):
+            seeds = skimage_level_set(image.shape, levelset=seeds)
+            vor_mask = np.zeros(image.shape, dtype=bool)
+        else:
+            # Get Voronoi boundaries to use to separate objects
+            vor_mask = voronoi_boundaries(seeds, thinner=True)
 
         # Propagate shapes
         regions = segm.morphological_chan_vese(image, iterations, seeds,
@@ -397,6 +405,26 @@ class Segmenter(BaseSegmenter):
             new_cyto_mask = np.where(eroded_img, new_cyto_mask, 0)
 
         return new_cyto_mask
+
+    @ImageHelper(by_frame=True)
+    def level_set_mask(self,
+                       image: Image,
+                       levelset: str = 'checkerboard',
+                       size: (float, int) = None,
+                       center: Tuple[int] = None,
+                       label: bool = False
+                       ) -> Mask:
+        """
+        Wrapper for levelset functions in skimage.segmentation
+
+        size refers to square_size for checkerboard or radius for disk
+        """
+        mask = skimage_level_set(image.shape, levelset, size, center)
+
+        if label:
+            mask = meas.label(mask)
+
+        return mask
 
     @ImageHelper(by_frame=False)
     def unet_predict(self,

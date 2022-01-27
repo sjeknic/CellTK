@@ -259,6 +259,27 @@ def voronoi_boundaries(seed: np.ndarray, thinner: bool = False) -> np.ndarray:
     return bound
 
 
+def skimage_level_set(shape: Tuple[int],
+                      levelset: str = 'checkerboard',
+                      size: (float, int) = None,
+                      center: Tuple[int] = None,
+                      ) -> np.ndarray:
+    """
+    Wrapper for levelset functions in skimage.segmentation
+
+    size refers to square_size for checkerboard or radius for disk
+    """
+    if levelset == 'checkerboard':
+        size = int(size) if size else 5  # default for skimage
+        out = segm.checkerboard_level_set(shape, size)
+    elif levelset == 'disk':
+        out = segm.disk_level_set(shape, center, size)
+    else:
+        raise ValueError(f'Could not find level_set function for {levelset}')
+
+    return out
+
+
 def match_labels_linear(source: np.ndarray, dest: np.ndarray) -> np.ndarray:
     """
     Should transfer labels from source to dest based on area overlap
