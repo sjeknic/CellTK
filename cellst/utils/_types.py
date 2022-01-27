@@ -29,13 +29,13 @@ class RandomNameProperty():
         - This does not guarantee a unique name, so getting IndexError
           in Extractor is still possible.
     """
-    def __init__(self, *args) -> None:
+    def __init__(self) -> None:
+        # Use ranndom int as name of the property
         rng = np.random.default_rng()
-        # Make it extremely unlikely to get the same int
         self.__name__ = str(rng.integers(999999))
 
     @staticmethod
-    def __call__(empty):
+    def __call__(*args, **kwargs):
         return np.nan
 
 

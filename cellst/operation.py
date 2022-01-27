@@ -484,6 +484,8 @@ class BaseExtractor(Operation):
                 'orientation', 'perimeter', 'solidity']
     _extra_properties = ['division_frame', 'parent_id', 'total_intensity',
                          'median_intensity']
+
+    # _props_to_add is what actually gets used to decide on extra metrics
     _props_to_add = {}
 
     def __init__(self,
@@ -534,6 +536,7 @@ class BaseExtractor(Operation):
         self.functions = [tuple(['extract_data_from_image', output, Arr, kwargs])]
 
         # Add division_frame and parent_id
+        # TODO: Make optional
         for m in self._extra_properties:
             self.add_extra_metric(m)
 
@@ -570,11 +573,11 @@ class BaseExtractor(Operation):
         new_met_list = []
         for m in met_list:
             if m == 'bbox':
-                # bbox becomes bbox-1,...,bbox-4'
-                new_met_list.extend([f'bbox-{n}' for n in range(1, 5)])
+                # becomes bbox-1...bbox-4:(min_row, min_col, max_row, max_col)
+                new_met_list.extend(['min_y', 'min_x', 'max_y', 'max_x'])
             elif m == 'centroid':
-                # centroid becomes centroid-1, centroid-2
-                new_met_list.extend([f'centroid-{n}' for n in range(1, 3)])
+                # becomes centroid-1, centroid-2:(y, x)
+                new_met_list.extend(['y', 'x'])
             else:
                 new_met_list.append(m)
 
@@ -632,6 +635,8 @@ class BaseExtractor(Operation):
                 lab = int(lab)
 
                 if lab in daughter_to_parent:
+                    # TODO: This should be optional (or at least the
+                    #       addition of division_frame and parent_id)
                     # Get parent label
                     # NOTE: Could this ever raise a KeyError?
                     par = daughter_to_parent[lab]
