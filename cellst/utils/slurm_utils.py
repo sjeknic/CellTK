@@ -340,8 +340,9 @@ class SlurmController(JobController):
 
             # Run the sbatch
             submitted = subprocess.run([f"sbatch {sbatch_path}"], shell=True,
-                                        capture_output=True, text=True)
-            self._record_job_history(submitted)
+                                       capture_output=True, text=True)
+            self._record_job_history(submitted,
+                                     partition=slurm_kwargs['partition'])
 
             self.logger.info(f'Submitted {sbatch_path}. '
                              f'Sleeping {self._submit_delay}s.')
@@ -352,11 +353,12 @@ class SlurmController(JobController):
         return True
 
     def _yield_working_sbatch(self, pipelines: dict) -> str:
-        self.logger.info(f'Building {len(pipelines)} pipelines: {list(pipelines.keys())}')
+        self.logger.info(f'Building {len(pipelines)} pipelines: '
+                         f'{list(pipelines.keys())}')
 
         for fol, kwargs in pipelines.items():
             # First load the pipeline, then save as yaml that can be accessed
-            # TODO: Obviously could be more efficient - esp if Orchestrator made yamls
+            # TODO: Make more efficient - esp if Orchestrator made yamls
             _pipe = Pipeline._build_from_dict(kwargs)
 
             _y_path = os.path.join(self.working_dir, f'{fol}yaml.yaml')
@@ -373,7 +375,11 @@ class SlurmController(JobController):
             self.pipes_run += 1
             yield _batch_path
 
-    def _record_job_history(self, submitted: str = None, update: bool = False) -> None:
+    def _record_job_history(self,
+                            submitted: str = None,
+                            update: bool = False,
+                            partition: str = ''
+                            ) -> None:
         """
         Will record a new job (submitted) or update current record of jobs (update)
         """
@@ -392,7 +398,8 @@ class SlurmController(JobController):
             job_id = ''.join((s for s in submitted.stdout if s.isdigit()))
             self.job_history[job_id] = dict(jobid=job_id, state='S',
                                             name=name, output=output_dir,
-                                            slurm_path=pth, yaml_path=ypth)
+                                            slurm_path=pth, yaml_path=ypth,
+                                            partition=partition)
 
         # Updates are slow, so don't do them often
         if update:
@@ -486,7 +493,7 @@ class SlurmController(JobController):
 
     def _get_info_from_jobs(self, info_keys: list = []) -> dict:
         """Returns only the specified keys"""
-        _default_info = ['jobid', 'name', 'state']
+        _default_info = ['jobid', 'name', 'state', 'partition']
         info_keys = info_keys if info_keys else _default_info
 
         return {k: {i: v[i] for i in info_keys}
