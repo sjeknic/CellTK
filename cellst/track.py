@@ -1,3 +1,4 @@
+import os
 from typing import Tuple
 
 import numpy as np
@@ -74,7 +75,7 @@ class Tracker(BaseTracker):
     @ImageHelper(by_frame=False)
     def simple_bayesian_track(self,
                               mask: Mask,
-                              config_path: str = './config/bayes_config.json',
+                              config_path: str = 'cellst/config/bayes_config.json',
                               update_method: str = 'exact',
                               ) -> Track:
         """
@@ -93,7 +94,7 @@ class Tracker(BaseTracker):
 
         # Track as shown in btrack example
         with btrack.BayesianTracker() as tracker:
-            tracker.configure_from_file(config_path)
+            tracker.configure_from_file(os.path.abspath(config_path))
             tracker.update_method = getattr(bconstants.BayesianUpdates,
                                             update_method.upper())
             tracker.append(objects)
