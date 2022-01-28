@@ -63,10 +63,13 @@ def _dict_to_operation(oper_dict: Dict) -> Operation:
 
         try:
             # Add the functions to the operation
-            operation.add_function_to_operation(func, save_as=name, output_type=exp_type, **kwargs)
-        except NotImplementedError:
-            # Extractor already has function added, but needs other info
+            operation.add_function_to_operation(func, save_as=name,
+                                                output_type=exp_type, **kwargs)
+        except NotImplementedError:  # Means operation is Extractor
+            # Save other user defined parameters
             operation.set_metric_list(val['metrics'])
+            for name, (fnc, kys, arg, kws) in val['derived_metrics'].items():
+                operation.add_derived_metric(name, kys, fnc, *arg, **kws)
             for k, v in val['extra_props'].items():
                 operation.add_extra_metric(k, v)
 

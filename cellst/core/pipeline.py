@@ -625,9 +625,6 @@ class Pipeline():
               in memory.
         NOTE: Assumes it is okay to make changes in-place in oper,
               i.e. that it is a copy of the original dictionary
-
-        TODO: This should, from now on, only take in Pipe. Everything
-              else should be handled externally.
         """
         pipe = cls._build_from_dict(pipe_dict)
         result = pipe.run()

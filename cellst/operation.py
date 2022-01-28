@@ -1,9 +1,9 @@
 import os
 import warnings
-from typing import Collection, Tuple, Callable, List, Dict
 import logging
 import time
 import inspect
+from typing import Collection, Tuple, Callable, List, Dict
 
 import numpy as np
 import skimage.measure as meas
@@ -486,7 +486,7 @@ class BaseExtractor(Operation):
                 'orientation', 'perimeter', 'solidity']
     _extra_properties = ['division_frame', 'parent_id', 'total_intensity',
                          'median_intensity']
-    _derived_metrics = []
+    _derived_metrics = {}
 
     # _props_to_add is what actually gets used to decide on extra metrics
     _props_to_add = {}
@@ -674,6 +674,7 @@ class BaseExtractor(Operation):
         # TODO: This is also a bit hackish
         func = 'extract_data_from_image'
         op_dict['_functions'][func]['metrics'] = self._metrics
+        op_dict['_functions'][func]['derived_metrics'] = self._derived_metrics
         op_dict['_functions'][func]['extra_props'] = self._props_to_add
 
         return op_dict
@@ -682,9 +683,10 @@ class BaseExtractor(Operation):
         """
         Does the actual computations from add_derived_metric
         """
-        for name, func, keys, args, kwargs in self._derived_metrics:
+        for name, (func, keys, args, kwargs) in self._derived_metrics.items():
             # NOTE: Only two arrays for now
             arrs = [array[tuple(k)] for k in keys]
+            func = getattr(np, func)
 
             # Assume the function takes two arrays for now
             result = func(arrs[0], arrs[1], *args, **kwargs)
@@ -722,15 +724,17 @@ class BaseExtractor(Operation):
     def add_derived_metric(self,
                            metric_name: str,
                            keys: Collection[Tuple[str]],
-                           func: Callable = np.sum,
+                           func: str = 'sum',
                            *args, **kwargs
                            ) -> None:
         """
         Calculates additional metrics based on information already in array
+        func can be any numpy function - expected to pass 2 arrays though
 
         TODO: Add ability to have more than 2 arrays
         TODO: Add ability to propagate results to other keys
         TODO: Add keys to save this in yaml dictionary
+        TODO: Add possiblity for custom Callable function
         """
         # Check the inputs now before calculation
         # Only two inputs allowed for now
@@ -738,11 +742,11 @@ class BaseExtractor(Operation):
         # Assert that keys include channel, region, and metric
         for key in keys:
             assert len(key) == 3
-        assert isinstance(func, Callable)
+        assert hasattr(np, func), 'Derived metric must be numpy function'
 
         # Save to calculated metrics to get added after extract is done
-        self._derived_metrics.append(tuple([metric_name, func, keys,
-                                            args, kwargs]))
+        self._derived_metrics[metric_name] = tuple([func, keys,
+                                                    args, kwargs])
 
         # Fill in the metric with just nan for now
         self._props_to_add[metric_name] = RandomNameProperty()
