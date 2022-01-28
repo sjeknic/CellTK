@@ -19,7 +19,6 @@ class Processor(BaseProcessor):
         - Add stand-alone crop function
         - Add optical-flow registration
         - Add faster bg subtract (wavelet hazen)
-        - Add unet_predict here
         - Add sobel filter
     """
     @ImageHelper(by_frame=False, as_tuple=True)
@@ -150,3 +149,50 @@ class Processor(BaseProcessor):
         # Apply the filter and return
         filimg = fil.Execute(frame0, frame1)
         return sitk.GetArrayFromImage(filimg)
+
+    @ImageHelper(by_frame=False)
+    def unet_predict(self,
+                     image: Image,
+                     weight_path: str,
+                     roi: (int, str) = 2,
+                     batch: int = None,
+                     classes: int = 3,
+                     ) -> Image:
+        """
+        roi - the prediction values are returned only for the roi
+        batch - number of frames passed to model. None is all of them.
+        classes - number of output categories from the model (has to match weights)
+        """
+        _roi_dict = {'background': 0, 'bg': 0, 'edge': 1,
+                     'interior': 2, 'nuc': 2, 'cyto': 2}
+        if isinstance(roi, str):
+            try:
+                roi = _roi_dict[roi]
+            except KeyError:
+                raise ValueError(f'Did not understand region of interest {roi}.')
+
+        # Only import tensorflow and Keras if needed
+        from cellst.utils.unet_model import UNetModel
+
+        if not hasattr(self, 'model'):
+            '''NOTE: If we had mulitple colors, then image would be 4D here.
+            The Pipeline isn't set up for that now, so for now the channels
+            is just assumed to be 1.'''
+            channels = 1
+            dims = (image.shape[1], image.shape[2], channels)
+
+            self.model = UNetModel(dimensions=dims,
+                                   weight_path=weight_path,
+                                   model='unet')
+
+        # Pre-allocate output memory
+        # TODO: Incorporate the batch here.
+        if batch is None:
+            output = self.model.predict(image[:, :, :], roi=roi)
+        else:
+            arrs = np.array_split(image, image.shape[0] // batch, axis=0)
+            output = np.concatenate([self.model.predict(a, roi=roi)
+                                     for a in arrs], axis=0)
+
+        # TODO: dtype can probably be downsampled from float32 before returning
+        return output
