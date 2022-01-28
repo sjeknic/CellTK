@@ -563,7 +563,9 @@ class BaseExtractor(Operation):
 
     @property
     def metrics(self) -> list:
-        return self._metrics + list(self._props_to_add.keys())
+        return (self._metrics
+               + self._extra_properties
+               + list(self._props_to_add.keys()))
 
     @property
     def extract_kwargs(self) -> dict:
@@ -706,6 +708,8 @@ class BaseExtractor(Operation):
         """
         Allows for adding custom metrics. If function is none, value will just
         be nan.
+
+        TODO: Callable function won't be saveable in YAML files
         """
         if not func:
             if name in self._possible_metrics:
