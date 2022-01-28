@@ -223,21 +223,19 @@ class ConditionArray():
                     # String slice
                     # First check that start and step are in the same dim
                     try:
-                        start_dim = None if k.start is None else self._key_dim_pairs[k.start]
-                        stop_dim = None if k.stop is None else self._key_dim_pairs[k.stop]
+                        start_dim = None if not k.start else self._key_dim_pairs[k.start]
+                        stop_dim = None if not k.stop else self._key_dim_pairs[k.stop]
                     except KeyError:
                         raise KeyError(f'Some of {k.start, k.stop} were not found '
                                        'in any dimension.')
-                    if (start_dim is not None and
-                        stop_dim is not None and
-                        start_dim != stop_dim):
+                    if start_dim and stop_dim and (start_dim != stop_dim):
                         raise IndexError(f"Dimensions don't match: {k.start} is in "
                                          f"{start_dim}, {k.stop} is in {stop_dim}.")
 
                     # Get axis and coord indices and remake the slice
                     idx = self._dim_idxs[start_dim]
-                    start_coord = self._key_coord_pairs[k.start] if k.start is not None else None
-                    stop_coord = self._key_coord_pairs[k.stop] if k.stop is not None else None
+                    start_coord = self._key_coord_pairs[k.start] if k.start else None
+                    stop_coord = self._key_coord_pairs[k.stop] if k.stop else None
 
                 else:
                     # Mixed slice

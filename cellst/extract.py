@@ -75,7 +75,7 @@ class Extractor(BaseExtractor):
                                  f'and {len(lineages)} lineages.')
             else:
                 tracks_to_use.extend([lineage_to_track(t, l)
-                                      for t, l in zip(tracks_to_use, lineages)])
+                                     for t, l in zip(tracks_to_use, lineages)])
 
         # Confirm sizes of inputs match
         if len(images) != len(channels):
