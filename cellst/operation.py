@@ -306,14 +306,16 @@ class Operation():
         Returns all possible inputs and outputs expectetd.
 
         Needed for Pipeline._input_output_handler
+
+        TODO: This whole system should be handled differently.
+              Inputs and outputs are now basically the same, so
+              one of them should be removed.
         """
         # Get all keys for the functions in Operation with save_as
         f_keys = [(svname, usr_typ) if usr_typ
                   else (svname, self._get_func_output_type(fnc))
                   for (fnc, svname, usr_typ, _) in self.functions]
-
-        # f_keys for inputs should not be included if no function follows
-        f_keys_for_inputs = [f for f in f_keys[:-1] if f[0]]
+        f_keys_for_inputs = [f for f in f_keys if f[0]]
         f_keys = [f for f in f_keys if f[0]]
 
         # Get all the inputs that were passed to __init__
@@ -323,7 +325,7 @@ class Operation():
 
         inputs += f_keys_for_inputs + [self.output_id]
 
-        # TODO: Possibly inaccurate because save_as overwrites output
+        # NOTE: Possibly inaccurate because save_as overwrites output
         outputs = f_keys + [self.output_id]
 
         return inputs, outputs
@@ -350,7 +352,6 @@ class Operation():
         # Save function definitions
         func_defs = {}
 
-        #for func, output_type, args, kwargs, name in self.functions:
         for (func, save_as, user_type, kwargs) in self.functions:
             # Rename if already in dictionary
             count = 1
@@ -535,7 +536,7 @@ class BaseExtractor(Operation):
                       remove_parent=remove_parent, position_id=position_id)
         # Add extract_data_from_image
         # functions are expected to be (func, save_as, user_type, kwargs)
-        self.functions = [tuple(['extract_data_from_image', output, Arr, kwargs])]
+        self.functions = [tuple(['extract_data_from_image', output, None, kwargs])]
 
         # Add division_frame and parent_id
         # TODO: Make optional
