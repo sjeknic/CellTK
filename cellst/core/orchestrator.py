@@ -8,7 +8,7 @@ from multiprocessing import Pool
 from typing import Dict, Collection, Callable
 from glob import glob
 
-from cellst.operation import Operation
+from cellst.core.operation import Operation
 from cellst.core.pipeline import Pipeline
 from cellst.core.arrays import ExperimentArray
 from cellst.utils._types import Arr

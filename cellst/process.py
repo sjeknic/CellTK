@@ -6,7 +6,7 @@ import skimage.filters as filt
 import skimage.segmentation as segm
 import scipy.ndimage as ndi
 
-from cellst.operation import BaseProcessor
+from cellst.core.operation import BaseProcessor
 from cellst.utils._types import Image, Mask, Track, Same
 from cellst.utils.utils import ImageHelper
 from cellst.utils.operation_utils import (sliding_window_generator,

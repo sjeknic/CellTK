@@ -7,7 +7,7 @@ import skimage.morphology as morph
 import skimage.filters as filt
 import scipy.ndimage as ndi
 
-from cellst.operation import BaseSegmenter
+from cellst.core.operation import BaseSegmenter
 from cellst.utils._types import Image, Mask
 from cellst.utils.utils import ImageHelper
 from cellst.utils.operation_utils import (remove_small_holes_keep_labels,

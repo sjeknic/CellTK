@@ -1,7 +1,7 @@
 import sys
 from typing import Dict, Collection
 
-from cellst.operation import Operation
+from cellst.core.operation import Operation
 from cellst.utils._types import TYPE_LOOKUP
 
 

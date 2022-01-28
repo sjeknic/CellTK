@@ -3,7 +3,7 @@ import warnings
 
 import numpy as np
 
-from cellst.operation import BaseExtractor
+from cellst.core.operation import BaseExtractor
 from cellst.utils.utils import ImageHelper
 from cellst.utils._types import Image, Mask, Track, Arr
 from cellst.core.arrays import ConditionArray

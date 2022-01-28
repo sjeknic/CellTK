@@ -1,4 +1,4 @@
-from cellst.operation import BaseEvaluator
+from cellst.core.operation import BaseEvaluator
 from cellst.utils._types import Arr
 
 

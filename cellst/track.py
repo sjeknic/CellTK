@@ -6,7 +6,7 @@ import btrack
 import btrack.utils as butils
 import btrack.constants as bconstants
 
-from cellst.operation import BaseTracker
+from cellst.core.operation import BaseTracker
 from cellst.utils._types import Image, Mask, Track
 from cellst.utils.utils import ImageHelper, stdout_redirected
 from cellst.utils.operation_utils import lineage_to_track

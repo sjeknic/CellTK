@@ -3,7 +3,7 @@ import yaml
 import linecache
 from typing import Collection, Dict
 
-from cellst.operation import Operation
+from cellst.core.operation import Operation
 from cellst.utils.process_utils import condense_operations
 
 

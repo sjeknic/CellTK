@@ -10,7 +10,7 @@ import numpy as np
 import tifffile as tiff
 import imageio as iio
 
-from cellst.operation import Operation
+from cellst.core.operation import Operation
 from cellst.utils._types import Image, Mask, Track, Arr, ImageContainer
 from cellst.utils.process_utils import condense_operations, extract_operations
 from cellst.utils.log_utils import get_logger, get_console_logger
