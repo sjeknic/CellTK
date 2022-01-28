@@ -69,7 +69,7 @@ class ConditionArray():
         # Sort given indices to the appropriate axes
         indices = self._convert_keys_to_index(key)
 
-        return self._arr[indices]
+        return np.squeeze(self._arr[indices])
 
     def __setitem__(self, key, value):
         # Sort given indices to the appropriate axes
@@ -159,7 +159,7 @@ class ConditionArray():
         Used by CustomSet to index CustomArray w/o recalculating
         the indices each time
         """
-        return self._arr[idx]
+        return np.squeeze(self._arr[idx])
 
     def _convert_keys_to_index(self, key) -> Tuple[(int, slice)]:
         """
