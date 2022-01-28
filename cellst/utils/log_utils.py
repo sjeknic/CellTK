@@ -24,7 +24,8 @@ def get_logger(name: str,
 
     # Set parameters
     logger.setLevel(logging.INFO)
-    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s: %(message)s')
+    formatter = logging.Formatter('%(asctime)s - %(name)s - '
+                                  '%(levelname)s: %(message)s')
 
     # Create file handler to write outputs
     path = '.' if path is None else path
@@ -36,7 +37,6 @@ def get_logger(name: str,
         fh.setLevel(getattr(logging, file_level.upper()))
     except AttributeError:
         raise ValueError(f'Not a valid logging level: {file_level}')
-
 
     # Create stream handler to specify standard output
     sh = logging.StreamHandler()
@@ -51,8 +51,23 @@ def get_logger(name: str,
     logger.addHandler(fh)
     logger.addHandler(sh)
 
-    # Initialize log file and return
+    # Set up warnings logger
+    warning_logger = get_warning_logger()
+    warning_logger.addHandler(fh)
+    warning_logger.addHandler(sh)
+
     return logger
+
+
+def get_warning_logger() -> logging.Logger:
+    """
+    Set up a logger to capture warnings and log them
+    """
+    logging.captureWarnings(True)
+    warning_logger = logging.getLogger('py.warnings')
+    if warning_logger.handlers: warning_logger.handlers = []
+
+    return warning_logger
 
 
 def get_console_logger(level: str = 'WARNING') -> logging.Logger:
@@ -64,7 +79,8 @@ def get_console_logger(level: str = 'WARNING') -> logging.Logger:
 
     # Set parameters
     logger.setLevel(getattr(logging, level))
-    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s: %(message)s')
+    formatter = logging.Formatter('%(asctime)s - %(name)s - '
+                                  '%(levelname)s: %(message)s')
 
     # Create stream handler to specify standard output
     sh = logging.StreamHandler()
@@ -78,10 +94,12 @@ def get_console_logger(level: str = 'WARNING') -> logging.Logger:
 
 def get_null_logger() -> logging.Logger:
     """
-    Used as a default logger. Writes to console only.
+    Does not log any outputs
     """
     # Get logger with name of module
     logger = logging.getLogger('null')
+    handler = logging.NullHandler()
+    logger.addHandler(handler)
 
     return logger
 
