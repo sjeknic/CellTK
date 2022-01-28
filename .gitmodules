@@ -1,0 +1,3 @@
+[submodule "kit_sch_ge"]
+	path = kit_sch_ge
+	url = https://git.scc.kit.edu/KIT-Sch-GE/2021-cell-tracking.git
