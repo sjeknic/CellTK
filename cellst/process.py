@@ -11,7 +11,8 @@ from cellst.utils._types import Image, Mask, Track, Same
 from cellst.utils.utils import ImageHelper
 from cellst.utils.operation_utils import (sliding_window_generator,
                                           shift_array, crop_array, PadHelper,
-                                          wavelet_background_estimate)
+                                          wavelet_background_estimate,
+                                          wavelet_noise_estimate)
 
 
 class Processor(BaseProcessor):
@@ -174,6 +175,35 @@ class Processor(BaseProcessor):
 
             # Remove background and ensure non-negative
             out[fr, ...] = im - bg
+            out[fr, ...][out[fr, ...] < 0] = 0
+
+        # Undo padding and reset dtype before return
+        return padder.undo_pad(out.astype(image.dtype))
+
+    @ImageHelper(by_frame=False)
+    def wavelet_noise_subtract(self,
+                               image: Image,
+                               noise_level: int = 1,
+                               thres: int = 2,
+                               wavelet: str = 'db1',
+                               mode: str = 'smooth',
+                               level: int = None,
+                               ) -> Image:
+        """
+        """
+        # Pad image to even before starting
+        padder = PadHelper(target='even', axis=[1, 2], mode='edge')
+        image_pad = padder.pad(image)
+
+        # Pass frames of the padded image
+        out = np.zeros(image_pad.shape, dtype=np.int16)
+        for fr, im in enumerate(image_pad):
+            ns = wavelet_noise_estimate(im, noise_level, wavelet,
+                                        mode, level, thres)
+            ns = np.asarray(ns, dtype=out.dtype)
+
+            # Remove background and ensure non-negative
+            out[fr, ...] = im - ns
             out[fr, ...][out[fr, ...] < 0] = 0
 
         # Undo padding and reset dtype before return

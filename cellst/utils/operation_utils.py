@@ -363,6 +363,36 @@ def wavelet_background_estimate(image: np.ndarray,
     return bg
 
 
+def wavelet_noise_estimate(image: np.ndarray,
+                           noise_level: int = 1,
+                           wavelet: str = 'db1',
+                           mode: str = 'smooth',
+                           level: int = None,
+                           thres: int = 2,
+                           axes: Tuple[int] = (-2, -1),
+                           ) -> np.ndarray:
+    """"""
+    # Get approximation and detail coeffecients
+    coeffs = pywt.wavedec2(image, wavelet, mode=mode,
+                           level=level, axes=axes)
+
+    # Set detail coefficients to 0
+    for idx, coeff in enumerate(coeffs[:-noise_level]):
+        if idx:  # skip first coefficients
+            coeffs[idx] = tuple([np.zeros_like(c) for c in coeff])
+        else:
+            coeffs[idx] = np.ones_like(coeff)
+
+    # Reconstruct and blur if needed
+    noise = pywt.waverec2(coeffs, wavelet, mode)
+
+    # Apply threshold compared to standard deviation of noise
+    thres_val = np.mean(noise) + thres * np.std(noise)
+    noise[noise > thres_val] = thres_val
+
+    return noise
+
+
 class PadHelper():
     """
     TODO:
