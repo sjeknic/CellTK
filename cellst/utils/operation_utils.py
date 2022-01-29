@@ -330,3 +330,79 @@ def match_labels_linear(source: np.ndarray, dest: np.ndarray) -> np.ndarray:
         out[dest == d] = s
 
     return out
+
+
+class PadHelper():
+    """
+    TODO:
+        - Add more complex padding options (e.g. pad both side, etc)
+    """
+    def __init__(self,
+                 target: (str, int),
+                 axis: (int, List[int]) = None,
+                 mode: str = 'constant',
+                 **kwargs
+                 ) -> None:
+        # Target can be 'even', 'odd', or a specific shape
+        self.target = target
+        self.mode = mode
+        self.kwargs = kwargs
+
+        # If axis is None, applies to all, otherwise, just some
+        if not isinstance(axis, Iterable):
+            self.axis = tuple([axis])
+        else:
+            self.axis = axis
+
+        # No pads yet
+        self.pads = []
+
+    def pad(self, arr: np.ndarray) -> np.ndarray:
+        """"""
+        # Pad always rewrites self.pads
+        self.pads = self._calculate_pads(arr.shape)
+
+        return np.pad(arr, self.pads, self.mode, **self.kwargs)
+
+    def undo_pad(self, arr: np.ndarray) -> np.ndarray:
+        """"""
+        if not self.pads:
+            raise ValueError('Pad values not found.')
+
+        pads_r = self._reverse_pads(self.pads)
+        # Turn pads_r into slices for indexing
+        slices = [slice(None)] * len(pads_r)
+        for n, (st, en) in enumerate(pads_r):
+            if not st and not en:
+                continue
+            else:
+                slices[n] = slice(st, en)
+
+        return arr[tuple(slices)]
+
+    def _calculate_pads(self, shape: Tuple[int]) -> Tuple[int]:
+        """"""
+        if not self.axis:
+            # If no axis is specified, pad all of them
+            self.axis = range(len(shape))
+
+        pads = [(0, 0)] * len(shape)
+        for ax in self.axis:
+            sh = shape[ax]
+            if self.target == 'even':
+                pads[ax] = (0, int(sh % 2))
+            elif self.target == 'odd':
+                pads[ax] = (0, int(not sh % 2))
+            else:
+                # self.target is a number
+                pads[ax] = (0, int(self.target - sh))
+
+        return pads
+
+    def _reverse_pads(self, pads: Tuple[int]) -> Tuple[int]:
+        """"""
+        pads_r = [(0, 0)] * len(pads)
+        for n, pad in enumerate(pads):
+            pads_r[n] = tuple([int(-1 * p) for p in pad])
+
+        return pads_r
