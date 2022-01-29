@@ -10,7 +10,8 @@ from cellst.core.operation import BaseProcessor
 from cellst.utils._types import Image, Mask, Track, Same
 from cellst.utils.utils import ImageHelper
 from cellst.utils.operation_utils import (sliding_window_generator,
-                                          shift_array, crop_array)
+                                          shift_array, crop_array, PadHelper,
+                                          wavelet_background_estimate)
 
 
 class Processor(BaseProcessor):
@@ -149,6 +150,34 @@ class Processor(BaseProcessor):
         # Apply the filter and return
         filimg = fil.Execute(frame0, frame1)
         return sitk.GetArrayFromImage(filimg)
+
+    @ImageHelper(by_frame=False)
+    def wavelet_background_subtract(self,
+                                    image: Image,
+                                    wavelet: str = 'db1',
+                                    mode: str = 'smooth',
+                                    level: int = None,
+                                    blur: bool = False,
+                                    ) -> Image:
+        """
+        """
+        # Pad image to even before starting
+        padder = PadHelper(target='even', axis=[1, 2], mode='edge')
+        image_pad = padder.pad(image)
+
+        # Pass frames of the padded image
+        out = np.zeros(image_pad.shape, dtype=np.int16)
+        for fr, im in enumerate(image_pad):
+            bg = wavelet_background_estimate(im, wavelet, mode,
+                                             level, blur)
+            bg = np.asarray(bg, dtype=out.dtype)
+
+            # Remove background and ensure non-negative
+            out[fr, ...] = im - bg
+            out[fr, ...][out[fr, ...] < 0] = 0
+
+        # Undo padding and reset dtype before return
+        return padder.undo_pad(out.astype(image.dtype))
 
     @ImageHelper(by_frame=False)
     def unet_predict(self,

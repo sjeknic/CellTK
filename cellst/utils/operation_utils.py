@@ -1,6 +1,7 @@
-from typing import Dict, Generator, Tuple
+from typing import Dict, Generator, Tuple, List, Iterable
 
 import numpy as np
+import pywt
 import numpy.lib.stride_tricks as stricks
 import skimage.morphology as morph
 import skimage.measure as meas
@@ -330,6 +331,36 @@ def match_labels_linear(source: np.ndarray, dest: np.ndarray) -> np.ndarray:
         out[dest == d] = s
 
     return out
+
+
+def wavelet_background_estimate(image: np.ndarray,
+                                wavelet: str = 'db1',
+                                mode: str = 'smooth',
+                                level: int = None,
+                                blur: bool = False,
+                                axes: Tuple[int] = (-2, -1)
+                                ) -> np.ndarray:
+    """"""
+    # Get approximation and detail coeffecients
+    coeffs = pywt.wavedec2(image, wavelet, mode=mode,
+                           level=level, axes=axes)
+
+    # Set detail coefficients to 0
+    for idx, coeff in enumerate(coeffs):
+        if idx:  # skip first coefficients
+            coeffs[idx] = tuple([np.zeros_like(c) for c in coeff])
+
+    # Reconstruct and blur if needed
+    bg = pywt.waverec2(coeffs, wavelet, mode)
+    if blur:
+        # If level is undefined, estimate here
+        if not level:
+            level = np.min([pywt.dwt_max_level(image.shape[a], wavelet)
+                            for a in axes])
+        sig = 2 ** level
+        bg = ndi.gaussian_filter(bg, sig)
+
+    return bg
 
 
 class PadHelper():
