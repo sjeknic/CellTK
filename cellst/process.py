@@ -102,12 +102,12 @@ class Processor(BaseProcessor):
         return ndi.gaussian_laplace(image, sigma)
 
     @ImageHelper(by_frame=True)
-    def rolling_ball_background_subtraction(self,
-                                            image: Image,
-                                            radius: float = 100,
-                                            kernel: np.ndarray = None,
-                                            nansafe: bool = False
-                                            ) -> Image:
+    def rolling_ball_background_subtract(self,
+                                         image: Image,
+                                         radius: float = 100,
+                                         kernel: np.ndarray = None,
+                                         nansafe: bool = False
+                                         ) -> Image:
         """
         Estimate background intensity by rolling/translating a kernel.
 
