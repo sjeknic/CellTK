@@ -540,6 +540,23 @@ class ExperimentArray():
     """
     __slots__ = ('name', 'attrs', 'sites', 'masks', '__dict__')
 
+    class _CondIndexer():
+        def __init__(self, data):
+            self.data = data
+
+        def __getitem__(self, key):
+            # Return ConditionArray if int or slice
+            if isinstance(key, int):
+                return self.data[key]
+            elif isinstance(key, slice):
+                return self.data[key]
+            elif not isinstance(key, tuple):
+                key = tuple([key])
+
+            # Otherwise, return FROM each ConditionArray
+            indices = self.data[0]._convert_keys_to_index(key)
+            return [v._getitem_w_idx(indices) for v in self.data]
+
     def __init__(self,
                  arrays: List[ConditionArray] = None,
                  name: str = None,
@@ -572,7 +589,7 @@ class ExperimentArray():
         try:
             # First try to return a site the user requested
             if isinstance(key, tuple):
-                return [self.sites[k] for k in key]
+                return self._CondIndexer([self.sites[k] for k in key])
             else:
                 return self.sites[key]
         except KeyError:
