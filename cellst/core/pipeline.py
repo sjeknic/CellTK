@@ -442,7 +442,11 @@ class Pipeline():
         to_load = list(set(all_requested))
 
         for key in to_load:
-            fol = getattr(self, f'{key[1]}_folder')
+            try:
+                fol = getattr(self, f'{key[1]}_folder')
+            except AttributeError:
+                continue
+
             pths = self._get_image_paths(fol, key)
 
             if not pths:
