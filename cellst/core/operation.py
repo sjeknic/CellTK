@@ -9,12 +9,14 @@ import numpy as np
 import skimage.measure as meas
 
 from cellst.core.arrays import ConditionArray
-from cellst.utils._types import (Image, Mask, Track, Arr,
+from cellst.utils._types import (Image, Mask, Track, Arr, Same,
                                  ImageContainer, INPT_NAMES,
                                  RandomNameProperty)
 from cellst.utils.operation_utils import track_to_mask, parents_from_track
 from cellst.utils.log_utils import get_console_logger
+from cellst.utils.utils import ImageHelper
 import cellst.utils.metric_utils as metric_utils
+import cellst.utils.filter_utils as filter_utils
 
 
 class Operation():
@@ -390,6 +392,73 @@ class Operation():
         else:
             str_kwargs = ''
         return f'{fname}({str_kwargs})'
+
+    ### Adding very basic functions to be inherited ###
+    @ImageHelper(by_frame=False, as_tuple=True)
+    def image_to_mask(self,
+                       image: Image,
+                       ) -> Mask:
+        """
+        TODO: Should be able to wrtie a complete function
+              to handle all types, but that might require
+              some work in ImageHelper
+        """
+        return image
+
+    @ImageHelper(by_frame=False, as_tuple=True)
+    def image_to_track(self,
+                       image: Image,
+                       ) -> Track:
+        return image
+
+    @ImageHelper(by_frame=False, as_tuple=True)
+    def mask_to_image(self,
+                      mask: Mask,
+                      ) -> Image:
+        return mask
+
+    @ImageHelper(by_frame=False, as_tuple=True)
+    def mask_to_track(self,
+                      mask: Mask,
+                      ) -> Track:
+        return mask
+
+    @ImageHelper(by_frame=False, as_tuple=True)
+    def track_to_mask(self,
+                      track: Track,
+                      ) -> Mask:
+        return track
+
+    @ImageHelper(by_frame=False, as_tuple=True)
+    def track_to_image(self,
+                       track: Track,
+                       ) -> Image:
+        return track
+
+    @ImageHelper(by_frame=True)
+    def apply_mask(self,
+                   image: Image,
+                   mask: Mask = None,
+                   mask_name: str = None,
+                   *args, **kwargs
+                   ) -> Same:
+        """
+        Applies a boolean mask.
+        if mask_name is given, overrides mask
+
+        mask_name can be any mask in filter_utils
+        *args and **kwargs passed there.
+        """
+        if mask_name:
+            mask = getattr(filter_utils, mask_name)
+            mask = mask(image, *args, **kwargs).astype(bool)
+        elif isinstance(mask, np.ndarray):
+            mask = mask.astype(bool)
+        else:
+            warnings.warn('Did not get useable mask.', UserWarning)
+            mask = np.ones(image.shape, dtype=bool)
+
+        return np.where(mask, image, 0)
 
 
 class BaseProcessor(Operation):
