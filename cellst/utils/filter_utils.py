@@ -68,7 +68,7 @@ def outside_percentile(values: np.ndarray,
     # Compute values of the boundries
     lo = np.percentile(values, lo)
     hi = np.percentile(values, hi)
-    ma = outside(values, lo, hi)
+    ma = outside(values, lo, hi, propagate=False)
     if propagate:
         ma = _propagate_mask(ma)
 
@@ -87,7 +87,7 @@ def inside_percentile(values: np.ndarray,
     # Compute values of the boundries
     lo = np.percentile(values, lo)
     hi = np.percentile(values, hi)
-    ma = inside(values, lo, hi)
+    ma = inside(values, lo, hi, propagate=False)
     if propagate:
         ma = _propagate_mask(ma)
 

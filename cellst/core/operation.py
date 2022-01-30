@@ -589,12 +589,12 @@ class BaseExtractor(Operation):
         if isinstance(channels, str):
             channels = [channels]
 
-        if len(channels) == 0:
-            channels = images
+        if not channels:
+            channels = self.images
 
         # Prefer tracks for naming
-        if len(regions) == 0:
-            if len(self.tracks) > 0:
+        if not regions:
+            if tracks:
                 regions = tracks
             else:
                 regions = masks

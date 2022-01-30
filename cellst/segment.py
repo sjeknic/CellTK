@@ -20,12 +20,8 @@ class Segmenter(BaseSegmenter):
     """
     TODO:
         - Test Taka's CellTK functions (find_boundaries, cytoring)
-        - fix expand_cytoring
         - Add more cytoring functions (thres, adaptive_thres, etc.)
-        - Add more bg subtract functions (bg_subtract_wavelet_hazen)
-        - Add morphsnakes segmentation and test
         - Add levelset segmentation
-        - Test eSJ69 segmentation
         - Add mahotas/watershed_distance
     """
     @ImageHelper(by_frame=True)

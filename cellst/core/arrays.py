@@ -375,15 +375,15 @@ class ConditionArray():
               an np.ndarray
         """
         # If key is provided, look for saved mask
-        if mask is None and key is not None:
+        if key and mask is None:
             mask = self.masks[key]
-        elif mask is None and key is None:
+        elif not key and mask is None:
             warnings.warn('Did not get mask or key. Nothing done.',
                           UserWarning)
             return
 
         # Check that mask is bool/int
-        if mask.dtype != bool and mask.dtype != int:
+        if mask.dtype not in (int, bool):
             raise TypeError(f'Mask must be bool or int. Got {mask.dtype}')
 
         # Make sure mask is the correct dimension
