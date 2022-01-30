@@ -1,12 +1,15 @@
 import subprocess
 import logging
 import os
+import shutil
 import sys
 import signal
 import itertools
 import time as time_module
 from time import sleep
+from datetime import date
 from pprint import pprint
+from glob import glob
 from typing import Collection, Generator, List, Callable
 
 from cellst.utils.log_utils import get_console_logger, get_null_logger
@@ -95,6 +98,7 @@ class SlurmController(JobController):
                  name: str = 'cst',
                  modules: str = None,
                  maxjobs: (list, int) = 1,
+                 clean: bool = True,
                  working_dir: str = '.cellst_temp',
                  output_dir: str = 'slurm_logs'
                  ) -> None:
@@ -103,13 +107,15 @@ class SlurmController(JobController):
         self.name = name
         self.modules = modules
         self.maxjobs = maxjobs
+        self.clean = clean
         self.working_dir = os.path.join(os.getcwd(), working_dir)
         self.output_dir = os.path.join(os.getcwd(), output_dir)
 
         # Save the inputs
         if isinstance(partition, str):
             partition = [partition]
-        self.slurm_partitions = self._make_slurm_kwargs(partition, time, cpu, mem)
+        self.slurm_partitions = self._make_slurm_kwargs(partition, time,
+                                                        cpu, mem)
 
         # Set up default logger
         self.logger = get_console_logger()
@@ -138,7 +144,27 @@ class SlurmController(JobController):
         self.last_update_time = 0
 
     def __exit__(self, exc_type, exc_val, exc_tb) -> None:
-        pass
+        if self.clean:
+            self.logger.info('Cleaning up temporary files...')
+            shutil.rmtree(self.working_dir)
+
+            # Make dir for slurm logs
+            self.logger.info('Consolidating slurm_logs')
+            today = date.today().strftime("%Y%m%d")
+            todaypath = os.path.join(self.output_dir, today)
+            if not os.path.exists(todaypath):
+                os.makedirs(todaypath)
+
+            types = ['*.out', '*.err']
+            for ty in types:
+                files = glob(os.listdir(os.path.join(self.output_dir, ty)))
+                for f in files:
+                    ol_path = os.path.join(self.output_dir, f)
+                    nw_path = os.path.join(todaypath, f)
+                    shutil.move(ol_path, nw_path)
+
+        self.batches = ()
+        self.signal_handler = None
 
     def run(self, pipelines: dict) -> None:
         """This needs to run the individual pipelines"""
