@@ -571,7 +571,10 @@ class ExperimentArray():
         """
         try:
             # First try to return a site the user requested
-            return self.sites[key]
+            if isinstance(key, tuple):
+                return [self.sites[k] for k in key]
+            else:
+                return self.sites[key]
         except KeyError:
             # If site doesn't exist, try using key to index all sites
             if not isinstance(key, tuple):
