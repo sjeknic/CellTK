@@ -265,6 +265,8 @@ class ImageHelper():
         # Store stack as list if not already
         if isinstance(stack, np.ndarray):
             stack = [stack]
+        elif isinstance(stack, tuple):
+            stack = list(stack)
         elif isinstance(stack, (ConditionArray, ExperimentArray)):
             stack = [stack]
             # Assume only one output key - set to output id
@@ -278,14 +280,18 @@ class ImageHelper():
 
         # Check that length matches
         if len(stack) < len(keys):
-            try:
-                # If fewer images than keys, try to match by type
-                same_type_keys = [k for k in keys
-                                  if k[1] == self.output_type.__name__]
-                keys = same_type_keys[:len(stack)]
-            except IndexError:
-                # Did not have enough keys of same type
+            # TODO: This doesn't work with Same type output
+            # If fewer images than keys, try to match by type
+            same_type_keys = [k for k in keys
+                              if k[1] == self.output_type.__name__]
+            same_type_keys = same_type_keys[:len(stack)]
+
+            if len(same_type_keys) < len(stack):
+                # Not enough of same type
                 keys = keys[:len(stack)]
+            else:
+                keys = same_type_keys
+
         elif len(stack) > len(keys):
             # Returned more images than inpupts... Will deal with if it happens
             raise ValueError(f'Length of outputs ({len(stack)}) does not '
