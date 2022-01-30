@@ -556,6 +556,7 @@ class BaseExtractor(Operation):
     _extra_properties = ['division_frame', 'parent_id', 'total_intensity',
                          'median_intensity']
     _derived_metrics = {}
+    _filters = {}
 
     # _props_to_add is what actually gets used to decide on extra metrics
     _props_to_add = {}
@@ -755,6 +756,7 @@ class BaseExtractor(Operation):
         Does the actual computations from add_derived_metric
         """
         for name, (func, keys, args, kwargs) in self._derived_metrics.items():
+            self.logger.info(f'Calculating derived metric {name}')
             # NOTE: Only two arrays for now
             arrs = [array[tuple(k)] for k in keys]
             func = getattr(np, func)
@@ -772,6 +774,17 @@ class BaseExtractor(Operation):
             # Metric slots should already by in Condition array
             array[tuple(save_key)] = result
             array[tuple(inv_save_key)] = inv_result
+
+    def _apply_filters(self, array: ConditionArray) -> None:
+        """Removes cells based on user-defined filters"""
+        for name, (metr, reg, chn, args, kws) in self._filters.items():
+            self.logger.info(f'Removing cells with filter {name}')
+            self.logger.info(f'Inputs: {[reg, chn, metr, args, kws]}')
+            self.logger.info(f'Current array size: {array.shape}')
+            mask = array.generate_mask(name, metr, reg, chn,
+                                       key=None, *args, **kws)
+            array.filter_cells(mask, delete=True)
+            self.logger.info(f'Post-filter array size: {array.shape}')
 
     def add_extra_metric(self, name: str, func: Callable = None) -> None:
         """
@@ -823,6 +836,27 @@ class BaseExtractor(Operation):
 
         # Fill in the metric with just nan for now
         self._props_to_add[metric_name] = RandomNameProperty()
+
+        self.logger.info(f'Added derived metric {metric_name}')
+
+    def add_filter(self,
+                   filter_name: str,
+                   metric: str,
+                   region: [str, int] = 0,
+                   channel: [str, int] = 0,
+                   *args, **kwargs
+                   ) -> None:
+        """
+        TODO: Add ability to pass Callable, has to be done after Extract now
+        """
+        assert hasattr(filter_utils, filter_name), f'{filter_name} not found.'
+        added_metrics = (self._extra_properties
+                         + self._metrics
+                         + list(self._derived_metrics.keys()))
+        assert metric in added_metrics, f'Metric {metric} not found'
+
+        self._filters[filter_name] = tuple([metric, region, channel,
+                                            args, kwargs])
 
     def set_metric_list(self, metrics: Collection[str]) -> None:
         """

@@ -134,9 +134,10 @@ class Extractor(BaseExtractor):
             # Remove cells
             array.filter_cells(mask, delete=True)
 
-        # Check for calculated metrics to add
+        # Check for calculated metrics to add and filters
         # TODO: Does it make a difference before or after parent??
         self._calculate_derived_metrics(array)
+        self._apply_filters(array)
 
         # Remove short traces
         mask = array.remove_short_traces(min_trace_length)
