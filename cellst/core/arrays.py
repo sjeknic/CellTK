@@ -69,7 +69,12 @@ class ConditionArray():
         # Sort given indices to the appropriate axes
         indices = self._convert_keys_to_index(key)
 
-        return np.squeeze(self._arr[indices])
+        # No len-1 axes, but at least2d
+        out = np.squeeze(self._arr[indices])
+        if out.ndim == 1:
+            out = np.expand_dims(out, -1)
+
+        return out
 
     def __setitem__(self, key, value):
         # Sort given indices to the appropriate axes
