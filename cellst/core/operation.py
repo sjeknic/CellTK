@@ -305,7 +305,8 @@ class Operation():
 
     def get_inputs_and_outputs(self) -> List[List[tuple]]:
         """
-        Returns all possible inputs and outputs expectetd.
+        Returns all possible inputs and outputs expected.
+        It's likely not all will actually get made/used.
 
         Needed for Pipeline._input_output_handler
 
@@ -325,10 +326,16 @@ class Operation():
         for i in INPT_NAMES:
             inputs.extend([(g, i) for g in getattr(self, f'{i}s')])
 
-        inputs += f_keys_for_inputs + [self.output_id]
+        # Check if save_as was set for last function
+        if self.functions[-1][1]:
+            last_name = self.functions[-1][1]
+        else:
+            last_name = self.output_id
+        outputs = f_keys + [last_name]
 
-        # NOTE: Possibly inaccurate because save_as overwrites output
-        outputs = f_keys + [self.output_id]
+        # Do not include function outputs in inputs if force_rerun
+        if not self.force_rerun:
+            inputs += f_keys_for_inputs + [last_name]
 
         return inputs, outputs
 
