@@ -149,7 +149,8 @@ class UNetModel():
         Calculate the adjustments to each axes in shape that will make it evenly
         divisible by the target_mod.
         """
-        axes_deltas = [target_mod - (s % target_mod) for s in shape]
+        axes_deltas = [target_mod - (s % target_mod) if s % target_mod
+                       else 0 for s in shape]
 
         if not all(a == 0 for a in axes_deltas):
             # Divide by two because padding both sides
