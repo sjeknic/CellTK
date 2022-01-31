@@ -149,7 +149,7 @@ class SlurmController(JobController):
             shutil.rmtree(self.working_dir)
 
             # Make dir for slurm logs
-            self.logger.info('Consolidating slurm_logs')
+            self.logger.info('Consolidating SLURM logs...')
             today = date.today().strftime("%Y%m%d")
             todaypath = os.path.join(self.output_dir, today)
             if not os.path.exists(todaypath):
@@ -157,7 +157,7 @@ class SlurmController(JobController):
 
             types = ['*.out', '*.err']
             for ty in types:
-                files = glob(os.listdir(os.path.join(self.output_dir, ty)))
+                files = glob(os.path.join(self.output_dir, ty))
                 for f in files:
                     ol_path = os.path.join(self.output_dir, f)
                     nw_path = os.path.join(todaypath, f)
@@ -519,7 +519,7 @@ class SlurmController(JobController):
 
     def _get_info_from_jobs(self, info_keys: list = []) -> dict:
         """Returns only the specified keys"""
-        _default_info = ['jobid', 'name', 'state', 'partition']
+        _default_info = ['jobid', 'name', 'state', 'partition', 'output']
         info_keys = info_keys if info_keys else _default_info
 
         return {k: {i: v[i] for i in info_keys}
