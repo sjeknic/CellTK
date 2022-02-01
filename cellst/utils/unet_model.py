@@ -137,11 +137,12 @@ class UNetModel():
     def normalize_result(self, image: Image) -> Image:
         """
         Given an image ensures image.sum(-1) = 1 at each spot
-
-        NOTE: I don't think this is necessary except for some activation layers
+        NaNs after division are cast to 0
         """
         for i in range(image.shape[0]):
             image[i, ...] = image[i, ...] / image[i, ...].sum(-1)[..., None]
+        image[np.isnan(image)] = 0.
+
         return image
 
     def _calculate_pads(self, shape: Tuple[int], target_mod: int) -> List[Tuple]:
