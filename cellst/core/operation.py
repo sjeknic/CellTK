@@ -275,7 +275,7 @@ class Operation():
 
                 if ret_to_pipe:
                     self.logger.info(f'Returning to the Pipeline: '
-                                     f'{out}, {res.shape}')
+                                     f'{out}, {res.shape}, {res.dtype}')
                     return_container[out] = res
 
                 if save_folders:
@@ -290,7 +290,7 @@ class Operation():
 
         self.logger.info(
             'Returning to pipeline: '
-            f'{[(k, v.shape) for k, v in return_container.items()]}'
+            f'{[(k, v.shape, v.dtype) for k, v in return_container.items()]}'
         )
         yield from return_container.items()
 
