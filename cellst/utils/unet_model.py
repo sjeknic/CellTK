@@ -118,7 +118,7 @@ class UNetModel():
                         ) -> Image:
         """
         Normalizes the image to [0, 1]
-        Percentiles are included to prevent high/low outliers from impacting fit
+        Percentiles prevent high/low outliers from impacting fit
 
         NOTE: The specific percentages are based on what was used during training
               with CellUNet. Results will vary if the percentiles are not the same.
@@ -264,11 +264,9 @@ class UNetModel():
         # Upsampling
         filt = y.shape[-1] / 2
         y = _add_up_module(y, filt, trans_layers)
-        # Output
-        y = conv_layer(classes, 1)(y)
-
-        # TODO: Add other activation options here.
-        # TODO: Is softmax the default for CellUNet?
-        y = Activation('softmax')(y)
+        # Output - last layer is Conv 1x1
+        # TODO: Add other activation options here
+        y = conv_layer(filters=classes, kernel_size=1, strides=1,
+                       activation=activation, padding=padding)(y)
 
         return tensorflow.keras.models.Model(x, y)
