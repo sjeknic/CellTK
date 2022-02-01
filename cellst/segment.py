@@ -10,10 +10,9 @@ import scipy.ndimage as ndi
 from cellst.core.operation import BaseSegmenter
 from cellst.utils._types import Image, Mask
 from cellst.utils.utils import ImageHelper
-from cellst.utils.operation_utils import (remove_small_holes_keep_labels,
-                                          dilate_sitk, voronoi_boundaries,
+from cellst.utils.operation_utils import (dilate_sitk, voronoi_boundaries,
                                           match_labels_linear,
-                                          skimage_level_set)
+                                          skimage_level_set, gray_fill_holes)
 
 
 class Segmenter(BaseSegmenter):
@@ -28,7 +27,7 @@ class Segmenter(BaseSegmenter):
     def clean_labels(self,
                      mask: Mask,
                      min_radius: float = 3,
-                     max_radius: float = 15,
+                     max_radius: float = 100,
                      open_size: int = 3,
                      relabel: bool = False,
                      sequential: bool = False,
@@ -37,12 +36,9 @@ class Segmenter(BaseSegmenter):
         """
         Applies light cleaning. Removes small, large, and border-connected
         objectes. Applies opening.
-
-        TODO:
-            - Still getting some objects that are not contiguous.
         """
         # Fill in holes and remove border-connected objects
-        labels = remove_small_holes_keep_labels(mask, np.pi * min_radius ** 2)
+        labels = gray_fill_holes(mask)
         labels = segm.clear_border(labels, buffer_size=2)
 
         # Remove small and large objects and open

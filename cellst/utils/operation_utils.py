@@ -16,38 +16,20 @@ from cellst.utils._types import Mask, Track
 # TODO: Add label by parent function
 
 
-def remove_small_holes_keep_labels(image: np.ndarray,
-                                   size: float
-                                   ) -> np.ndarray:
+def gray_fill_holes(labels: np.ndarray) -> np.ndarray:
     """
-    Wrapper for skimage.morphology.remove_small_holes
-    to keep the same labels on the images.
-
-    TODO:
-        - Confirm correct selem to use or make option
-    """
-    dilated = morph.dilation(image, selem=np.ones((3, 3)))
-    fill = morph.remove_small_holes(image, area_threshold=size,
-                                    connectivity=2, in_place=False)
-    return np.where(fill > 0, dilated, 0)
-
-
-def gray_fill_holes_celltk(labels):
-    """
-    Direct copy from CellTK, trying to make a copy function above.
+    Faster (but hopefully identical) to the CellTK version above
     """
     fil = sitk.GrayscaleFillholeImageFilter()
-    filled = sitk.GetArrayFromImage(fil.Execute(sitk.GetImageFromArray(labels)))
-    holes = meas.label(filled != labels)
-    for idx in np.unique(holes):
-        if idx == 0:
-            continue
-        hole = holes == idx
-        surrounding_values = labels[ndi.binary_dilation(hole) & ~hole]
-        uniq = np.unique(surrounding_values)
-        if len(uniq) == 1:
-            labels[hole > 0] = uniq[0]
-    return labels
+    filled = sitk.GetArrayFromImage(
+        fil.Execute(sitk.GetImageFromArray(labels))
+    )
+    idx = np.where(filled != labels, True, False)
+    idx = ndi.distance_transform_edt(idx,
+                                     return_distances=False,
+                                     return_indices=True)
+
+    return labels[tuple(idx)]
 
 
 def dilate_sitk(labels: Mask, radius: int) -> np.ndarray:
@@ -466,3 +448,41 @@ class PadHelper():
             pads_r[n] = tuple([int(-1 * p) for p in pad])
 
         return pads_r
+
+
+def _remove_small_holes_keep_labels(image: np.ndarray,
+                                    size: float
+                                    ) -> np.ndarray:
+    """
+    Wrapper for skimage.morphology.remove_small_holes
+    to keep the same labels on the images.
+
+    Probably is not a good way to do this, but kept for
+    now for debugging purposes.
+
+    TODO:
+        - Confirm correct selem to use or make option
+    """
+    dilated = morph.dilation(image, selem=np.ones((3, 3)))
+    fill = morph.remove_small_holes(image, area_threshold=size,
+                                    connectivity=2, in_place=False)
+    return np.where(fill > 0, dilated, 0)
+
+
+def _gray_fill_holes_celltk(labels):
+    """
+    Direct copy from CellTK. Should not be used in Pipeline.
+    Kept for now for debugging purposes.
+    """
+    fil = sitk.GrayscaleFillholeImageFilter()
+    filled = sitk.GetArrayFromImage(fil.Execute(sitk.GetImageFromArray(labels)))
+    holes = meas.label(filled != labels)
+    for idx in np.unique(holes):
+        if idx == 0:
+            continue
+        hole = holes == idx
+        surrounding_values = labels[ndi.binary_dilation(hole) & ~hole]
+        uniq = np.unique(surrounding_values)
+        if len(uniq) == 1:
+            labels[hole > 0] = uniq[0]
+    return labels
