@@ -240,11 +240,22 @@ class Segmenter(BaseSegmenter):
                            lambda1: float = 1,
                            lambda2: float = 1,
                            connectivity: int = 1,
+                           thres: float = None,
+                           keep_labels: bool = True,
+                           clean_before_match: bool = True
                            ) -> Mask:
         """
-        Should run skimage.segmentation.morphological_chan_vese
+        Uses morphological_chan_vese to segment objects, followed by a
+        voronoi calculation to separate them.
 
-        # rename
+        Args:
+        thres - if set, only considers values in image > thres
+        keep_labels - uses linear assignment to transfer seed labels
+        clean_before_match - apply simple cleaning to masks before match
+
+        TODO:
+            - Add option to draw voronoi boundaries after each iteration
+            - Should thresholding happen before or after morph?
         """
         # Get level_set mask if needed - dont use voronoi boundaries
         if not isinstance(seeds, np.ndarray):
@@ -252,7 +263,11 @@ class Segmenter(BaseSegmenter):
             vor_mask = np.zeros(image.shape, dtype=bool)
         else:
             # Get Voronoi boundaries to use to separate objects
-            vor_mask = voronoi_boundaries(seeds, thinner=True)
+            vor_mask = voronoi_boundaries(seeds, thinner=False)
+
+        # Apply threshold to image. Should this happen before or after???
+        if thres:
+            image = np.where(image > thres, image, 0)
 
         # Propagate shapes
         regions = segm.morphological_chan_vese(image, iterations, seeds,
@@ -263,7 +278,10 @@ class Segmenter(BaseSegmenter):
         regions = meas.label(regions, connectivity=connectivity)
 
         # # If seed mask is provided, transfer labels
-        if isinstance(seeds, np.ndarray):
+        if keep_labels and isinstance(seeds, np.ndarray):
+            # Optional cleaning to remove small objects and whatnot
+            if clean_before_match:
+                regions = self.clean_labels.__wrapped__(self, regions)
             regions = match_labels_linear(seeds, regions)
 
         return regions
@@ -376,8 +394,8 @@ class Segmenter(BaseSegmenter):
 
     @ImageHelper(by_frame=True)
     def remove_nuc_from_cyto(self,
-                             nuc_mask: Mask,
                              cyto_mask: Mask,
+                             nuc_mask: Mask,
                              val_match: bool = False,
                              erosion: bool = False
                              ) -> Mask:

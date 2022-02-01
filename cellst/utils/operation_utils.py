@@ -313,7 +313,6 @@ def match_labels_linear(source: np.ndarray, dest: np.ndarray) -> np.ndarray:
     # Check if all dest labels were labeled
     # TODO: Should add option to check source labels
     if len(d_idx) < len(dest_labels):
-        # TODO: Need to get the equivalent of dest_labels[~d_idx]
         # Get the indices of the unlabled and add to the original.
         unlabeled = set(range(len(dest_labels))).difference(d_idx)
         unlabeled = np.fromiter(unlabeled, int)
