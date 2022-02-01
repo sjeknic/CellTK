@@ -1,13 +1,9 @@
-"""
-TODO: Rename this to file_utils and move some functions from utils.py and
-any others that use file IO and put them here.
-"""
 import os
 import yaml
 import linecache
 from typing import Collection, Dict
 
-from cellst.operation import Operation
+from cellst.core.operation import Operation
 from cellst.utils.process_utils import condense_operations
 
 
@@ -30,7 +26,7 @@ def save_yaml_file(data: dict, path: str, warning: bool = True) -> None:
                     'To generate a new file use the methods of Pipeline '
                     'or Orchestrator.',
                     'Or use the save_operation_yaml and save_pipeline_yaml '
-                    'functions in cellst.utils.yaml_utils.')
+                    'functions in cellst.utils.file_utils.')
     with open(path, 'w') as yf:
         if warning:
             for warn in warning_text:
@@ -95,3 +91,10 @@ def get_file_line(path: str, lineno: str = 1) -> str:
                 else:
                     f.seek(0)
             return f.readline().decode().rstrip(' \n')
+
+
+def folder_name(path: str) -> str:
+    """Returns name of last folder in a path
+    TODO: Doesn't work if path points to file - returns file name, not folder name
+    """
+    return os.path.basename(os.path.normpath(path))

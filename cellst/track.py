@@ -1,3 +1,4 @@
+import os
 from typing import Tuple
 
 import numpy as np
@@ -5,7 +6,7 @@ import btrack
 import btrack.utils as butils
 import btrack.constants as bconstants
 
-from cellst.operation import BaseTrack
+from cellst.core.operation import BaseTracker
 from cellst.utils._types import Image, Mask, Track
 from cellst.utils.utils import ImageHelper, stdout_redirected
 from cellst.utils.operation_utils import lineage_to_track
@@ -18,7 +19,7 @@ from cellst.utils.bayes_utils import (bayes_extract_tracker_data,
                                       bayes_update_mask)
 
 
-class Track(BaseTrack):
+class Tracker(BaseTracker):
     @ImageHelper(by_frame=False)
     def kit_sch_ge_track(self,
                          image: Image,
@@ -74,7 +75,7 @@ class Track(BaseTrack):
     @ImageHelper(by_frame=False)
     def simple_bayesian_track(self,
                               mask: Mask,
-                              config_path: str = './config/bayes_config.json',
+                              config_path: str = 'cellst/config/bayes_config.json',
                               update_method: str = 'exact',
                               ) -> Track:
         """
@@ -93,7 +94,7 @@ class Track(BaseTrack):
 
         # Track as shown in btrack example
         with btrack.BayesianTracker() as tracker:
-            tracker.configure_from_file(config_path)
+            tracker.configure_from_file(os.path.abspath(config_path))
             tracker.update_method = getattr(bconstants.BayesianUpdates,
                                             update_method.upper())
             tracker.append(objects)

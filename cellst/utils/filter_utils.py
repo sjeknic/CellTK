@@ -19,7 +19,8 @@ def _propagate_mask(mask: np.ndarray) -> np.ndarray:
 def outside(values: np.ndarray,
             lo: float = -np.inf,
             hi: float = np.inf,
-            allow_equal: bool = True
+            allow_equal: bool = True,
+            propagate: bool = True
             ) -> np.ndarray:
     """
     Masks cells with values that fall outside of the specified range
@@ -29,14 +30,17 @@ def outside(values: np.ndarray,
         ma = np.logical_and(values >= lo, values <= hi)
     else:
         ma = np.logical_and(values > lo, values < hi)
+    if propagate:
+        ma = _propagate_mask(ma)
 
-    return _propagate_mask(ma)
+    return ma
 
 
 def inside(values: np.ndarray,
            lo: float = -np.inf,
            hi: float = np.inf,
-           allow_equal: bool = True
+           allow_equal: bool = True,
+           propagate: bool = True
            ) -> np.ndarray:
     """
     Masks cells with values that fall inside of the specified range
@@ -46,14 +50,16 @@ def inside(values: np.ndarray,
         ma = np.logical_or(values <= lo, values >= hi)
     else:
         ma = np.logical_or(values < lo, values > hi)
+    if propagate:
+        ma = _propagate_mask(ma)
 
-    return _propagate_mask(ma)
+    return ma
 
 
 def outside_percentile(values: np.ndarray,
                        lo: float = 5,
                        hi: float = 95,
-                       allow_equal: bool = True
+                       propagate: bool = True
                        ) -> np.ndarray:
     """
     Masks cells with values that fall outside of the specified
@@ -62,14 +68,17 @@ def outside_percentile(values: np.ndarray,
     # Compute values of the boundries
     lo = np.percentile(values, lo)
     hi = np.percentile(values, hi)
+    ma = outside(values, lo, hi, propagate=False)
+    if propagate:
+        ma = _propagate_mask(ma)
 
-    return outside(values, lo, hi)
+    return ma
 
 
 def inside_percentile(values: np.ndarray,
                       lo: float = 5,
                       hi: float = 95,
-                      allow_equal: bool = True
+                      propagate: bool = True
                       ) -> np.ndarray:
     """
     Masks cells with values that fall inside of the specified
@@ -78,19 +87,30 @@ def inside_percentile(values: np.ndarray,
     # Compute values of the boundries
     lo = np.percentile(values, lo)
     hi = np.percentile(values, hi)
+    ma = inside(values, lo, hi, propagate=False)
+    if propagate:
+        ma = _propagate_mask(ma)
 
-    return inside(values, lo, hi)
+    return ma
 
 
-def any_nan(values: np.ndarray) -> np.ndarray:
+def any_nan(values: np.ndarray, propagate: bool = True) -> np.ndarray:
     """
     Masks cells that include any np.nan
     """
-    return _propagate_mask(~np.isnan(values))
+    ma = ~np.isnan(values)
+    if propagate:
+        ma = _propagate_mask(ma)
+
+    return ma
 
 
-def any_negative(values: np.ndarray) -> np.ndarray:
+def any_negative(values: np.ndarray, propagate: bool = True) -> np.ndarray:
     """
     Masks cells that include any negative values
     """
-    return _propagate_mask(~(values < 0))
+    ma = ~(values < 0)
+    if propagate:
+        ma = _propagate_mask(ma)
+
+    return ma

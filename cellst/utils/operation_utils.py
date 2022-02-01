@@ -1,6 +1,7 @@
-from typing import Dict, Generator, Tuple
+from typing import Dict, Generator, Tuple, List, Iterable
 
 import numpy as np
+import pywt
 import numpy.lib.stride_tricks as stricks
 import skimage.morphology as morph
 import skimage.measure as meas
@@ -9,45 +10,26 @@ import scipy.ndimage as ndi
 import scipy.optimize as opti
 import mahotas.segmentation as mahotas_seg
 import SimpleITK as sitk
-import btrack
 
 from cellst.utils._types import Mask, Track
 
 # TODO: Add label by parent function
 
 
-def remove_small_holes_keep_labels(image: np.ndarray,
-                                   size: float
-                                   ) -> np.ndarray:
+def gray_fill_holes(labels: np.ndarray) -> np.ndarray:
     """
-    Wrapper for skimage.morphology.remove_small_holes
-    to keep the same labels on the images.
-
-    TODO:
-        - Confirm correct selem to use or make option
-    """
-    dilated = morph.dilation(image, selem=np.ones((3, 3)))
-    fill = morph.remove_small_holes(image, area_threshold=size,
-                                    connectivity=2, in_place=False)
-    return np.where(fill > 0, dilated, 0)
-
-
-def gray_fill_holes_celltk(labels):
-    """
-    Direct copy from CellTK, trying to make a copy function above.
+    Faster (but hopefully identical) to the CellTK version above
     """
     fil = sitk.GrayscaleFillholeImageFilter()
-    filled = sitk.GetArrayFromImage(fil.Execute(sitk.GetImageFromArray(labels)))
-    holes = meas.label(filled != labels)
-    for idx in np.unique(holes):
-        if idx == 0:
-            continue
-        hole = holes == idx
-        surrounding_values = labels[ndi.binary_dilation(hole) & ~hole]
-        uniq = np.unique(surrounding_values)
-        if len(uniq) == 1:
-            labels[hole > 0] = uniq[0]
-    return labels
+    filled = sitk.GetArrayFromImage(
+        fil.Execute(sitk.GetImageFromArray(labels))
+    )
+    idx = np.where(filled != labels, True, False)
+    idx = ndi.distance_transform_edt(idx,
+                                     return_distances=False,
+                                     return_indices=True)
+
+    return labels[tuple(idx)]
 
 
 def dilate_sitk(labels: Mask, radius: int) -> np.ndarray:
@@ -259,6 +241,27 @@ def voronoi_boundaries(seed: np.ndarray, thinner: bool = False) -> np.ndarray:
     return bound
 
 
+def skimage_level_set(shape: Tuple[int],
+                      levelset: str = 'checkerboard',
+                      size: (float, int) = None,
+                      center: Tuple[int] = None,
+                      ) -> np.ndarray:
+    """
+    Wrapper for levelset functions in skimage.segmentation
+
+    size refers to square_size for checkerboard or radius for disk
+    """
+    if levelset == 'checkerboard':
+        size = int(size) if size else 5  # default for skimage
+        out = segm.checkerboard_level_set(shape, size)
+    elif levelset == 'disk':
+        out = segm.disk_level_set(shape, center, size)
+    else:
+        raise ValueError(f'Could not find level_set function for {levelset}')
+
+    return out
+
+
 def match_labels_linear(source: np.ndarray, dest: np.ndarray) -> np.ndarray:
     """
     Should transfer labels from source to dest based on area overlap
@@ -292,7 +295,6 @@ def match_labels_linear(source: np.ndarray, dest: np.ndarray) -> np.ndarray:
     # Check if all dest labels were labeled
     # TODO: Should add option to check source labels
     if len(d_idx) < len(dest_labels):
-        # TODO: Need to get the equivalent of dest_labels[~d_idx]
         # Get the indices of the unlabled and add to the original.
         unlabeled = set(range(len(dest_labels))).difference(d_idx)
         unlabeled = np.fromiter(unlabeled, int)
@@ -312,23 +314,175 @@ def match_labels_linear(source: np.ndarray, dest: np.ndarray) -> np.ndarray:
     return out
 
 
-class RandomNameProperty():
-    """
-    This class is to be used with skimage.regionprops_table.
-    Every extra property passed to regionprops_table must
-    have a unique name, however, I want to use several as a
-    placeholder, so that I can get the right size array, but fill
-    in the values later. So, this assigns a random __name__.
+def wavelet_background_estimate(image: np.ndarray,
+                                wavelet: str = 'db1',
+                                mode: str = 'smooth',
+                                level: int = None,
+                                blur: bool = False,
+                                axes: Tuple[int] = (-2, -1)
+                                ) -> np.ndarray:
+    """"""
+    # Get approximation and detail coeffecients
+    coeffs = pywt.wavedec2(image, wavelet, mode=mode,
+                           level=level, axes=axes)
 
-    NOTE:
-        - This does not guarantee a unique name, so getting IndexError
-          in Extract is still possible.
-    """
-    def __init__(self, *args) -> None:
-        rng = np.random.default_rng()
-        # Make it extremely unlikely to get the same int
-        self.__name__ = str(rng.integers(999999))
+    # Set detail coefficients to 0
+    for idx, coeff in enumerate(coeffs):
+        if idx:  # skip first coefficients
+            coeffs[idx] = tuple([np.zeros_like(c) for c in coeff])
 
-    @staticmethod
-    def __call__(empty):
-        return np.nan
+    # Reconstruct and blur if needed
+    bg = pywt.waverec2(coeffs, wavelet, mode)
+    if blur:
+        # If level is undefined, estimate here
+        if not level:
+            level = np.min([pywt.dwt_max_level(image.shape[a], wavelet)
+                            for a in axes])
+        sig = 2 ** level
+        bg = ndi.gaussian_filter(bg, sig)
+
+    return bg
+
+
+def wavelet_noise_estimate(image: np.ndarray,
+                           noise_level: int = 1,
+                           wavelet: str = 'db1',
+                           mode: str = 'smooth',
+                           level: int = None,
+                           thres: int = 2,
+                           axes: Tuple[int] = (-2, -1),
+                           ) -> np.ndarray:
+    """"""
+    # Get approximation and detail coeffecients
+    coeffs = pywt.wavedec2(image, wavelet, mode=mode,
+                           level=level, axes=axes)
+
+    # Set detail coefficients to 0
+    for idx, coeff in enumerate(coeffs[:-noise_level]):
+        if idx:  # skip first coefficients
+            coeffs[idx] = tuple([np.zeros_like(c) for c in coeff])
+        else:
+            coeffs[idx] = np.ones_like(coeff)
+
+    # Reconstruct and blur if needed
+    noise = pywt.waverec2(coeffs, wavelet, mode)
+
+    # Apply threshold compared to standard deviation of noise
+    thres_val = np.mean(noise) + thres * np.std(noise)
+    noise[noise > thres_val] = thres_val
+
+    return noise
+
+
+class PadHelper():
+    """
+    TODO:
+        - Add more complex padding options (e.g. pad both side, etc)
+    """
+    def __init__(self,
+                 target: (str, int),
+                 axis: (int, List[int]) = None,
+                 mode: str = 'constant',
+                 **kwargs
+                 ) -> None:
+        # Target can be 'even', 'odd', or a specific shape
+        self.target = target
+        self.mode = mode
+        self.kwargs = kwargs
+
+        # If axis is None, applies to all, otherwise, just some
+        if not isinstance(axis, Iterable):
+            self.axis = tuple([axis])
+        else:
+            self.axis = axis
+
+        # No pads yet
+        self.pads = []
+
+    def pad(self, arr: np.ndarray) -> np.ndarray:
+        """"""
+        # Pad always rewrites self.pads
+        self.pads = self._calculate_pads(arr.shape)
+
+        return np.pad(arr, self.pads, self.mode, **self.kwargs)
+
+    def undo_pad(self, arr: np.ndarray) -> np.ndarray:
+        """"""
+        if not self.pads:
+            raise ValueError('Pad values not found.')
+
+        pads_r = self._reverse_pads(self.pads)
+        # Turn pads_r into slices for indexing
+        slices = [slice(None)] * len(pads_r)
+        for n, (st, en) in enumerate(pads_r):
+            if not st and not en:
+                continue
+            else:
+                slices[n] = slice(st, en)
+
+        return arr[tuple(slices)]
+
+    def _calculate_pads(self, shape: Tuple[int]) -> Tuple[int]:
+        """"""
+        if not self.axis:
+            # If no axis is specified, pad all of them
+            self.axis = range(len(shape))
+
+        pads = [(0, 0)] * len(shape)
+        for ax in self.axis:
+            sh = shape[ax]
+            if self.target == 'even':
+                pads[ax] = (0, int(sh % 2))
+            elif self.target == 'odd':
+                pads[ax] = (0, int(not sh % 2))
+            else:
+                # self.target is a number
+                pads[ax] = (0, int(self.target - sh))
+
+        return pads
+
+    def _reverse_pads(self, pads: Tuple[int]) -> Tuple[int]:
+        """"""
+        pads_r = [(0, 0)] * len(pads)
+        for n, pad in enumerate(pads):
+            pads_r[n] = tuple([int(-1 * p) for p in pad])
+
+        return pads_r
+
+
+def _remove_small_holes_keep_labels(image: np.ndarray,
+                                    size: float
+                                    ) -> np.ndarray:
+    """
+    Wrapper for skimage.morphology.remove_small_holes
+    to keep the same labels on the images.
+
+    Probably is not a good way to do this, but kept for
+    now for debugging purposes.
+
+    TODO:
+        - Confirm correct selem to use or make option
+    """
+    dilated = morph.dilation(image, selem=np.ones((3, 3)))
+    fill = morph.remove_small_holes(image, area_threshold=size,
+                                    connectivity=2, in_place=False)
+    return np.where(fill > 0, dilated, 0)
+
+
+def _gray_fill_holes_celltk(labels):
+    """
+    Direct copy from CellTK. Should not be used in Pipeline.
+    Kept for now for debugging purposes.
+    """
+    fil = sitk.GrayscaleFillholeImageFilter()
+    filled = sitk.GetArrayFromImage(fil.Execute(sitk.GetImageFromArray(labels)))
+    holes = meas.label(filled != labels)
+    for idx in np.unique(holes):
+        if idx == 0:
+            continue
+        hole = holes == idx
+        surrounding_values = labels[ndi.binary_dilation(hole) & ~hole]
+        uniq = np.unique(surrounding_values)
+        if len(uniq) == 1:
+            labels[hole > 0] = uniq[0]
+    return labels

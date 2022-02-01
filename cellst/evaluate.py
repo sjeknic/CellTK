@@ -1,6 +1,6 @@
-from cellst.operation import BaseEvaluate
+from cellst.core.operation import BaseEvaluator
 from cellst.utils._types import Arr
 
 
-class Evaluate(BaseEvaluate):
+class Evaluator(BaseEvaluator):
     pass

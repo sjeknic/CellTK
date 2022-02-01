@@ -8,14 +8,14 @@ from multiprocessing import Pool
 from typing import Dict, Collection, Callable
 from glob import glob
 
-from cellst.operation import Operation
-from cellst.pipeline import Pipeline
-from cellst.utils._types import Arr, Experiment
+from cellst.core.operation import Operation
+from cellst.core.pipeline import Pipeline
+from cellst.core.arrays import ExperimentArray
+from cellst.utils._types import Arr
 from cellst.utils.process_utils import condense_operations, extract_operations
-from cellst.utils.utils import folder_name
 from cellst.utils.log_utils import get_logger, get_console_logger
-from cellst.utils.yaml_utils import (save_operation_yaml, save_pipeline_yaml,
-                                     save_yaml_file)
+from cellst.utils.file_utils import (save_operation_yaml, save_pipeline_yaml,
+                                     save_yaml_file, folder_name)
 from cellst.utils.slurm_utils import JobController, SlurmController
 from cellst.utils.cli_utils import CLIParser
 
@@ -24,7 +24,6 @@ class Orchestrator():
     """
     TODO:
         - Add __str__ method
-        - Add function for submitting jobs to SLURM
     """
     file_location = os.path.dirname(os.path.realpath(__file__))
 
@@ -202,8 +201,8 @@ class Orchestrator():
         TODO:
             - Increase efficiency by grouping sites by condition before loading
         """
-        # Make Experiment array to hold data
-        out = Experiment(name=self.name)
+        # Make ExperimentArray to hold data
+        out = ExperimentArray(name=self.name)
 
         # Search for all dfs in all pipeline folders
         for fol in self.pipelines:
@@ -231,8 +230,8 @@ class Orchestrator():
         self.logger.info(f'Adding Operations {operations} '
                          f'to {len(self)} Pipelines.')
         for pipe, kwargs in self.pipelines.items():
-            # If Extract is in operations, update the condition
-            # TODO: This won't work for multiple Extract operations
+            # If Extractor is in operations, update the condition
+            # TODO: This won't work for multiple Extractor operations
             if 'extract' in op_dict:
                 if op_dict['extract']['condition'] == 'default':
                     condition = kwargs['name']
@@ -243,7 +242,7 @@ class Orchestrator():
                 if self.position_map:
                     pos = self.position_map[pipe]
                 else:
-                    pos = None
+                    pos = 0
 
                 # Make new extract dictionary
                 new_extract = {}
@@ -320,7 +319,7 @@ class Orchestrator():
             os.makedirs(path)
         path = os.path.join(path, fname)
 
-        # Save using yaml_utils
+        # Save using file_utils
         self.logger.info(f"Saving Operations at {path}")
         save_operation_yaml(path, self.operations)
 
@@ -330,7 +329,7 @@ class Orchestrator():
         if not os.path.exists(path):
             os.makedirs(path)
 
-        # Save using yaml_utils
+        # Save using file_utils
         self.logger.info(f"Saving condition_map at {path}")
         save_yaml_file(self.condition_map, path, warning=False)
 

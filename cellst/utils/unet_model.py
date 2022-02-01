@@ -118,7 +118,7 @@ class UNetModel():
                         ) -> Image:
         """
         Normalizes the image to [0, 1]
-        Percentiles are included to prevent high/low outliers from impacting fit
+        Percentiles prevent high/low outliers from impacting fit
 
         NOTE: The specific percentages are based on what was used during training
               with CellUNet. Results will vary if the percentiles are not the same.
@@ -137,11 +137,12 @@ class UNetModel():
     def normalize_result(self, image: Image) -> Image:
         """
         Given an image ensures image.sum(-1) = 1 at each spot
-
-        NOTE: I don't think this is necessary except for some activation layers
+        NaNs after division are cast to 0
         """
         for i in range(image.shape[0]):
             image[i, ...] = image[i, ...] / image[i, ...].sum(-1)[..., None]
+        image[np.isnan(image)] = 0.
+
         return image
 
     def _calculate_pads(self, shape: Tuple[int], target_mod: int) -> List[Tuple]:
@@ -149,7 +150,8 @@ class UNetModel():
         Calculate the adjustments to each axes in shape that will make it evenly
         divisible by the target_mod.
         """
-        axes_deltas = [target_mod - (s % target_mod) for s in shape]
+        axes_deltas = [target_mod - (s % target_mod) if s % target_mod
+                       else 0 for s in shape]
 
         if not all(a == 0 for a in axes_deltas):
             # Divide by two because padding both sides
@@ -263,11 +265,9 @@ class UNetModel():
         # Upsampling
         filt = y.shape[-1] / 2
         y = _add_up_module(y, filt, trans_layers)
-        # Output
-        y = conv_layer(classes, 1)(y)
-
-        # TODO: Add other activation options here.
-        # TODO: Is softmax the default for CellUNet?
-        y = Activation('softmax')(y)
+        # Output - last layer is Conv 1x1
+        # TODO: Add other activation options here
+        y = conv_layer(filters=classes, kernel_size=1, strides=1,
+                       activation=activation, padding=padding)(y)
 
         return tensorflow.keras.models.Model(x, y)

@@ -3,13 +3,21 @@ import warnings
 
 import numpy as np
 
-from cellst.operation import BaseExtract
+from cellst.core.operation import BaseExtractor
 from cellst.utils.utils import ImageHelper
-from cellst.utils._types import Image, Mask, Track, Arr, Condition
+from cellst.utils._types import Image, Mask, Track, Arr
+from cellst.core.arrays import ConditionArray
 from cellst.utils.operation_utils import lineage_to_track, parents_from_track
 
 
-class Extract(BaseExtract):
+class Extractor(BaseExtractor):
+    _metrics = ['label', 'area', 'convex_area', 'filled_area', 'bbox',
+                'centroid', 'mean_intensity', 'max_intensity', 'min_intensity',
+                'minor_axis_length', 'major_axis_length',
+                'orientation', 'perimeter', 'solidity']
+    _extra_properties = ['division_frame', 'parent_id', 'total_intensity',
+                         'median_intensity']
+
     @ImageHelper(by_frame=False, as_tuple=True)
     def extract_data_from_image(self,
                                 images: Image,
@@ -41,10 +49,6 @@ class Extract(BaseExtract):
                               and remove parents
             - parent_track - if remove_parent, track to use for lineage info
 
-        NOTE: Extract takes in all inputs, so no need for decorator
-        NOTE: Inputs are optional so that __call__ can use either mask
-              or track
-
         TODO:
             - Allow an option for caching or not in regionprops
             - Allow input of tracking file
@@ -71,7 +75,7 @@ class Extract(BaseExtract):
                                  f'and {len(lineages)} lineages.')
             else:
                 tracks_to_use.extend([lineage_to_track(t, l)
-                                      for t, l in zip(tracks_to_use, lineages)])
+                                     for t, l in zip(tracks_to_use, lineages)])
 
         # Confirm sizes of inputs match
         if len(images) != len(channels):
@@ -104,18 +108,20 @@ class Extract(BaseExtract):
         frames = range(max([i.shape[0] for i in images]))
 
         # Initialize data structure
-        array = Condition(regions, channels, all_measures, cells, frames,
-                          name=condition, pos_id=position_id)
+        array = ConditionArray(regions, channels, all_measures, cells, frames,
+                               name=condition, pos_id=position_id)
 
         # Extract data for all channels and regions individually
         for c_idx, cnl in enumerate(channels):
             for r_idx, rgn in enumerate(regions):
-                cr_data = self._extract_data_with_track(images[c_idx],
-                                                        tracks_to_use[r_idx],
-                                                        metrics,
-                                                        extra_funcs,
-                                                        cell_index)
-            array[rgn, cnl, :, :, :] = cr_data
+                cnl_rgn_data = self._extract_data_with_track(
+                    images[c_idx],
+                    tracks_to_use[r_idx],
+                    metrics,
+                    extra_funcs,
+                    cell_index
+                )
+            array[rgn, cnl, :, :, :] = cnl_rgn_data
 
         if remove_parent:
             # Get parent information from a single track
@@ -127,6 +133,11 @@ class Extract(BaseExtract):
 
             # Remove cells
             array.filter_cells(mask, delete=True)
+
+        # Check for calculated metrics to add and filters
+        # TODO: Does it make a difference before or after parent??
+        self._calculate_derived_metrics(array)
+        self._apply_filters(array)
 
         # Remove short traces
         mask = array.remove_short_traces(min_trace_length)

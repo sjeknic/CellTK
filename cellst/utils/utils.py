@@ -1,6 +1,5 @@
 import sys
 import os
-import types
 import inspect
 import functools
 import contextlib
@@ -12,8 +11,8 @@ import numpy as np
 
 from cellst.utils._types import (Image, Mask, Track,
                                  Arr, ImageContainer,
-                                 Condition, Experiment,
                                  INPT_NAMES)
+from cellst.core.arrays import ConditionArray, ExperimentArray
 from cellst.utils.operation_utils import sliding_window_generator
 from cellst.utils.log_utils import get_null_logger
 
@@ -31,29 +30,6 @@ def nan_helper_2d(arr: np.ndarray) -> np.ndarray:
         nans, z = nan_helper(y)
         y[nans] = np.interp(z(nans), z(~nans), y[~nans])
         temp[n, :] = y
-
-
-def folder_name(path: str) -> str:
-    """Returns name of last folder in a path
-    TODO: Doesn't work if path points to file - returns file name, not folder name
-    """
-    return os.path.basename(os.path.normpath(path))
-
-
-# Decorator that end users can use to add custom functions
-# to Operations.
-# TODO: Needs to wrap in ImageHelper
-def custom_function(operation):
-    def decorator(func):
-        func = types.MethodType(func, operation)
-
-        if not hasattr(operation, func.__name__):
-            setattr(operation, func.__name__, func)
-        else:
-            raise ValueError(f'Function {func} already exists in {operation}.')
-
-        return func
-    return decorator
 
 
 # Functions to block output to Terminal
@@ -289,7 +265,9 @@ class ImageHelper():
         # Store stack as list if not already
         if isinstance(stack, np.ndarray):
             stack = [stack]
-        elif isinstance(stack, (Condition, Experiment)):
+        elif isinstance(stack, tuple):
+            stack = list(stack)
+        elif isinstance(stack, (ConditionArray, ExperimentArray)):
             stack = [stack]
             # Assume only one output key - set to output id
             try:
@@ -302,14 +280,18 @@ class ImageHelper():
 
         # Check that length matches
         if len(stack) < len(keys):
-            try:
-                # If fewer images than keys, try to match by type
-                same_type_keys = [k for k in keys
-                                  if k[1] == self.output_type.__name__]
-                keys = same_type_keys[:len(stack)]
-            except IndexError:
-                # Did not have enough keys of same type
+            # TODO: This doesn't work with Same type output
+            # If fewer images than keys, try to match by type
+            same_type_keys = [k for k in keys
+                              if k[1] == self.output_type.__name__]
+            same_type_keys = same_type_keys[:len(stack)]
+
+            if len(same_type_keys) < len(stack):
+                # Not enough of same type
                 keys = keys[:len(stack)]
+            else:
+                keys = same_type_keys
+
         elif len(stack) > len(keys):
             # Returned more images than inpupts... Will deal with if it happens
             raise ValueError(f'Length of outputs ({len(stack)}) does not '

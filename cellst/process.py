@@ -6,23 +6,23 @@ import skimage.filters as filt
 import skimage.segmentation as segm
 import scipy.ndimage as ndi
 
-from cellst.operation import BaseProcess
+from cellst.core.operation import BaseProcessor
 from cellst.utils._types import Image, Mask, Track, Same
 from cellst.utils.utils import ImageHelper
 from cellst.utils.operation_utils import (sliding_window_generator,
-                                          shift_array, crop_array)
-
-"""
-TODO:
-    - Add stand-alone crop function
-    - Add optical-flow registration
-    - Add faster bg subtract (wavelet hazen)
-    - Add unet_predict here
-    - Add sobel filter
-"""
+                                          shift_array, crop_array, PadHelper,
+                                          wavelet_background_estimate,
+                                          wavelet_noise_estimate)
 
 
-class Process(BaseProcess):
+class Processor(BaseProcessor):
+    """
+    TODO:
+        - Add stand-alone crop function
+        - Add optical-flow registration
+        - Add faster bg subtract (wavelet hazen)
+        - Add sobel filter
+    """
     @ImageHelper(by_frame=False, as_tuple=True)
     def align_by_cross_correlation(self,
                                    image: Image,
@@ -102,12 +102,12 @@ class Process(BaseProcess):
         return ndi.gaussian_laplace(image, sigma)
 
     @ImageHelper(by_frame=True)
-    def rolling_ball_background_subtraction(self,
-                                            image: Image,
-                                            radius: float = 100,
-                                            kernel: np.ndarray = None,
-                                            nansafe: bool = False
-                                            ) -> Image:
+    def rolling_ball_background_subtract(self,
+                                         image: Image,
+                                         radius: float = 100,
+                                         kernel: np.ndarray = None,
+                                         nansafe: bool = False
+                                         ) -> Image:
         """
         Estimate background intensity by rolling/translating a kernel.
 
@@ -151,3 +151,107 @@ class Process(BaseProcess):
         # Apply the filter and return
         filimg = fil.Execute(frame0, frame1)
         return sitk.GetArrayFromImage(filimg)
+
+    @ImageHelper(by_frame=False)
+    def wavelet_background_subtract(self,
+                                    image: Image,
+                                    wavelet: str = 'db1',
+                                    mode: str = 'smooth',
+                                    level: int = None,
+                                    blur: bool = False,
+                                    ) -> Image:
+        """
+        """
+        # Pad image to even before starting
+        padder = PadHelper(target='even', axis=[1, 2], mode='edge')
+        image_pad = padder.pad(image)
+
+        # Pass frames of the padded image
+        out = np.zeros(image_pad.shape, dtype=np.int16)
+        for fr, im in enumerate(image_pad):
+            bg = wavelet_background_estimate(im, wavelet, mode,
+                                             level, blur)
+            bg = np.asarray(bg, dtype=out.dtype)
+
+            # Remove background and ensure non-negative
+            out[fr, ...] = im - bg
+            out[fr, ...][out[fr, ...] < 0] = 0
+
+        # Undo padding and reset dtype before return
+        return padder.undo_pad(out.astype(image.dtype))
+
+    @ImageHelper(by_frame=False)
+    def wavelet_noise_subtract(self,
+                               image: Image,
+                               noise_level: int = 1,
+                               thres: int = 2,
+                               wavelet: str = 'db1',
+                               mode: str = 'smooth',
+                               level: int = None,
+                               ) -> Image:
+        """
+        """
+        # Pad image to even before starting
+        padder = PadHelper(target='even', axis=[1, 2], mode='edge')
+        image_pad = padder.pad(image)
+
+        # Pass frames of the padded image
+        out = np.zeros(image_pad.shape, dtype=np.int16)
+        for fr, im in enumerate(image_pad):
+            ns = wavelet_noise_estimate(im, noise_level, wavelet,
+                                        mode, level, thres)
+            ns = np.asarray(ns, dtype=out.dtype)
+
+            # Remove background and ensure non-negative
+            out[fr, ...] = im - ns
+            out[fr, ...][out[fr, ...] < 0] = 0
+
+        # Undo padding and reset dtype before return
+        return padder.undo_pad(out.astype(image.dtype))
+
+    @ImageHelper(by_frame=False)
+    def unet_predict(self,
+                     image: Image,
+                     weight_path: str,
+                     roi: (int, str) = 2,
+                     batch: int = None,
+                     classes: int = 3,
+                     ) -> Image:
+        """
+        roi - the prediction values are returned only for the roi
+        batch - number of frames passed to model. None is all of them.
+        classes - number of output categories from the model (has to match weights)
+        """
+        _roi_dict = {'background': 0, 'bg': 0, 'edge': 1,
+                     'interior': 2, 'nuc': 2, 'cyto': 2}
+        if isinstance(roi, str):
+            try:
+                roi = _roi_dict[roi]
+            except KeyError:
+                raise ValueError(f'Did not understand region of interest {roi}.')
+
+        # Only import tensorflow and Keras if needed
+        from cellst.utils.unet_model import UNetModel
+
+        if not hasattr(self, 'model'):
+            '''NOTE: If we had mulitple colors, then image would be 4D here.
+            The Pipeline isn't set up for that now, so for now the channels
+            is just assumed to be 1.'''
+            channels = 1
+            dims = (image.shape[1], image.shape[2], channels)
+
+            self.model = UNetModel(dimensions=dims,
+                                   weight_path=weight_path,
+                                   model='unet')
+
+        # Pre-allocate output memory
+        # TODO: Incorporate the batch here.
+        if batch is None:
+            output = self.model.predict(image[:, :, :], roi=roi)
+        else:
+            arrs = np.array_split(image, image.shape[0] // batch, axis=0)
+            output = np.concatenate([self.model.predict(a, roi=roi)
+                                     for a in arrs], axis=0)
+
+        # TODO: dtype can probably be downsampled from float32 before returning
+        return output

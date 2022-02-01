@@ -1,3 +1,5 @@
+from typing import Tuple
+
 import numpy as np
 import skimage.measure as meas
 import skimage.segmentation as segm
@@ -5,32 +7,27 @@ import skimage.morphology as morph
 import skimage.filters as filt
 import scipy.ndimage as ndi
 
-from cellst.operation import BaseSegment
+from cellst.core.operation import BaseSegmenter
 from cellst.utils._types import Image, Mask
 from cellst.utils.utils import ImageHelper
-from cellst.utils.operation_utils import (remove_small_holes_keep_labels,
-                                          dilate_sitk, voronoi_boundaries,
-                                          match_labels_linear)
-
-"""
-TODO:
-    - Test Taka's CellTK functions (find_boundaries, cytoring)
-    - fix expand_cytoring
-    - Add more cytoring functions (thres, adaptive_thres, etc.)
-    - Add more bg subtract functions (bg_subtract_wavelet_hazen)
-    - Add morphsnakes segmentation and test
-    - Add levelset segmentation
-    - Test eSJ69 segmentation
-    - Add mahotas/watershed_distance
-"""
+from cellst.utils.operation_utils import (dilate_sitk, voronoi_boundaries,
+                                          match_labels_linear,
+                                          skimage_level_set, gray_fill_holes)
 
 
-class Segment(BaseSegment):
+class Segmenter(BaseSegmenter):
+    """
+    TODO:
+        - Test Taka's CellTK functions (find_boundaries, cytoring)
+        - Add more cytoring functions (thres, adaptive_thres, etc.)
+        - Add levelset segmentation
+        - Add mahotas/watershed_distance
+    """
     @ImageHelper(by_frame=True)
     def clean_labels(self,
                      mask: Mask,
                      min_radius: float = 3,
-                     max_radius: float = 15,
+                     max_radius: float = 100,
                      open_size: int = 3,
                      relabel: bool = False,
                      sequential: bool = False,
@@ -39,12 +36,9 @@ class Segment(BaseSegment):
         """
         Applies light cleaning. Removes small, large, and border-connected
         objectes. Applies opening.
-
-        TODO:
-            - Still getting some objects that are not contiguous.
         """
         # Fill in holes and remove border-connected objects
-        labels = remove_small_holes_keep_labels(mask, np.pi * min_radius ** 2)
+        labels = gray_fill_holes(mask)
         labels = segm.clear_border(labels, buffer_size=2)
 
         # Remove small and large objects and open
@@ -242,14 +236,34 @@ class Segment(BaseSegment):
                            lambda1: float = 1,
                            lambda2: float = 1,
                            connectivity: int = 1,
+                           thres: float = None,
+                           keep_labels: bool = True,
+                           clean_before_match: bool = True
                            ) -> Mask:
         """
-        Should run skimage.segmentation.morphological_chan_vese
+        Uses morphological_chan_vese to segment objects, followed by a
+        voronoi calculation to separate them.
 
-        # rename
+        Args:
+        thres - if set, only considers values in image > thres
+        keep_labels - uses linear assignment to transfer seed labels
+        clean_before_match - apply simple cleaning to masks before match
+
+        TODO:
+            - Add option to draw voronoi boundaries after each iteration
+            - Should thresholding happen before or after morph?
         """
-        # Get Voronoi boundaries to use to separate objects
-        vor_mask = voronoi_boundaries(seeds, thinner=True)
+        # Get level_set mask if needed - dont use voronoi boundaries
+        if not isinstance(seeds, np.ndarray):
+            seeds = skimage_level_set(image.shape, levelset=seeds)
+            vor_mask = np.zeros(image.shape, dtype=bool)
+        else:
+            # Get Voronoi boundaries to use to separate objects
+            vor_mask = voronoi_boundaries(seeds, thinner=False)
+
+        # Apply threshold to image. Should this happen before or after???
+        if thres:
+            image = np.where(image > thres, image, 0)
 
         # Propagate shapes
         regions = segm.morphological_chan_vese(image, iterations, seeds,
@@ -260,7 +274,10 @@ class Segment(BaseSegment):
         regions = meas.label(regions, connectivity=connectivity)
 
         # # If seed mask is provided, transfer labels
-        if isinstance(seeds, np.ndarray):
+        if keep_labels and isinstance(seeds, np.ndarray):
+            # Optional cleaning to remove small objects and whatnot
+            if clean_before_match:
+                regions = self.clean_labels.__wrapped__(self, regions)
             regions = match_labels_linear(seeds, regions)
 
         return regions
@@ -373,8 +390,8 @@ class Segment(BaseSegment):
 
     @ImageHelper(by_frame=True)
     def remove_nuc_from_cyto(self,
-                             nuc_mask: Mask,
                              cyto_mask: Mask,
+                             nuc_mask: Mask,
                              val_match: bool = False,
                              erosion: bool = False
                              ) -> Mask:
@@ -398,6 +415,26 @@ class Segment(BaseSegment):
             new_cyto_mask = np.where(eroded_img, new_cyto_mask, 0)
 
         return new_cyto_mask
+
+    @ImageHelper(by_frame=True)
+    def level_set_mask(self,
+                       image: Image,
+                       levelset: str = 'checkerboard',
+                       size: (float, int) = None,
+                       center: Tuple[int] = None,
+                       label: bool = False
+                       ) -> Mask:
+        """
+        Wrapper for levelset functions in skimage.segmentation
+
+        size refers to square_size for checkerboard or radius for disk
+        """
+        mask = skimage_level_set(image.shape, levelset, size, center)
+
+        if label:
+            mask = meas.label(mask)
+
+        return mask
 
     @ImageHelper(by_frame=False)
     def unet_predict(self,

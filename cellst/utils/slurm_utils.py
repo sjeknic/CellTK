@@ -1,17 +1,20 @@
 import subprocess
 import logging
 import os
+import shutil
 import sys
 import signal
 import itertools
 import time as time_module
 from time import sleep
+from datetime import date
 from pprint import pprint
+from glob import glob
 from typing import Collection, Generator, List, Callable
 
 from cellst.utils.log_utils import get_console_logger, get_null_logger
-from cellst.utils.yaml_utils import save_job_history_yaml, get_file_line, load_yaml
-from cellst.pipeline import Pipeline
+from cellst.utils.file_utils import save_job_history_yaml, get_file_line, load_yaml
+from cellst.core.pipeline import Pipeline
 
 
 class JobController():
@@ -95,6 +98,7 @@ class SlurmController(JobController):
                  name: str = 'cst',
                  modules: str = None,
                  maxjobs: (list, int) = 1,
+                 clean: bool = True,
                  working_dir: str = '.cellst_temp',
                  output_dir: str = 'slurm_logs'
                  ) -> None:
@@ -103,13 +107,15 @@ class SlurmController(JobController):
         self.name = name
         self.modules = modules
         self.maxjobs = maxjobs
+        self.clean = clean
         self.working_dir = os.path.join(os.getcwd(), working_dir)
         self.output_dir = os.path.join(os.getcwd(), output_dir)
 
         # Save the inputs
         if isinstance(partition, str):
             partition = [partition]
-        self.slurm_partitions = self._make_slurm_kwargs(partition, time, cpu, mem)
+        self.slurm_partitions = self._make_slurm_kwargs(partition, time,
+                                                        cpu, mem)
 
         # Set up default logger
         self.logger = get_console_logger()
@@ -138,7 +144,27 @@ class SlurmController(JobController):
         self.last_update_time = 0
 
     def __exit__(self, exc_type, exc_val, exc_tb) -> None:
-        pass
+        if self.clean:
+            self.logger.info('Cleaning up temporary files...')
+            shutil.rmtree(self.working_dir)
+
+            # Make dir for slurm logs
+            self.logger.info('Consolidating SLURM logs...')
+            today = date.today().strftime("%Y%m%d")
+            todaypath = os.path.join(self.output_dir, today)
+            if not os.path.exists(todaypath):
+                os.makedirs(todaypath)
+
+            types = ['*.out', '*.err']
+            for ty in types:
+                files = glob(os.path.join(self.output_dir, ty))
+                for f in files:
+                    ol_path = os.path.join(self.output_dir, f)
+                    nw_path = os.path.join(todaypath, f)
+                    shutil.move(ol_path, nw_path)
+
+        self.batches = ()
+        self.signal_handler = None
 
     def run(self, pipelines: dict) -> None:
         """This needs to run the individual pipelines"""
@@ -340,8 +366,9 @@ class SlurmController(JobController):
 
             # Run the sbatch
             submitted = subprocess.run([f"sbatch {sbatch_path}"], shell=True,
-                                        capture_output=True, text=True)
-            self._record_job_history(submitted)
+                                       capture_output=True, text=True)
+            self._record_job_history(submitted,
+                                     partition=slurm_kwargs['partition'])
 
             self.logger.info(f'Submitted {sbatch_path}. '
                              f'Sleeping {self._submit_delay}s.')
@@ -352,11 +379,12 @@ class SlurmController(JobController):
         return True
 
     def _yield_working_sbatch(self, pipelines: dict) -> str:
-        self.logger.info(f'Building {len(pipelines)} pipelines: {list(pipelines.keys())}')
+        self.logger.info(f'Building {len(pipelines)} pipelines: '
+                         f'{list(pipelines.keys())}')
 
         for fol, kwargs in pipelines.items():
             # First load the pipeline, then save as yaml that can be accessed
-            # TODO: Obviously could be more efficient - esp if Orchestrator made yamls
+            # TODO: Make more efficient - esp if Orchestrator made yamls
             _pipe = Pipeline._build_from_dict(kwargs)
 
             _y_path = os.path.join(self.working_dir, f'{fol}yaml.yaml')
@@ -373,7 +401,11 @@ class SlurmController(JobController):
             self.pipes_run += 1
             yield _batch_path
 
-    def _record_job_history(self, submitted: str = None, update: bool = False) -> None:
+    def _record_job_history(self,
+                            submitted: str = None,
+                            update: bool = False,
+                            partition: str = ''
+                            ) -> None:
         """
         Will record a new job (submitted) or update current record of jobs (update)
         """
@@ -392,7 +424,8 @@ class SlurmController(JobController):
             job_id = ''.join((s for s in submitted.stdout if s.isdigit()))
             self.job_history[job_id] = dict(jobid=job_id, state='S',
                                             name=name, output=output_dir,
-                                            slurm_path=pth, yaml_path=ypth)
+                                            slurm_path=pth, yaml_path=ypth,
+                                            partition=partition)
 
         # Updates are slow, so don't do them often
         if update:
@@ -486,7 +519,7 @@ class SlurmController(JobController):
 
     def _get_info_from_jobs(self, info_keys: list = []) -> dict:
         """Returns only the specified keys"""
-        _default_info = ['jobid', 'name', 'state']
+        _default_info = ['jobid', 'name', 'state', 'partition', 'output']
         info_keys = info_keys if info_keys else _default_info
 
         return {k: {i: v[i] for i in info_keys}
@@ -624,7 +657,7 @@ class SlurmController(JobController):
             mods = f'module restore {self.modules}'
             string = _add_line(string, mods, '', '')
 
-        command = f'python3 -m cellst.pipeline -y {yaml_path}'
+        command = f'python3 -m cellst.core.pipeline -y {yaml_path}'
         string = _add_line(string, command, '', '')
 
         # Make the file
