@@ -302,6 +302,13 @@ class Segmenter(BaseSegmenter):
                                                           threshold, balloon)
 
     @ImageHelper(by_frame=True)
+    def match_labels_linear(self,
+                            dest: Mask,
+                            source: Mask
+                            ) -> Mask:
+        return match_labels_linear(source, dest)
+
+    @ImageHelper(by_frame=True)
     def find_boundaries(self,
                         mask: Mask,
                         connectivity: int = 2,
