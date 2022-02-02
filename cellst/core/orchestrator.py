@@ -5,7 +5,7 @@ import yaml
 import itertools
 import warnings
 from multiprocessing import Pool
-from typing import Dict, Collection, Callable
+from typing import Dict, Collection, Tuple
 from glob import glob
 
 from cellst.core.operation import Operation
@@ -46,6 +46,7 @@ class Orchestrator():
                  array_folder: str = None,
                  condition_map: dict = {},
                  name: str = 'experiment',
+                 frame_rng: Tuple[int] = None,
                  file_extension: str = 'tif',
                  overwrite: bool = True,
                  log_file: bool = True,
@@ -65,6 +66,7 @@ class Orchestrator():
         """
         # Save some values
         self.name = name
+        self.frame_rng = frame_rng
         self.file_extension = file_extension
         self.overwrite = overwrite
         self.save = save_master_df
@@ -424,6 +426,7 @@ class Orchestrator():
                         self.pipelines[fol]['name'] = fol
 
                     # Add miscellaneous options
+                    self.pipelines[fol]['frame_rng'] = self.frame_rng
                     self.pipelines[fol]['file_extension'] = self.file_extension
                     self.pipelines[fol]['overwrite'] = self.overwrite
                     self.pipelines[fol]['log_file'] = self.log_file
