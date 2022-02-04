@@ -132,16 +132,20 @@ def lineage_to_track(mask: Mask,
 def sliding_window_generator(arr: np.ndarray, overlap: int = 0) -> Generator:
     """
     NOTE: If memory is an issue here, can probably manually count the indices
-          and make a generator that way, but it will probably be much slower.
+          and make a generator that way, but it will be much slower.
 
     TODO:
         - Add low mem option (see above)
-        - Add option to slide over different axis
+        - Add option to slide over different axis, by default uses 0
     """
-    # Shapes are all the same
-    shape = (overlap + 1, *arr.shape[1:])
-    # Create a generator, returns each cut of the array
-    yield from [np.squeeze(s) for s in stricks.sliding_window_view(arr, shape)]
+    if overlap:
+        # Shapes are all the same
+        shape = (overlap + 1, *arr.shape[1:])
+        # Create a generator, returns each cut of the array
+        yield from [np.squeeze(s)
+                    for s in stricks.sliding_window_view(arr, shape)]
+    else:
+        yield from arr
 
 
 # TODO: Test including @numba.njit here
@@ -315,7 +319,7 @@ def match_labels_linear(source: np.ndarray, dest: np.ndarray) -> np.ndarray:
 
 
 def wavelet_background_estimate(image: np.ndarray,
-                                wavelet: str = 'db1',
+                                wavelet: str = 'db4',
                                 mode: str = 'smooth',
                                 level: int = None,
                                 blur: bool = False,
