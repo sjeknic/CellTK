@@ -131,6 +131,12 @@ def lineage_to_track(mask: Mask,
 
 def sliding_window_generator(arr: np.ndarray, overlap: int = 0) -> Generator:
     """
+    overlap: int(amount of frames to overlap between passing)
+    e.g. overlap = 1: [0, 1], [1, 2], [2, 3], [3, 4]
+         overlap = 2: [0, 1, 2], [1, 2, 3], [2, 3, 4]
+
+    NOTE: Overlaps get passed as a stack, not as separate args.
+          i.e. if overlap = 1, image.shape = (2, h, w)
     NOTE: If memory is an issue here, can probably manually count the indices
           and make a generator that way, but it will be much slower.
 
@@ -271,7 +277,6 @@ def match_labels_linear(source: np.ndarray, dest: np.ndarray) -> np.ndarray:
     Should transfer labels from source to dest based on area overlap
 
     TODO:
-        - Should overlap be calculated relative to original area?
         - Should there be a threshold of the overlapping amount?
         - Should overlap be relative to source or dest?
         - Handle overflow amounts
@@ -286,12 +291,12 @@ def match_labels_linear(source: np.ndarray, dest: np.ndarray) -> np.ndarray:
     for x, slab in enumerate(source_labels):
         # Get values in dest that overlap with slab
         _dest = dest[source == slab]
-        labels, overlaps = np.unique(_dest, return_counts=True)
+        _area = np.count_nonzero(_dest)
+        labels, overlaps = np.unique(_dest[_dest > 0], return_counts=True)
 
         # Need to remove 0 again
         for l, o in zip(labels, overlaps):
-            if l:
-                cost_matrix[x, dest_idx[l]] = -o
+            cost_matrix[x, dest_idx[l]] = -o / _area
 
     # These are the indices of the lowest cost assignment
     s_idx, d_idx = opti.linear_sum_assignment(cost_matrix)
