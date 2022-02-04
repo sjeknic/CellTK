@@ -331,11 +331,12 @@ class Operation():
             last_name = self.functions[-1][1]
         else:
             last_name = self.output_id
-        outputs = f_keys + [last_name]
+        last_key = (last_name, self.output_id[1])
+        outputs = f_keys + [last_key]
 
         # Do not include function outputs in inputs if force_rerun
         if not self.force_rerun:
-            inputs += f_keys_for_inputs + [last_name]
+            inputs += f_keys_for_inputs + [last_key]
 
         return inputs, outputs
 
