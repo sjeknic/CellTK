@@ -11,7 +11,6 @@ from cellst.core.operation import BaseSegmenter
 from cellst.utils._types import Image, Mask
 from cellst.utils.utils import ImageHelper
 from cellst.utils.operation_utils import (dilate_sitk, voronoi_boundaries,
-                                          match_labels_linear,
                                           skimage_level_set, gray_fill_holes)
 
 
@@ -27,7 +26,7 @@ class Segmenter(BaseSegmenter):
     def clean_labels(self,
                      mask: Mask,
                      min_radius: float = 3,
-                     max_radius: float = 100,
+                     max_radius: float = 20,
                      open_size: int = 3,
                      relabel: bool = False,
                      sequential: bool = False,
@@ -302,31 +301,24 @@ class Segmenter(BaseSegmenter):
                                                           threshold, balloon)
 
     @ImageHelper(by_frame=True)
-    def match_labels_linear(self,
-                            dest: Mask,
-                            source: Mask
-                            ) -> Mask:
-        return match_labels_linear(source, dest)
-
-    @ImageHelper(by_frame=True)
     def find_boundaries(self,
                         mask: Mask,
                         connectivity: int = 2,
                         mode: str = 'inner',
-                        binary: bool = False
+                        keep_labels: bool = False
                         ) -> Mask:
         """
         Outlines the objects in mask and preserves labels.
 
-        if binary - don't preserve labels
+        if not keep_labels - don't preserve labels
         """
         boundaries = segm.find_boundaries(mask, connectivity=connectivity,
                                           mode=mode)
 
-        if binary:
-            return boundaries
-        else:
+        if keep_labels:
             return np.where(boundaries, mask, 0)
+        else:
+            return boundaries
 
     @ImageHelper(by_frame=True)
     def dilate_to_cytoring_celltk(self,

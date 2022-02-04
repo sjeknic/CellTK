@@ -12,7 +12,8 @@ from cellst.core.arrays import ConditionArray
 from cellst.utils._types import (Image, Mask, Track, Arr, Same,
                                  ImageContainer, INPT_NAMES,
                                  RandomNameProperty)
-from cellst.utils.operation_utils import track_to_mask, parents_from_track
+from cellst.utils.operation_utils import (track_to_mask, parents_from_track,
+                                          match_labels_linear)
 from cellst.utils.log_utils import get_console_logger
 from cellst.utils.utils import ImageHelper
 import cellst.utils.metric_utils as metric_utils
@@ -467,6 +468,13 @@ class Operation():
             mask = np.ones(image.shape, dtype=bool)
 
         return np.where(mask, image, 0)
+
+    @ImageHelper(by_frame=True)
+    def match_labels_linear(self,
+                            dest: Mask,
+                            source: Mask
+                            ) -> Mask:
+        return match_labels_linear(source, dest)
 
 
 class BaseProcessor(Operation):
