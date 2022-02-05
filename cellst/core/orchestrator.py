@@ -5,7 +5,7 @@ import yaml
 import itertools
 import warnings
 from multiprocessing import Pool
-from typing import Dict, Collection, Tuple
+from typing import Dict, Collection, Tuple, Callable
 from glob import glob
 
 from cellst.core.operation import Operation
@@ -45,6 +45,7 @@ class Orchestrator():
                  track_folder: str = None,
                  array_folder: str = None,
                  condition_map: dict = {},
+                 position_map: dict = None,
                  name: str = 'experiment',
                  frame_rng: Tuple[int] = None,
                  file_extension: str = 'tif',
@@ -71,7 +72,7 @@ class Orchestrator():
         self.overwrite = overwrite
         self.save = save_master_df
         self.condition_map = condition_map
-        self.position_map = self._set_position_map(condition_map)
+        self.position_map = self._set_position_map(position_map)
         self.controller = job_controller
         self.log_file = log_file
         self.verbose = verbose
@@ -241,9 +242,9 @@ class Orchestrator():
                     condition = op_dict['extractor']['condition']
 
                 # Get position if needed
-                if self.position_map:
+                try:
                     pos = self.position_map[pipe]
-                else:
+                except (KeyError, AttributeError, TypeError):
                     pos = 0
 
                 # Make new extract dictionary
@@ -335,23 +336,42 @@ class Orchestrator():
         self.logger.info(f"Saving condition_map at {path}")
         save_yaml_file(self.condition_map, path, warning=False)
 
-    def _set_position_map(self, condition_map: dict) -> dict:
+    def _set_position_map(self, position_map: (dict, Callable)) -> dict:
         """
-        Given the condition map, save a unique identifier as needed,
+        Save a unique identifier for each position if needed
 
-        TODO:
-            - Make id_func something that the user can set
+        If position_map is Callable, should input position name (key in
+        self.condition_map) and return int
         """
         # Check for duplicate conditions
-        uniq_conds = tuple(itertools.groupby(condition_map.values()))
-        need_merge = len(uniq_conds) != len(condition_map)
+        uniq_conds = tuple(itertools.groupby(self.condition_map.values()))
+        need_merge = len(uniq_conds) != len(self.condition_map)
+
+        if isinstance(position_map, dict):
+            return position_map  # assume user did it correctly
         if need_merge:
-            # By default, take digits after last _
-            id_func = lambda x: x.split('_')[-1]
-            position_map = {k: id_func(k) for k in condition_map}
-            return position_map
-        else:
-            return
+            if isinstance(position_map, Callable):
+                # User passed lambda function- check it returns int
+                try:
+                    int(position_map(next(iter(self.condition_map))))
+                    id_func = position_map
+                except (TypeError, ValueError, StopIteration):
+                    # Warn user and go to default
+                    warnings.warn('position_map is Callable but does not return '
+                                  'int. Using default positions.', UserWarning)
+                    id_func = None
+            else:
+                warnings.warn('Did not get usable position_map. '
+                              'Using default positions.', UserWarning)
+                id_func = None
+
+            # Make position map with id_func or just integers
+            if id_func:
+                position_map = {k: id_func(k) for k in self.condition_map}
+            else:
+                position_map = {k: n for n, k in enumerate(self.condition_map)}
+
+        return position_map
 
     def _load_cond_map_from_yaml(self, path: str) -> dict:
         with open(path, 'r') as yf:
