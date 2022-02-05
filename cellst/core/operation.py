@@ -329,15 +329,16 @@ class Operation():
 
         # Check if save_as was set for last function
         if self.functions[-1][1]:
-            last_name = self.functions[-1][1]
+            last_name = (self.functions[-1][1],
+                         self.output_id[1])
         else:
             last_name = self.output_id
-        last_key = (last_name, self.output_id[1])
-        outputs = f_keys + [last_key]
+
+        outputs = f_keys + [last_name]
 
         # Do not include function outputs in inputs if force_rerun
         if not self.force_rerun:
-            inputs += f_keys_for_inputs + [last_key]
+            inputs += f_keys_for_inputs + [last_name]
 
         return inputs, outputs
 
