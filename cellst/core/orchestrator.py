@@ -234,11 +234,11 @@ class Orchestrator():
         for pipe, kwargs in self.pipelines.items():
             # If Extractor is in operations, update the condition
             # TODO: This won't work for multiple Extractor operations
-            if 'extract' in op_dict:
-                if op_dict['extract']['condition'] == 'default':
+            if 'extractor' in op_dict:
+                if op_dict['extractor']['condition'] == 'condition':
                     condition = kwargs['name']
                 else:
-                    condition = op_dict['extract']['condition']
+                    condition = op_dict['extractor']['condition']
 
                 # Get position if needed
                 if self.position_map:
@@ -248,7 +248,7 @@ class Orchestrator():
 
                 # Make new extract dictionary
                 new_extract = {}
-                for k, v in op_dict['extract'].items():
+                for k, v in op_dict['extractor'].items():
                     if k == 'condition':
                         new_extract[k] = condition
                     elif k == 'position_id':
@@ -257,8 +257,8 @@ class Orchestrator():
                         new_extract[k] = v
 
                 # Copy values to new operation dictionary
-                op = {k: v for k, v in op_dict.items() if k != 'extract'}
-                op.update({'extract': new_extract})
+                op = {k: v for k, v in op_dict.items() if k != 'extractor'}
+                op.update({'extractor': new_extract})
             else:
                 op = op_dict
 
@@ -278,7 +278,7 @@ class Orchestrator():
         NOTE: path will overwrite anything in condition_map
         """
         # Load condition map YAML if available
-        if path is not None:
+        if path:
             _cond_map = self._load_cond_map_from_yaml(path)
             condition_map.update(_cond_map)
 
