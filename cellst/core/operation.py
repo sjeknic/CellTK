@@ -3,7 +3,7 @@ import warnings
 import logging
 import time
 import inspect
-from typing import Collection, Tuple, Callable, List, Dict
+from typing import Collection, Tuple, Callable, List, Dict, Generator
 
 import numpy as np
 import skimage.measure as meas
@@ -175,7 +175,7 @@ class Operation():
 
     def run_operation(self,
                       inputs: ImageContainer
-                      ) -> ImageContainer:
+                      ) -> Generator:
         """
         """
         # By default, return all inputs of output type
@@ -469,6 +469,16 @@ class Operation():
             mask = np.ones(image.shape, dtype=bool)
 
         return np.where(mask, image, 0)
+
+    @ImageHelper(by_frame=True)
+    def make_boolean_mask(self,
+                          image: Image,
+                          mask_name: str = 'outside',
+                          *args, **kwargs
+                          ) -> Mask:
+        """Generates a mask using filter_utils"""
+        mask = getattr(filter_utils, mask_name)
+        return mask(image, *args, **kwargs).astype(bool)
 
     @ImageHelper(by_frame=True)
     def match_labels_linear(self,
