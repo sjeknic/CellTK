@@ -18,7 +18,7 @@ from cellst.utils._types import Mask, Track
 
 def gray_fill_holes(labels: np.ndarray) -> np.ndarray:
     """
-    Faster (but hopefully identical) to the CellTK version above
+    Faster (but hopefully identical) to the CellTK version
     """
     fil = sitk.GrayscaleFillholeImageFilter()
     filled = sitk.GetArrayFromImage(
@@ -239,15 +239,19 @@ def crop_array(array: np.ndarray,
         return array[..., :x]
 
 
-def voronoi_boundaries(seed: np.ndarray, thinner: bool = False) -> np.ndarray:
+def voronoi_boundaries(seed: np.ndarray,
+                       thin: bool = False,
+                       thick: bool = False,) -> np.ndarray:
     """
     Calculate voronoi boundaries, and return as mask to set pixels to 0.
     """
     bound = segm.find_boundaries(mahotas_seg.gvoronoi(seed))
 
-    if thinner:
+    if thin:
         bound = morph.thin(bound)
-
+    if thick:
+        bound = morph.binary_dilation(bound.astype(bool),
+                                      footprint=np.ones((3, 3)))
     return bound
 
 
