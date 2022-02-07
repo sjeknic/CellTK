@@ -5,12 +5,14 @@ import numpy as np
 import btrack
 import btrack.utils as butils
 import btrack.constants as bconstants
+import skimage.measure as meas
 
 from cellst.core.operation import BaseTracker
 from cellst.utils._types import Image, Mask, Track
 from cellst.utils.utils import ImageHelper, stdout_redirected
 from cellst.utils.operation_utils import (lineage_to_track,
-                                          match_labels_linear)
+                                          match_labels_linear,
+                                          voronoi_boundaries)
 
 # Tracking algorithm specific imports
 from kit_sch_ge.tracker.extract_data import get_indices_pandas
@@ -23,10 +25,14 @@ from cellst.utils.bayes_utils import (bayes_extract_tracker_data,
 class Tracker(BaseTracker):
     @ImageHelper(by_frame=False)
     def simple_linear_tracker(self,
-                              mask: Mask
-                              ) -> Mask:
+                              mask: Mask,
+                              voronoi_split: bool = True
+                              ) -> Track:
         """
         Tracker based on frame-to-frame linear assignment
+
+        voronoi_split keeps objects from merging, but slows
+        down computation
 
         TODO: Multiple ways to improve this function
             - Add custom cost function
@@ -39,7 +45,13 @@ class Tracker(BaseTracker):
                 out = np.zeros_like(mask)
                 out[idx, ...] = mask[idx]
             else:
-                # Else run linear assignment and save
+                if voronoi_split:
+                    # Mask borders on the frame before doing LAP
+                    borders = voronoi_boundaries(out[idx - 1, ...], thick=True)
+                    fr = fr.copy()
+                    fr[borders] = 0
+                    fr = meas.label(fr)
+
                 out[idx, ...] = match_labels_linear(out[idx - 1, ...], fr)
 
         return out
