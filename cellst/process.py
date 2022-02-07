@@ -4,6 +4,7 @@ import skimage.registration as regi
 import skimage.restoration as rest
 import skimage.filters as filt
 import skimage.segmentation as segm
+import skimage.util as util
 import scipy.ndimage as ndi
 
 from cellst.core.operation import BaseProcessor
@@ -128,6 +129,28 @@ class Processor(BaseProcessor):
         """
         """
         return segm.inverse_gaussian_gradient(image, alpha, sigma)
+
+    @ImageHelper(by_frame=True)
+    def sobel_edge_detection(self,
+                             image: Image,
+                             orientation: str = 'both'
+                             ) -> Image:
+        """
+        Applies Sobel filter
+
+        orientation can be 'h', 'v', or 'both'
+
+        TODO:
+            - Could be run faster on whole stack
+        """
+        if orientation in ('h', 'horizontal'):
+            sobel = filt.sobel_h(image)
+        elif orientation in ('v', 'vertical'):
+            sobel = filt.sobel_v(image)
+        else:
+            sobel = filt.sobel(image)
+
+        return util.img_as_float32(sobel)
 
     @ImageHelper(by_frame=False)
     def histogram_matching(self,
