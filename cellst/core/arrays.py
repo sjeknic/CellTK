@@ -1,11 +1,13 @@
 import warnings
 import itertools
-from typing import List, Tuple, Dict, Callable
+from typing import List, Tuple, Dict, Callable, Collection
 
 import h5py
 import numpy as np
+import plotly.graph_objects as go
 
 import cellst.utils.filter_utils as filt
+from cellst.utils.plot_utils import plot_groups
 
 
 class ConditionArray():
@@ -880,6 +882,39 @@ class ExperimentArray():
                 self.sites[cond] = ConditionArray(**coords, name=cond,
                                                   time=cond_arrs[0].time)
                 self.sites[cond][:] = new_arr
+
+    def plot_by_condition(self,
+                          keys: Tuple[str],
+                          title: str = None,
+                          x_label: str = None,
+                          y_label: str = None,
+                          x_range: Tuple[float] = None,
+                          y_range: Tuple[float] = None,
+                          layout_spec: dict = {},
+                          ) -> go.Figure:
+        """
+        keys must return a 2D arr for this to work.
+        TODO: More generic way to group conditions
+        TODO: Add option to save figures
+        """
+        # Get the data to plot
+        keys = tuple(keys) if not isinstance(keys, tuple) else keys
+        arrs = self[keys]
+        conds = self.conditions
+        # Assume all conditions have the same time
+        time = self.time[0]
+
+        # Make the base plot
+        fig = plot_groups(arrs, conds, time=time)
+
+        # Update the figure layout
+        fig.update_xaxes(title=x_label, range=x_range)
+        fig.update_yaxes(title=y_label, range=y_range)
+        fig.update_layout(title=title, **layout_spec)
+
+        fig.show()
+
+        return fig
 
     @classmethod
     def _build_from_file(cls, f: h5py.File) -> 'ExperimentArray':
