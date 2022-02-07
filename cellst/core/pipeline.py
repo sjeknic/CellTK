@@ -510,6 +510,8 @@ class Pipeline():
                 self.logger.info(f'Images loaded. shape: {img_stack.shape}, '
                                  f'type: {img_stack.dtype}.')
 
+        self.logger.info(f'Images loaed: {[list(container.keys())]}.')
+
         return container
 
     def _get_images_from_container(self,
