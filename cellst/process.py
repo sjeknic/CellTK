@@ -128,7 +128,9 @@ class Processor(BaseProcessor):
                                   ) -> Image:
         """
         """
-        return segm.inverse_gaussian_gradient(image, alpha, sigma)
+        return util.img_as_float32(
+            segm.inverse_gaussian_gradient(image, alpha, sigma)
+        )
 
     @ImageHelper(by_frame=True)
     def sobel_edge_detection(self,

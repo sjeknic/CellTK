@@ -5,6 +5,7 @@ import skimage.measure as meas
 import skimage.segmentation as segm
 import skimage.morphology as morph
 import skimage.filters as filt
+import skimage.util as util
 import scipy.ndimage as ndi
 
 from cellst.core.operation import BaseSegmenter
@@ -28,6 +29,7 @@ class Segmenter(BaseSegmenter):
                      min_radius: float = 3,
                      max_radius: float = 20,
                      open_size: int = 3,
+                     clear_border: (bool, int) = True,
                      relabel: bool = False,
                      sequential: bool = False,
                      connectivity: int = 2,
@@ -35,10 +37,16 @@ class Segmenter(BaseSegmenter):
         """
         Applies light cleaning. Removes small, large, and border-connected
         objectes. Applies opening.
+
+        TODO:
+            - Prevent int32/64 w/o having to use img_as_uint
         """
         # Fill in holes and remove border-connected objects
         labels = gray_fill_holes(mask)
-        labels = segm.clear_border(labels, buffer_size=2)
+
+        if clear_border:
+            buff = clear_border if isinstance(clear_border, int) else 2
+            labels = segm.clear_border(labels, buffer_size=buff)
 
         # Remove small and large objects and open
         min_area, max_area = np.pi * np.array((min_radius, max_radius)) ** 2
@@ -57,7 +65,7 @@ class Segmenter(BaseSegmenter):
         if sequential:
             labels = segm.relabel_sequential(labels)[0]
 
-        return labels
+        return util.img_as_uint(labels)
 
     @ImageHelper(by_frame=True)
     def constant_thres(self,
@@ -95,14 +103,16 @@ class Segmenter(BaseSegmenter):
     def otsu_thres(self,
                    image: Image,
                    nbins: int = 256,
-                   connectivity: int = 2
+                   connectivity: int = 2,
+                   buffer: float = 0.
                    ) -> Mask:
         """
         Uses Otsu's method to determine the threshold. All pixels
         above the threshold are labeled
         """
-        thres = filt.threshold_otsu(image, nbins=nbins)
-        return meas.label(image > thres, connectivity=connectivity)
+        thres = (1 - buffer) * filt.threshold_otsu(image, nbins=nbins)
+        labels = meas.label(image > thres, connectivity=connectivity)
+        return util.img_as_uint(labels)
 
     @ImageHelper(by_frame=True)
     def random_walk_segmentation(self,
