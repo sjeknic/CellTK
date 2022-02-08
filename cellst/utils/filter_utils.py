@@ -1,14 +1,17 @@
 import numpy as np
 
-"""For all, if values is 2D, assume cells x frames
-and apply the mask only in first axis"""
+"""
+Cells are to be removed are marked with False.
+
+For all, if values is 2D, assume cells x frames
+and apply the mask only in first axis.
+"""
 
 
 def _propagate_mask(mask: np.ndarray) -> np.ndarray:
     """
     For any cell with a single value masked, mask all values
     """
-
     if mask.ndim == 2:
         # If a single False is in a row, mark all False
         mask[np.logical_not(mask).any(1), :] = False
@@ -20,6 +23,7 @@ def outside(values: np.ndarray,
             lo: float = -np.inf,
             hi: float = np.inf,
             allow_equal: bool = True,
+            ignore_nans: bool = False,
             propagate: bool = True
             ) -> np.ndarray:
     """
@@ -30,6 +34,12 @@ def outside(values: np.ndarray,
         ma = np.logical_and(values >= lo, values <= hi)
     else:
         ma = np.logical_and(values > lo, values < hi)
+
+    # Set nans to True to exclude from masking
+    if ignore_nans:
+        ma[np.isnan(ma)] = True
+
+    # A single False will exclude the whole row
     if propagate:
         ma = _propagate_mask(ma)
 
@@ -40,6 +50,7 @@ def inside(values: np.ndarray,
            lo: float = -np.inf,
            hi: float = np.inf,
            allow_equal: bool = True,
+           ignore_nans: bool = False,
            propagate: bool = True
            ) -> np.ndarray:
     """
@@ -50,6 +61,12 @@ def inside(values: np.ndarray,
         ma = np.logical_or(values <= lo, values >= hi)
     else:
         ma = np.logical_or(values < lo, values > hi)
+
+    # Set nans to True to exclude from masking
+    if ignore_nans:
+        ma[np.isnan(ma)] = True
+
+    # A single False will exclude the whole row
     if propagate:
         ma = _propagate_mask(ma)
 
@@ -59,6 +76,7 @@ def inside(values: np.ndarray,
 def outside_percentile(values: np.ndarray,
                        lo: float = 5,
                        hi: float = 95,
+                       ignore_nans: bool = False,
                        propagate: bool = True
                        ) -> np.ndarray:
     """
@@ -69,6 +87,12 @@ def outside_percentile(values: np.ndarray,
     lo = np.percentile(values, lo)
     hi = np.percentile(values, hi)
     ma = outside(values, lo, hi, propagate=False)
+
+    # Set nans to True to exclude from masking
+    if ignore_nans:
+        ma[np.isnan(ma)] = True
+
+    # A single False will exclude the whole row
     if propagate:
         ma = _propagate_mask(ma)
 
@@ -78,6 +102,7 @@ def outside_percentile(values: np.ndarray,
 def inside_percentile(values: np.ndarray,
                       lo: float = 5,
                       hi: float = 95,
+                      ignore_nans: bool = False,
                       propagate: bool = True
                       ) -> np.ndarray:
     """
@@ -88,28 +113,46 @@ def inside_percentile(values: np.ndarray,
     lo = np.percentile(values, lo)
     hi = np.percentile(values, hi)
     ma = inside(values, lo, hi, propagate=False)
+
+    # Set nans to True to exclude from masking
+    if ignore_nans:
+        ma[np.isnan(ma)] = True
+
+    # A single False will exclude the whole row
     if propagate:
         ma = _propagate_mask(ma)
 
     return ma
 
 
-def any_nan(values: np.ndarray, propagate: bool = True) -> np.ndarray:
+def any_nan(values: np.ndarray,
+            propagate: bool = True
+            ) -> np.ndarray:
     """
     Masks cells that include any np.nan
     """
     ma = ~np.isnan(values)
+
+    # A single False will exclude the whole row
     if propagate:
         ma = _propagate_mask(ma)
 
     return ma
 
 
-def any_negative(values: np.ndarray, propagate: bool = True) -> np.ndarray:
+def any_negative(values: np.ndarray,
+                 ignore_nans: bool = False,
+                 propagate: bool = True) -> np.ndarray:
     """
     Masks cells that include any negative values
     """
     ma = ~(values < 0)
+
+    # Set nans to True to exclude from masking
+    if ignore_nans:
+        ma[np.isnan(ma)] = True
+
+    # A single False will exclude the whole row
     if propagate:
         ma = _propagate_mask(ma)
 
