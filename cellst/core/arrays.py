@@ -115,6 +115,12 @@ class ConditionArray():
     def metrics(self):
         return self.coords['metrics']
 
+    @property
+    def keys(self):
+        return list(itertools.product(self.coords['regions'],
+                                      self.coords['channels'],
+                                      self.coords['metrics']))
+
     def save(self, path: str) -> None:
         """
         Saves ConditionArray to an hdf5 file.
@@ -531,6 +537,39 @@ class ConditionArray():
         Updates name of the ConditionArray.
         """
         self.name = condition
+
+    def propagate_values(self,
+                         key: Tuple[str],
+                         prop_to: str = 'both'
+                         ) -> None:
+        """Propagates metric value to other keys"""
+        assert isinstance(key, tuple)
+        assert len(key) == 3
+
+        # Get original key values
+        data = self[key]
+        dims = {self._key_dim_pairs[k]: k for k in key}
+        chan = dims['channels']
+        regn = dims['regions']
+        metr = [dims['metrics']]
+
+        # Figure out where to propagate
+        if prop_to in ('c', 'chnl', 'channel'):
+            # Get all other channels
+            _chan = [c for c in self.channels if c != chan]
+        elif prop_to in ('r', 'rgn', 'region'):
+            # Get all other regions
+            _regn = [r for r in self.regions if r != regn]
+        else:
+            _chan = [c for c in self.channels if c != chan]
+            _regn = [r for r in self.regions if r != regn]
+        chan = _chan if _chan else [chan]
+        regn = _regn if _regn else [regn]
+
+        # Build keys and assign values
+        new_keys = itertools.product(chan, regn, metr)
+        for nk in new_keys:
+            self[nk] = data
 
 
 class ExperimentArray():

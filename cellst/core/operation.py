@@ -784,14 +784,12 @@ class BaseExtractor(Operation):
         """
         Does the actual computations from add_derived_metric
         """
-        for name, (func, keys, incl, args, kwargs) in self._derived_metrics.items():
+        for name, (func, keys, incl, prop, args, kwargs) in self._derived_metrics.items():
             self.logger.info(f'Calculating derived metric {name}')
             arrs = [array[tuple(k)] for k in keys]
             arr_groups = itertools.permutations(zip(keys, arrs))
             func = getattr(np, func)
-
             for arrgrp in arr_groups:
-                import ipdb; ipdb.set_trace()
                 keys, arrs = zip(*arrgrp)
                 result = func(*arrs, *args, **kwargs)
 
@@ -800,6 +798,9 @@ class BaseExtractor(Operation):
                                      if k not in self._metric_idx]
                 array[tuple(save_key)] = result
 
+                # Propagate results to other keys
+                if prop:
+                    array.propagate_values(tuple(save_key), prop_to=prop)
                 # If not including inverses, skip all remaining
                 if not incl:
                     break
@@ -840,26 +841,26 @@ class BaseExtractor(Operation):
                            metric_name: str,
                            keys: Collection[Tuple[str]],
                            func: str = 'sum',
-                           incl_inverse: bool = False,
+                           inverse: bool = False,
+                           propagate: (str, bool) = False,
                            *args, **kwargs
                            ) -> None:
         """
         Calculates additional metrics based on information already in array
-        func can be any numpy function - expected to pass 2 arrays though
+        func can be any numpy function
+        propagate can be bool, or the name of dimension to propagate to
 
-        TODO: Add ability to propagate results to other keys
-        TODO: Add keys to save this in yaml dictionary
         TODO: Add possiblity for custom Callable function
         """
         # Check the inputs now before calculation
         # Assert that keys include channel, region, and metric
         for key in keys:
             assert len(key) == 3
-        assert hasattr(np, func), 'Derived metric must be numpy function'
+        assert hasattr(np, func), 'Derived metric must be numpy function.'
 
         # Save to calculated metrics to get added after extract is done
-        self._derived_metrics[metric_name] = tuple([func, keys, incl_inverse,
-                                                    args, kwargs])
+        self._derived_metrics[metric_name] = tuple([func, keys, inverse,
+                                                    propagate, args, kwargs])
 
         # Fill in the metric with just nan for now
         self._props_to_add[metric_name] = RandomNameProperty()
