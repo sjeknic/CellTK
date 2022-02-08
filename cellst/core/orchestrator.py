@@ -411,7 +411,7 @@ class Orchestrator():
                              f'possible pipelines in {self.parent_folder}')
             for fol in os.listdir(self.parent_folder):
                 # Check for the match_str
-                if match_str is not None and match_str not in fol:
+                if match_str and match_str not in fol:
                     continue
 
                 # Make sure the path is a directory

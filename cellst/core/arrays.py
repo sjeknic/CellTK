@@ -700,15 +700,15 @@ class ExperimentArray():
 
     def set_conditions(self, condition_map: Dict[str, str] = {}) -> None:
         """
-        Updates name of all Condition arrays in Experiment.
-
+        Updates name of Condition arrays in Experiment.
         condition_map should map Condition.name to desired condition.
-        NOTE: Each condition needs a unique name for this to work.
         """
-        if len(condition_map) == 0:
-            # Uses keys that were used for saving the Conditions
-            for k, v in self.sites:
-                v.set_condition(k)
+        for k, v in condition_map.items():
+            try:
+                self.sites[k].set_condition(v)
+            except KeyError:
+                # TODO: Should this warn users?
+                pass
 
     def load_condition(self,
                        path: str,
