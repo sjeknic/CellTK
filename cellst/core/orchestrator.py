@@ -207,6 +207,8 @@ class Orchestrator():
         # Make ExperimentArray to hold data
         out = ExperimentArray(name=self.name)
 
+        self.logger.info(f'Building ExperimentArray {out}')
+
         # Search for all dfs in all pipeline folders
         for fol in self.pipelines:
             otpt_fol = os.path.join(self.output_folder, fol)
@@ -214,6 +216,7 @@ class Orchestrator():
             # NOTE: if df.name is already in Experiment, will be overwritten
             for df in glob(os.path.join(otpt_fol, '*.hdf5')):
                 out.load_condition(df)
+                self.logger.info(f'Loaded {df}')
 
         # Merge conditions - does nothing if all are unique
         out.merge_conditions()
@@ -221,6 +224,7 @@ class Orchestrator():
         # Save the master df file
         save_path = os.path.join(self.output_folder, f'{self.name}.hdf5')
         out.save(save_path)
+        self.logger.info(f'Saved ExperimentArray at {save_path}')
 
     def add_operations_to_pipelines(self,
                                     operations: Collection[Operation] = []
