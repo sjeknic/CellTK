@@ -5,11 +5,14 @@ import numpy as np
 import btrack
 import btrack.utils as butils
 import btrack.constants as bconstants
+import skimage.measure as meas
 
 from cellst.core.operation import BaseTracker
 from cellst.utils._types import Image, Mask, Track
 from cellst.utils.utils import ImageHelper, stdout_redirected
-from cellst.utils.operation_utils import lineage_to_track
+from cellst.utils.operation_utils import (lineage_to_track,
+                                          match_labels_linear,
+                                          voronoi_boundaries)
 
 # Tracking algorithm specific imports
 from kit_sch_ge.tracker.extract_data import get_indices_pandas
@@ -21,15 +24,48 @@ from cellst.utils.bayes_utils import (bayes_extract_tracker_data,
 
 class Tracker(BaseTracker):
     @ImageHelper(by_frame=False)
-    def kit_sch_ge_track(self,
-                         image: Image,
-                         mask: Mask,
-                         default_roi_size: int = 2,
-                         delta_t: int = 2,
-                         cut_off_distance: Tuple = None,
-                         allow_cell_division: bool = True,
-                         postprocessing_key: str = None,
-                         ) -> Track:
+    def simple_linear_tracker(self,
+                              mask: Mask,
+                              voronoi_split: bool = True
+                              ) -> Track:
+        """
+        Tracker based on frame-to-frame linear assignment
+
+        voronoi_split keeps objects from merging, but slows
+        down computation
+
+        TODO: Multiple ways to improve this function
+            - Add custom cost function
+            - Add ability to use intensity information
+        """
+        # Iterate over all frames in mask
+        for idx, fr in enumerate(mask):
+            if not idx:
+                # Make output arr and save first frame
+                out = np.zeros_like(mask)
+                out[idx, ...] = mask[idx]
+            else:
+                if voronoi_split:
+                    # Mask borders on the frame before doing LAP
+                    borders = voronoi_boundaries(out[idx - 1, ...], thick=True)
+                    fr = fr.copy()
+                    fr[borders] = 0
+                    fr = meas.label(fr)
+
+                out[idx, ...] = match_labels_linear(out[idx - 1, ...], fr)
+
+        return out
+
+    @ImageHelper(by_frame=False)
+    def kit_sch_ge_tracker(self,
+                           image: Image,
+                           mask: Mask,
+                           default_roi_size: int = 2,
+                           delta_t: int = 2,
+                           cut_off_distance: Tuple = None,
+                           allow_cell_division: bool = True,
+                           postprocessing_key: str = None,
+                           ) -> Track:
         """
         See kit_sch_ge/run_tracking.py for reference
 
@@ -73,11 +109,11 @@ class Tracker(BaseTracker):
         return lineage_to_track(mask, lineage)
 
     @ImageHelper(by_frame=False)
-    def simple_bayesian_track(self,
-                              mask: Mask,
-                              config_path: str = 'cellst/config/bayes_config.json',
-                              update_method: str = 'exact',
-                              ) -> Track:
+    def bayesian_tracker(self,
+                         mask: Mask,
+                         config_path: str = 'cellst/config/bayes_config.json',
+                         update_method: str = 'exact',
+                         ) -> Track:
         """
         Wraps BayesianTracker: https://github.com/quantumjot/BayesianTracker
 

@@ -5,7 +5,7 @@ import yaml
 import itertools
 import warnings
 from multiprocessing import Pool
-from typing import Dict, Collection, Callable
+from typing import Dict, Collection, Tuple, Callable
 from glob import glob
 
 from cellst.core.operation import Operation
@@ -45,7 +45,9 @@ class Orchestrator():
                  track_folder: str = None,
                  array_folder: str = None,
                  condition_map: dict = {},
+                 position_map: dict = None,
                  name: str = 'experiment',
+                 frame_rng: Tuple[int] = None,
                  file_extension: str = 'tif',
                  overwrite: bool = True,
                  log_file: bool = True,
@@ -65,11 +67,12 @@ class Orchestrator():
         """
         # Save some values
         self.name = name
+        self.frame_rng = frame_rng
         self.file_extension = file_extension
         self.overwrite = overwrite
         self.save = save_master_df
         self.condition_map = condition_map
-        self.position_map = self._set_position_map(condition_map)
+        self.position_map = self._set_position_map(position_map)
         self.controller = job_controller
         self.log_file = log_file
         self.verbose = verbose
@@ -232,21 +235,21 @@ class Orchestrator():
         for pipe, kwargs in self.pipelines.items():
             # If Extractor is in operations, update the condition
             # TODO: This won't work for multiple Extractor operations
-            if 'extract' in op_dict:
-                if op_dict['extract']['condition'] == 'default':
+            if 'extractor' in op_dict:
+                if op_dict['extractor']['condition'] == 'condition':
                     condition = kwargs['name']
                 else:
-                    condition = op_dict['extract']['condition']
+                    condition = op_dict['extractor']['condition']
 
                 # Get position if needed
-                if self.position_map:
+                try:
                     pos = self.position_map[pipe]
-                else:
+                except (KeyError, AttributeError, TypeError):
                     pos = 0
 
                 # Make new extract dictionary
                 new_extract = {}
-                for k, v in op_dict['extract'].items():
+                for k, v in op_dict['extractor'].items():
                     if k == 'condition':
                         new_extract[k] = condition
                     elif k == 'position_id':
@@ -255,8 +258,8 @@ class Orchestrator():
                         new_extract[k] = v
 
                 # Copy values to new operation dictionary
-                op = {k: v for k, v in op_dict.items() if k != 'extract'}
-                op.update({'extract': new_extract})
+                op = {k: v for k, v in op_dict.items() if k != 'extractor'}
+                op.update({'extractor': new_extract})
             else:
                 op = op_dict
 
@@ -276,7 +279,7 @@ class Orchestrator():
         NOTE: path will overwrite anything in condition_map
         """
         # Load condition map YAML if available
-        if path is not None:
+        if path:
             _cond_map = self._load_cond_map_from_yaml(path)
             condition_map.update(_cond_map)
 
@@ -333,23 +336,42 @@ class Orchestrator():
         self.logger.info(f"Saving condition_map at {path}")
         save_yaml_file(self.condition_map, path, warning=False)
 
-    def _set_position_map(self, condition_map: dict) -> dict:
+    def _set_position_map(self, position_map: (dict, Callable)) -> dict:
         """
-        Given the condition map, save a unique identifier as needed,
+        Save a unique identifier for each position if needed
 
-        TODO:
-            - Make id_func something that the user can set
+        If position_map is Callable, should input position name (key in
+        self.condition_map) and return int
         """
         # Check for duplicate conditions
-        uniq_conds = tuple(itertools.groupby(condition_map.values()))
-        need_merge = len(uniq_conds) != len(condition_map)
+        uniq_conds = tuple(itertools.groupby(self.condition_map.values()))
+        need_merge = len(uniq_conds) != len(self.condition_map)
+
+        if isinstance(position_map, dict):
+            return position_map  # assume user did it correctly
         if need_merge:
-            # By default, take digits after last _
-            id_func = lambda x: x.split('_')[-1]
-            position_map = {k: id_func(k) for k in condition_map}
-            return position_map
-        else:
-            return
+            if isinstance(position_map, Callable):
+                # User passed lambda function- check it returns int
+                try:
+                    int(position_map(next(iter(self.condition_map))))
+                    id_func = position_map
+                except (TypeError, ValueError, StopIteration):
+                    # Warn user and go to default
+                    warnings.warn('position_map is Callable but does not return '
+                                  'int. Using default positions.', UserWarning)
+                    id_func = None
+            else:
+                warnings.warn('Did not get usable position_map. '
+                              'Using default positions.', UserWarning)
+                id_func = None
+
+            # Make position map with id_func or just integers
+            if id_func:
+                position_map = {k: id_func(k) for k in self.condition_map}
+            else:
+                position_map = {k: n for n, k in enumerate(self.condition_map)}
+
+        return position_map
 
     def _load_cond_map_from_yaml(self, path: str) -> dict:
         with open(path, 'r') as yf:
@@ -424,6 +446,7 @@ class Orchestrator():
                         self.pipelines[fol]['name'] = fol
 
                     # Add miscellaneous options
+                    self.pipelines[fol]['frame_rng'] = self.frame_rng
                     self.pipelines[fol]['file_extension'] = self.file_extension
                     self.pipelines[fol]['overwrite'] = self.overwrite
                     self.pipelines[fol]['log_file'] = self.log_file

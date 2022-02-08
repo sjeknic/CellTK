@@ -43,6 +43,7 @@ class Pipeline():
                  track_folder: str = None,
                  array_folder: str = None,
                  name: str = None,
+                 frame_rng: Tuple[int] = None,
                  file_extension: str = 'tif',
                  overwrite: bool = True,
                  log_file: bool = True,
@@ -63,6 +64,7 @@ class Pipeline():
             None
         """
         # Save some values in case Pipeline is written as yaml
+        self.frame_rng = frame_rng
         self.overwrite = overwrite
         self.log_file = log_file
         self._split_key = _split_key
@@ -282,7 +284,8 @@ class Pipeline():
                 zrs = len(str(arr.shape[0]))
                 # Save files as tiff with consecutive idx
                 for idx in range(arr.shape[0]):
-                    name = os.path.join(save_folder, f"{otpt_type}{idx:0{zrs}}.tiff")
+                    name = os.path.join(save_folder,
+                                        f"{otpt_type}{idx:0{zrs}}.tiff")
                     tiff.imsave(name, arr[idx, ...].astype(save_dtype))
 
                 self.logger.info(f'Saved {arr.shape[0]} images in {save_folder}.')
@@ -411,6 +414,19 @@ class Pipeline():
             if im_names: break
 
         self.logger.info(f'Found {len(im_names)} images.')
+        if self.frame_rng:
+            try:
+                # If only a number - take that many frames from start
+                im_names = im_names[:int(self.frame_rng)]
+            except TypeError:
+                _rng = slice(int(self.frame_rng[0]), int(self.frame_rng[1]))
+                im_names = im_names[_rng]
+            except Exception as e:
+                warnings.warn(f'Did not understand range {self.frame_rng},'
+                              f' got Exception {e}. \n', UserWarning)
+            finally:
+                self.logger.info(f'Expecting to load {len(im_names)} images.')
+
         return im_names
 
     def _load_images_to_container(self,
@@ -493,6 +509,8 @@ class Pipeline():
 
                 self.logger.info(f'Images loaded. shape: {img_stack.shape}, '
                                  f'type: {img_stack.dtype}.')
+
+        self.logger.info(f'Images loaed: {[list(container.keys())]}.')
 
         return container
 
@@ -586,7 +604,7 @@ class Pipeline():
         init_params = ('parent_folder', 'output_folder', 'image_folder',
                        'mask_folder', 'track_folder', 'array_folder',
                        'overwrite', 'file_extension', 'log_file', 'name',
-                       '_split_key')
+                       'frame_rng', '_split_key')
         pipe_dict = {att: getattr(self, att) for att in init_params}
 
         # Add Operations to dict

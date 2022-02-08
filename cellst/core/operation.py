@@ -3,7 +3,8 @@ import warnings
 import logging
 import time
 import inspect
-from typing import Collection, Tuple, Callable, List, Dict
+import itertools
+from typing import Collection, Tuple, Callable, List, Dict, Generator
 
 import numpy as np
 import skimage.measure as meas
@@ -12,7 +13,8 @@ from cellst.core.arrays import ConditionArray
 from cellst.utils._types import (Image, Mask, Track, Arr, Same,
                                  ImageContainer, INPT_NAMES,
                                  RandomNameProperty)
-from cellst.utils.operation_utils import track_to_mask, parents_from_track
+from cellst.utils.operation_utils import (track_to_mask, parents_from_track,
+                                          match_labels_linear)
 from cellst.utils.log_utils import get_console_logger
 from cellst.utils.utils import ImageHelper
 import cellst.utils.metric_utils as metric_utils
@@ -174,7 +176,7 @@ class Operation():
 
     def run_operation(self,
                       inputs: ImageContainer
-                      ) -> ImageContainer:
+                      ) -> Generator:
         """
         """
         # By default, return all inputs of output type
@@ -328,9 +330,11 @@ class Operation():
 
         # Check if save_as was set for last function
         if self.functions[-1][1]:
-            last_name = self.functions[-1][1]
+            last_name = (self.functions[-1][1],
+                         self.output_id[1])
         else:
             last_name = self.output_id
+
         outputs = f_keys + [last_name]
 
         # Do not include function outputs in inputs if force_rerun
@@ -466,6 +470,23 @@ class Operation():
             mask = np.ones(image.shape, dtype=bool)
 
         return np.where(mask, image, 0)
+
+    @ImageHelper(by_frame=True)
+    def make_boolean_mask(self,
+                          image: Image,
+                          mask_name: str = 'outside',
+                          *args, **kwargs
+                          ) -> Mask:
+        """Generates a mask using filter_utils"""
+        mask = getattr(filter_utils, mask_name)
+        return mask(image, *args, **kwargs).astype(bool)
+
+    @ImageHelper(by_frame=True)
+    def match_labels_linear(self,
+                            dest: Mask,
+                            source: Mask
+                            ) -> Mask:
+        return match_labels_linear(source, dest)
 
 
 class BaseProcessor(Operation):
@@ -754,6 +775,7 @@ class BaseExtractor(Operation):
         func = 'extract_data_from_image'
         op_dict['_functions'][func]['metrics'] = self._metrics
         op_dict['_functions'][func]['derived_metrics'] = self._derived_metrics
+        op_dict['_functions'][func]['filters'] = self._filters
         op_dict['_functions'][func]['extra_props'] = self._props_to_add
 
         return op_dict
@@ -762,25 +784,26 @@ class BaseExtractor(Operation):
         """
         Does the actual computations from add_derived_metric
         """
-        for name, (func, keys, args, kwargs) in self._derived_metrics.items():
+        for name, (func, keys, incl, prop, args, kwargs) in self._derived_metrics.items():
             self.logger.info(f'Calculating derived metric {name}')
-            # NOTE: Only two arrays for now
             arrs = [array[tuple(k)] for k in keys]
+            arr_groups = itertools.permutations(zip(keys, arrs))
             func = getattr(np, func)
+            for arrgrp in arr_groups:
+                keys, arrs = zip(*arrgrp)
+                result = func(*arrs, *args, **kwargs)
 
-            # Assume the function takes two arrays for now
-            result = func(arrs[0], arrs[1], *args, **kwargs)
-            inv_result = func(arrs[1], arrs[0], *args, **kwargs)
-
-            # Get channel and region from keys for saving
-            save_key = [name] + [k for k in keys[0]
-                                 if k not in self._metric_idx]
-            inv_save_key = [name] + [k for k in keys[1]
+                # Each result is saved with the first key
+                save_key = [name] + [k for k in keys[0]
                                      if k not in self._metric_idx]
+                array[tuple(save_key)] = result
 
-            # Metric slots should already by in Condition array
-            array[tuple(save_key)] = result
-            array[tuple(inv_save_key)] = inv_result
+                # Propagate results to other keys
+                if prop:
+                    array.propagate_values(tuple(save_key), prop_to=prop)
+                # If not including inverses, skip all remaining
+                if not incl:
+                    break
 
     def _apply_filters(self, array: ConditionArray) -> None:
         """Removes cells based on user-defined filters"""
@@ -818,28 +841,26 @@ class BaseExtractor(Operation):
                            metric_name: str,
                            keys: Collection[Tuple[str]],
                            func: str = 'sum',
+                           inverse: bool = False,
+                           propagate: (str, bool) = False,
                            *args, **kwargs
                            ) -> None:
         """
         Calculates additional metrics based on information already in array
-        func can be any numpy function - expected to pass 2 arrays though
+        func can be any numpy function
+        propagate can be bool, or the name of dimension to propagate to
 
-        TODO: Add ability to have more than 2 arrays
-        TODO: Add ability to propagate results to other keys
-        TODO: Add keys to save this in yaml dictionary
         TODO: Add possiblity for custom Callable function
         """
         # Check the inputs now before calculation
-        # Only two inputs allowed for now
-        assert len(keys) == 2
         # Assert that keys include channel, region, and metric
         for key in keys:
             assert len(key) == 3
-        assert hasattr(np, func), 'Derived metric must be numpy function'
+        assert hasattr(np, func), 'Derived metric must be numpy function.'
 
         # Save to calculated metrics to get added after extract is done
-        self._derived_metrics[metric_name] = tuple([func, keys,
-                                                    args, kwargs])
+        self._derived_metrics[metric_name] = tuple([func, keys, inverse,
+                                                    propagate, args, kwargs])
 
         # Fill in the metric with just nan for now
         self._props_to_add[metric_name] = RandomNameProperty()

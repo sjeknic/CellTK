@@ -4,6 +4,7 @@ import skimage.registration as regi
 import skimage.restoration as rest
 import skimage.filters as filt
 import skimage.segmentation as segm
+import skimage.util as util
 import scipy.ndimage as ndi
 
 from cellst.core.operation import BaseProcessor
@@ -20,7 +21,6 @@ class Processor(BaseProcessor):
     TODO:
         - Add stand-alone crop function
         - Add optical-flow registration
-        - Add faster bg subtract (wavelet hazen)
         - Add sobel filter
     """
     @ImageHelper(by_frame=False, as_tuple=True)
@@ -76,16 +76,18 @@ class Processor(BaseProcessor):
     @ImageHelper(by_frame=True)
     def gaussian_filter(self,
                         image: Image,
-                        sigma: float = 2.5
+                        sigma: float = 2.5,
+                        dtype: type = np.float32
                         ) -> Image:
         """
-        Multidimensional Gaussian filter
+        Multidimensional Gaussian filter.
 
         TODO:
             - Test applying to a stack with sigma = (s1, s1, 0)
             - SimpleITK implementation should be faseter
         """
-        return filt.gaussian(image, sigma)
+        return filt.gaussian(image, sigma, preserve_range=True,
+                             output=np.empty(image.shape, dtype=dtype))
 
     @ImageHelper(by_frame=True)
     def gaussian_laplace_filter(self,
@@ -126,21 +128,46 @@ class Processor(BaseProcessor):
                                   ) -> Image:
         """
         """
-        return segm.inverse_gaussian_gradient(image, alpha, sigma)
+        return util.img_as_float32(
+            segm.inverse_gaussian_gradient(image, alpha, sigma)
+        )
 
-    @ImageHelper(by_frame=True, overlap=1)
+    @ImageHelper(by_frame=True)
+    def sobel_edge_detection(self,
+                             image: Image,
+                             orientation: str = 'both'
+                             ) -> Image:
+        """
+        Applies Sobel filter
+
+        orientation can be 'h', 'v', or 'both'
+
+        TODO:
+            - Could be run faster on whole stack
+        """
+        if orientation in ('h', 'horizontal'):
+            sobel = filt.sobel_h(image)
+        elif orientation in ('v', 'vertical'):
+            sobel = filt.sobel_v(image)
+        else:
+            sobel = filt.sobel(image)
+
+        return util.img_as_float32(sobel)
+
+    @ImageHelper(by_frame=False)
     def histogram_matching(self,
                            image: Image,
-                           bins: int = 500,
-                           match_pts: int = 2,
+                           bins: int = 1000,
+                           match_pts: int = 100,
                            threshold: bool = False,
+                           ref_frame: int = 0,
                            ) -> Image:
         """
         Histogram matching from CellTK
         """
-        # Get frames as sITK images
-        frame0 = sitk.GetImageFromArray(image[0, ...])
-        frame1 = sitk.GetImageFromArray(image[1, ...])
+        # Get frame that will set the histogram
+        reference_frame = image[ref_frame]
+        reference_frame = sitk.GetImageFromArray(reference_frame)
 
         # Get the histogram matching filter
         fil = sitk.HistogramMatchingImageFilter()
@@ -148,15 +175,23 @@ class Processor(BaseProcessor):
         fil.SetNumberOfMatchPoints(match_pts)
         fil.SetThresholdAtMeanIntensity(threshold)
 
-        # Apply the filter and return
-        filimg = fil.Execute(frame0, frame1)
-        return sitk.GetArrayFromImage(filimg)
+        # Make output array
+        out = np.empty_like(image)
+
+        # Then iterate through all images
+        for idx, frame in enumerate(image):
+            # Apply the filter and save
+            im = sitk.GetImageFromArray(frame)
+            filimg = fil.Execute(im, reference_frame)
+            out[idx, ...] = sitk.GetArrayFromImage(filimg)
+
+        return out
 
     @ImageHelper(by_frame=False)
     def wavelet_background_subtract(self,
                                     image: Image,
-                                    wavelet: str = 'db1',
-                                    mode: str = 'smooth',
+                                    wavelet: str = 'db4',
+                                    mode: str = 'symmetric',
                                     level: int = None,
                                     blur: bool = False,
                                     ) -> Image:

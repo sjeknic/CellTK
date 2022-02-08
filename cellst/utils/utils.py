@@ -2,10 +2,11 @@ import sys
 import os
 import inspect
 import functools
+import itertools
 import contextlib
 import warnings
 import logging
-from typing import List, Tuple
+from typing import List, Tuple, Generator
 
 import numpy as np
 
@@ -75,35 +76,17 @@ class ImageHelper():
     """
     __name__ = 'ImageHelper'
 
-    def __init__(self,
+    def __init__(self, *,
                  by_frame: bool = False,
-                 overlap: int = 0,
                  as_tuple: bool = False,
                  dtype: type = None,
-                 copy_to_output: type = None
                  ) -> None:
         """
-        overlap: int(amount of frames to overlap between passing)
-            e.g. overlap = 1: [0, 1], [1, 2], [2, 3], [3, 4]
-                 overlap = 2: [0, 1, 2], [1, 2, 3], [2, 3, 4]
-
-        NOTE: Overlaps get passed as a stack, not as separate args.
-              i.e. if overlap = 1, image.shape = (2, h, w)
         """
         # Save inputs
         self.by_frame = by_frame
-        self.overlap = overlap
         self.dtype = dtype
         self.as_tuple = as_tuple
-
-        # Get copy_to_output as str
-        if isinstance(copy_to_output, str) or copy_to_output is None:
-            self.copy_to_output = copy_to_output
-        else:
-            try:
-                self.copy_to_output = copy_to_output.__name__
-            except AttributeError:
-                raise ValueError('Did not understand copy_to_output type.')
 
     def __call__(self, func):
         # Save information about the function from the signature
@@ -135,7 +118,7 @@ class ImageHelper():
 
             self.logger = self._get_calling_logger(calling_cls)
             self.logger.info(f'ImageHelper called for {self.func.__name__}')
-            self.logger.info(f'by_frame: {self.by_frame}, overlap: {self.overlap}, '
+            self.logger.info(f'by_frame: {self.by_frame}, '
                              f'as_tuple: {self.as_tuple}, dtype: {self.dtype}')
 
             # Sort the inputs and keep only those that are relevant
@@ -323,93 +306,47 @@ class ImageHelper():
             else:
                 return get_null_logger()
 
-    def _guess_input_from_output(self, output_type: type) -> type:
-        """
-        Uses simple heuristics to guess the input type
-        """
-        if output_type == 'mask' or output_type == 'track':
-            # For track or mask, assume mask
-            return 'mask'
-        else:
-            # Otherwise same as input
-            return output_type
-
-    def _get_output_array(self, ex_arr: np.ndarray) -> np.ndarray:
-        """
-        TODO: Update to expect an array as input, not a list.
-        TODO: copy_to_output is probably dumb and I'll ignore it for now.
-        TODO: I don't think self.input_type_idx still works with inputs
-        """
-        # Use the output type to set the value of the array
-        if self.dtype is not None:
-            dtype = self.dtype
-        elif self.output_type.__name__ == 'mask':
-            # If mask, use only positive integers
-            dtype = np.uint16
-        elif self.output_type.__name__ == 'track':
-            dtype = np.int16
-        else:
-            # For image and same
-            dtype = ex_arr.dtype
-
-        # Make output array
-        # NOTE: This assumes that output is the same shape as input
-        #       and that all the inputs have the same shape
-        out = np.empty(ex_arr.shape).astype(dtype)
-
-        '''If overlap > 0, frames need to be copied to the output array.
-        If user hasn't specified which input to copy, then guess based
-        on output.'''
-        # TODO: copy_to_output needs to be handled differently
-        if self.overlap > 0:
-            if self.copy_to_output is None:
-                # If only one input, then obviously it has to be used
-                if len(ex_arr) == 1:
-                    copy_idx = 0
-                else:
-                    warnings.warn('If overlap is greater than 0, specify '
-                                  'copy_to_output. Trying to guess based on '
-                                  'output type.', UserWarning)
-                    copy_type = self._guess_output_from_input()
-                    try:
-                        copy_idx = self.input_type_idx.index(copy_type)
-                    except ValueError:
-                        raise ValueError(f'Did not find type {copy_type} '
-                                         'to add to output array. '
-                                         'Set ImageHelper.copy_to_output.')
-            else:
-                copy_idx = self.input_type_idx.index(self.copy_to_output)
-
-            # Copy number of frames from the correct input
-            frames = ex_arr[copy_idx][:self.overlap]
-            out[:self.overlap, ...] = frames
-
-        return out
-
     def _pass_by_frames(self,
                         pass_to_func: List,
                         calling_cls: Tuple,
                         *args, **kwargs
                         ) -> np.ndarray:
         """
+        Creates output array and passes individual frames to func
+
         TODO:
-            - How to handle multiple outputs? Probably best to do a test-run,
-              then make the output arrays, then finish the run
+            - Is it okay to convert float64 -> float32? or int32 -> int16
+            - So this actually won't work if as_tuple and by_frame
+              are both true, because the sliding window generator
+              isn't set up to accept tuples.
         """
-        # Initialize output array - with frames copied if needed
+        # Get window generators for each array in pass_to_func
         if self.as_tuple:
-            out = self._get_output_array(pass_to_func[0][0])
+            out_shape = pass_to_func[0][0].shape
+            windows = [self._multiple_sliding_windows(p) for p in pass_to_func]
         else:
-            out = self._get_output_array(pass_to_func[0])
+            out_shape = pass_to_func[0].shape
+            windows = [sliding_window_generator(p) for p in pass_to_func]
 
-        # Get generators for each array in pass_to_func
-        windows = [sliding_window_generator(p, self.overlap)
-                   for p in pass_to_func]
-
-        for fr, win in enumerate(zip(*windows)):
-            # Pass each generator and save in index + overlap
-            idx = fr + self.overlap
-            out[idx, ...] = self.func(*calling_cls,
-                                      *win, *args, **kwargs)
+        # zip_longest in case some stacks aren't found
+        # wrapped function should raise an error if needed
+        for fr, win in enumerate(itertools.zip_longest(*windows)):
+            res = self.func(*calling_cls, *win, *args, **kwargs)
+            if not fr:
+                # If first frame, make the output array
+                out = np.empty(out_shape, dtype=res.dtype)
+            out[fr, ...] = res
 
         return out
+
+    def _multiple_sliding_windows(self, arrs: Tuple[np.ndarray]) -> Generator:
+        """
+        Generates tuple with single frames from each np.ndarray
+        """
+        # Make generator for each window
+        windows = []
+        for arr in arrs:
+            windows.append(sliding_window_generator(arr))
+
+        # Yield from all generators simultaneously
+        yield from zip(*windows)

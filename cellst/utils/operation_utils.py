@@ -18,7 +18,7 @@ from cellst.utils._types import Mask, Track
 
 def gray_fill_holes(labels: np.ndarray) -> np.ndarray:
     """
-    Faster (but hopefully identical) to the CellTK version above
+    Faster (but hopefully identical) to the CellTK version
     """
     fil = sitk.GrayscaleFillholeImageFilter()
     filled = sitk.GetArrayFromImage(
@@ -131,17 +131,27 @@ def lineage_to_track(mask: Mask,
 
 def sliding_window_generator(arr: np.ndarray, overlap: int = 0) -> Generator:
     """
+    overlap: int(amount of frames to overlap between passing)
+    e.g. overlap = 1: [0, 1], [1, 2], [2, 3], [3, 4]
+         overlap = 2: [0, 1, 2], [1, 2, 3], [2, 3, 4]
+
+    NOTE: Overlaps get passed as a stack, not as separate args.
+          i.e. if overlap = 1, image.shape = (2, h, w)
     NOTE: If memory is an issue here, can probably manually count the indices
-          and make a generator that way, but it will probably be much slower.
+          and make a generator that way, but it will be much slower.
 
     TODO:
         - Add low mem option (see above)
-        - Add option to slide over different axis
+        - Add option to slide over different axis, by default uses 0
     """
-    # Shapes are all the same
-    shape = (overlap + 1, *arr.shape[1:])
-    # Create a generator, returns each cut of the array
-    yield from [np.squeeze(s) for s in stricks.sliding_window_view(arr, shape)]
+    if overlap:
+        # Shapes are all the same
+        shape = (overlap + 1, *arr.shape[1:])
+        # Create a generator, returns each cut of the array
+        yield from [np.squeeze(s)
+                    for s in stricks.sliding_window_view(arr, shape)]
+    else:
+        yield from arr
 
 
 # TODO: Test including @numba.njit here
@@ -229,15 +239,19 @@ def crop_array(array: np.ndarray,
         return array[..., :x]
 
 
-def voronoi_boundaries(seed: np.ndarray, thinner: bool = False) -> np.ndarray:
+def voronoi_boundaries(seed: np.ndarray,
+                       thin: bool = False,
+                       thick: bool = False,) -> np.ndarray:
     """
     Calculate voronoi boundaries, and return as mask to set pixels to 0.
     """
     bound = segm.find_boundaries(mahotas_seg.gvoronoi(seed))
 
-    if thinner:
+    if thin:
         bound = morph.thin(bound)
-
+    if thick:
+        bound = morph.binary_dilation(bound.astype(bool),
+                                      footprint=np.ones((3, 3)))
     return bound
 
 
@@ -267,7 +281,6 @@ def match_labels_linear(source: np.ndarray, dest: np.ndarray) -> np.ndarray:
     Should transfer labels from source to dest based on area overlap
 
     TODO:
-        - Should overlap be calculated relative to original area?
         - Should there be a threshold of the overlapping amount?
         - Should overlap be relative to source or dest?
         - Handle overflow amounts
@@ -282,12 +295,12 @@ def match_labels_linear(source: np.ndarray, dest: np.ndarray) -> np.ndarray:
     for x, slab in enumerate(source_labels):
         # Get values in dest that overlap with slab
         _dest = dest[source == slab]
-        labels, overlaps = np.unique(_dest, return_counts=True)
+        _area = np.count_nonzero(_dest)
+        labels, overlaps = np.unique(_dest[_dest > 0], return_counts=True)
 
         # Need to remove 0 again
         for l, o in zip(labels, overlaps):
-            if l:
-                cost_matrix[x, dest_idx[l]] = -o
+            cost_matrix[x, dest_idx[l]] = -o / _area
 
     # These are the indices of the lowest cost assignment
     s_idx, d_idx = opti.linear_sum_assignment(cost_matrix)
@@ -315,7 +328,7 @@ def match_labels_linear(source: np.ndarray, dest: np.ndarray) -> np.ndarray:
 
 
 def wavelet_background_estimate(image: np.ndarray,
-                                wavelet: str = 'db1',
+                                wavelet: str = 'db4',
                                 mode: str = 'smooth',
                                 level: int = None,
                                 blur: bool = False,

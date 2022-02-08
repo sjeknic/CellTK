@@ -5,13 +5,13 @@ import skimage.measure as meas
 import skimage.segmentation as segm
 import skimage.morphology as morph
 import skimage.filters as filt
+import skimage.util as util
 import scipy.ndimage as ndi
 
 from cellst.core.operation import BaseSegmenter
 from cellst.utils._types import Image, Mask
 from cellst.utils.utils import ImageHelper
 from cellst.utils.operation_utils import (dilate_sitk, voronoi_boundaries,
-                                          match_labels_linear,
                                           skimage_level_set, gray_fill_holes)
 
 
@@ -27,8 +27,9 @@ class Segmenter(BaseSegmenter):
     def clean_labels(self,
                      mask: Mask,
                      min_radius: float = 3,
-                     max_radius: float = 100,
+                     max_radius: float = 20,
                      open_size: int = 3,
+                     clear_border: (bool, int) = True,
                      relabel: bool = False,
                      sequential: bool = False,
                      connectivity: int = 2,
@@ -36,10 +37,16 @@ class Segmenter(BaseSegmenter):
         """
         Applies light cleaning. Removes small, large, and border-connected
         objectes. Applies opening.
+
+        TODO:
+            - Prevent int32/64 w/o having to use img_as_uint
         """
         # Fill in holes and remove border-connected objects
         labels = gray_fill_holes(mask)
-        labels = segm.clear_border(labels, buffer_size=2)
+
+        if clear_border:
+            buff = clear_border if isinstance(clear_border, int) else 2
+            labels = segm.clear_border(labels, buffer_size=buff)
 
         # Remove small and large objects and open
         min_area, max_area = np.pi * np.array((min_radius, max_radius)) ** 2
@@ -58,7 +65,7 @@ class Segmenter(BaseSegmenter):
         if sequential:
             labels = segm.relabel_sequential(labels)[0]
 
-        return labels
+        return util.img_as_uint(labels)
 
     @ImageHelper(by_frame=True)
     def constant_thres(self,
@@ -96,14 +103,16 @@ class Segmenter(BaseSegmenter):
     def otsu_thres(self,
                    image: Image,
                    nbins: int = 256,
-                   connectivity: int = 2
+                   connectivity: int = 2,
+                   buffer: float = 0.
                    ) -> Mask:
         """
         Uses Otsu's method to determine the threshold. All pixels
         above the threshold are labeled
         """
-        thres = filt.threshold_otsu(image, nbins=nbins)
-        return meas.label(image > thres, connectivity=connectivity)
+        thres = (1 - buffer) * filt.threshold_otsu(image, nbins=nbins)
+        labels = meas.label(image > thres, connectivity=connectivity)
+        return util.img_as_uint(labels)
 
     @ImageHelper(by_frame=True)
     def random_walk_segmentation(self,
@@ -306,20 +315,20 @@ class Segmenter(BaseSegmenter):
                         mask: Mask,
                         connectivity: int = 2,
                         mode: str = 'inner',
-                        binary: bool = False
+                        keep_labels: bool = False
                         ) -> Mask:
         """
         Outlines the objects in mask and preserves labels.
 
-        if binary - don't preserve labels
+        if not keep_labels - don't preserve labels
         """
         boundaries = segm.find_boundaries(mask, connectivity=connectivity,
                                           mode=mode)
 
-        if binary:
-            return boundaries
-        else:
+        if keep_labels:
             return np.where(boundaries, mask, 0)
+        else:
+            return boundaries
 
     @ImageHelper(by_frame=True)
     def dilate_to_cytoring_celltk(self,
