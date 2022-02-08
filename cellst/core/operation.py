@@ -3,6 +3,7 @@ import warnings
 import logging
 import time
 import inspect
+import itertools
 from typing import Collection, Tuple, Callable, List, Dict, Generator
 
 import numpy as np
@@ -774,6 +775,7 @@ class BaseExtractor(Operation):
         func = 'extract_data_from_image'
         op_dict['_functions'][func]['metrics'] = self._metrics
         op_dict['_functions'][func]['derived_metrics'] = self._derived_metrics
+        op_dict['_functions'][func]['filters'] = self._filters
         op_dict['_functions'][func]['extra_props'] = self._props_to_add
 
         return op_dict
@@ -782,25 +784,25 @@ class BaseExtractor(Operation):
         """
         Does the actual computations from add_derived_metric
         """
-        for name, (func, keys, args, kwargs) in self._derived_metrics.items():
+        for name, (func, keys, incl, args, kwargs) in self._derived_metrics.items():
             self.logger.info(f'Calculating derived metric {name}')
-            # NOTE: Only two arrays for now
             arrs = [array[tuple(k)] for k in keys]
+            arr_groups = itertools.permutations(zip(keys, arrs))
             func = getattr(np, func)
 
-            # Assume the function takes two arrays for now
-            result = func(arrs[0], arrs[1], *args, **kwargs)
-            inv_result = func(arrs[1], arrs[0], *args, **kwargs)
+            for arrgrp in arr_groups:
+                import ipdb; ipdb.set_trace()
+                keys, arrs = zip(*arrgrp)
+                result = func(*arrs, *args, **kwargs)
 
-            # Get channel and region from keys for saving
-            save_key = [name] + [k for k in keys[0]
-                                 if k not in self._metric_idx]
-            inv_save_key = [name] + [k for k in keys[1]
+                # Each result is saved with the first key
+                save_key = [name] + [k for k in keys[0]
                                      if k not in self._metric_idx]
+                array[tuple(save_key)] = result
 
-            # Metric slots should already by in Condition array
-            array[tuple(save_key)] = result
-            array[tuple(inv_save_key)] = inv_result
+                # If not including inverses, skip all remaining
+                if not incl:
+                    break
 
     def _apply_filters(self, array: ConditionArray) -> None:
         """Removes cells based on user-defined filters"""
@@ -838,27 +840,25 @@ class BaseExtractor(Operation):
                            metric_name: str,
                            keys: Collection[Tuple[str]],
                            func: str = 'sum',
+                           incl_inverse: bool = False,
                            *args, **kwargs
                            ) -> None:
         """
         Calculates additional metrics based on information already in array
         func can be any numpy function - expected to pass 2 arrays though
 
-        TODO: Add ability to have more than 2 arrays
         TODO: Add ability to propagate results to other keys
         TODO: Add keys to save this in yaml dictionary
         TODO: Add possiblity for custom Callable function
         """
         # Check the inputs now before calculation
-        # Only two inputs allowed for now
-        assert len(keys) == 2
         # Assert that keys include channel, region, and metric
         for key in keys:
             assert len(key) == 3
         assert hasattr(np, func), 'Derived metric must be numpy function'
 
         # Save to calculated metrics to get added after extract is done
-        self._derived_metrics[metric_name] = tuple([func, keys,
+        self._derived_metrics[metric_name] = tuple([func, keys, incl_inverse,
                                                     args, kwargs])
 
         # Fill in the metric with just nan for now
