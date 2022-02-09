@@ -114,6 +114,22 @@ class Segmenter(BaseSegmenter):
         labels = meas.label(image > thres, connectivity=connectivity)
         return util.img_as_uint(labels)
 
+    @ImageHelper(by_frame=False)
+    def multiotsu_thres(self,
+                        image: Image,
+                        classes: int = 2,
+                        nbins: int = 256,
+                        hist: np.ndarray = None
+                        ) -> Mask:
+        """
+        TODO:
+            - Test
+            - 3D version
+        """
+        thres = filt.threshold_multiotsu(image, classes, nbins,
+                                         hist=hist)
+        return np.digitize(image, bins=thres).astype(np.uint16)
+
     @ImageHelper(by_frame=True)
     def random_walk_segmentation(self,
                                  image: Image,
