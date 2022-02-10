@@ -71,12 +71,7 @@ class ConditionArray():
         # Sort given indices to the appropriate axes
         indices = self._convert_keys_to_index(key)
 
-        # No len-1 axes, but at least2d
-        out = np.squeeze(self._arr[indices])
-        if out.ndim == 1:
-            out = np.expand_dims(out, -1)
-
-        return out
+        return self._correct_output_dimensions(self._arr[indices])
 
     def __setitem__(self, key, value):
         # Sort given indices to the appropriate axes
@@ -169,10 +164,33 @@ class ConditionArray():
 
     def _getitem_w_idx(self, idx):
         """
-        Used by CustomSet to index CustomArray w/o recalculating
-        the indices each time
+        Index CustomArray w/o recalculating the indices each time
         """
-        return np.squeeze(self._arr[idx])
+        return self._correct_output_dimensions(idx)
+
+    def _correct_output_dimensions(self,
+                                   idx: Tuple[slice, str]
+                                   ) -> np.ndarray:
+        """Output must be at least 2D, but no other axes of len 1"""
+
+        out = np.squeeze(self._arr[idx])
+        if out.ndim == 1:
+            # Figure out how many cells/frames total
+            _cidx, _fidx = self._dim_idxs['cells'], self._dim_idxs['frames']
+            tot_cells = self._arr.shape[_cidx]
+            tot_frames = self._arr.shape[_fidx]
+
+            # Index a pretend array to figure out how many were requested
+            req_cells = len(np.empty(tot_cells)[idx[_cidx]])
+            req_frames = len(np.empty(tot_frames)[idx[_fidx]])
+            cf = [req_cells, req_frames]
+            missing = [s not in out.shape for s in cf]
+
+            # Need to add either cells or frames back
+            if any(missing) and not all(missing):
+                out = np.expand_dims(out, missing.index(True))
+
+        return out
 
     def _convert_keys_to_index(self, key) -> Tuple[(int, slice)]:
         """
@@ -198,9 +216,7 @@ class ConditionArray():
                              f' Got {len(key)}.')
 
         # Get dimensions for the keys
-        # Five dimensions possible
         indices = [slice(None)] * len(self.coords)
-        # TODO: I feel like names shouldn't be hard-coded
         cell_idx = self._dim_idxs['cells']
         frame_idx = self._dim_idxs['frames']
         seen_int = 0  # This will be used to separate cells and frames
