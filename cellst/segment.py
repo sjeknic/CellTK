@@ -104,14 +104,22 @@ class Segmenter(BaseSegmenter):
                    image: Image,
                    nbins: int = 256,
                    connectivity: int = 2,
-                   buffer: float = 0.
+                   buffer: float = 0.,
+                   fill_holes: bool = False,
                    ) -> Mask:
         """
         Uses Otsu's method to determine the threshold. All pixels
         above the threshold are labeled
         """
         thres = (1 - buffer) * filt.threshold_otsu(image, nbins=nbins)
-        labels = meas.label(image > thres, connectivity=connectivity)
+        labels = image > thres
+
+        if fill_holes:
+            # Run binary closing first to connect broken edges
+            labels = morph.binary_closing(labels)
+            labels = ndi.binary_fill_holes(labels)
+
+        labels = meas.label(labels, connectivity=connectivity)
         return util.img_as_uint(labels)
 
     @ImageHelper(by_frame=False)
