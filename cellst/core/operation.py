@@ -796,7 +796,17 @@ class BaseExtractor(Operation):
                 # Each result is saved with the first key
                 save_key = [name] + [k for k in keys[0]
                                      if k not in self._metric_idx]
-                array[tuple(save_key)] = result
+                try:
+                    array[tuple(save_key)] = result
+                except ValueError as e:
+                    '''This is super hackish, but need to
+                    differentiate broadcasting error from
+                    error due to incorrect array/result type'''
+                    if 'could not broadcast' in e.args[0]:
+                        result = np.expand_dims(result, axis=-1)
+                        array[tuple(save_key)] = result
+                    else:
+                        raise ValueError(e)
 
                 # Propagate results to other keys
                 if prop:
