@@ -33,6 +33,10 @@ class Processor(BaseProcessor):
                                    ) -> Same:
         """
         Shifts and crops images based on regi.phase_cross_correlation.
+
+        TODO:
+            - Needs to confirm image shapes match before cropping,
+              otherwise, on reruns image might be cropped multiple times
         """
         # Image that aligning will be based on - first img in align_with
         to_align = locals()[align_with][0]
@@ -202,7 +206,7 @@ class Processor(BaseProcessor):
         image_pad = padder.pad(image)
 
         # Pass frames of the padded image
-        out = np.zeros(image_pad.shape, dtype=np.int16)
+        out = np.zeros(image_pad.shape, dtype=image.dtype)
         for fr, im in enumerate(image_pad):
             bg = wavelet_background_estimate(im, wavelet, mode,
                                              level, blur)
@@ -231,7 +235,7 @@ class Processor(BaseProcessor):
         image_pad = padder.pad(image)
 
         # Pass frames of the padded image
-        out = np.zeros(image_pad.shape, dtype=np.int16)
+        out = np.zeros(image_pad.shape, dtype=image.dtype)
         for fr, im in enumerate(image_pad):
             ns = wavelet_noise_estimate(im, noise_level, wavelet,
                                         mode, level, thres)

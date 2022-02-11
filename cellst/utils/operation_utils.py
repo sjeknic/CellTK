@@ -276,6 +276,12 @@ def skimage_level_set(shape: Tuple[int],
     return out
 
 
+def get_binary_footprint(rank: int = 2, connectivity: int = 1) -> np.ndarray:
+    """Wrapper for ndi.generate_binary_structure"""
+    assert connectivity <= rank
+    return ndi.generate_binary_structure(rank, connectivity)
+
+
 def match_labels_linear(source: np.ndarray, dest: np.ndarray) -> np.ndarray:
     """
     Should transfer labels from source to dest based on area overlap
