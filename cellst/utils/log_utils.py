@@ -42,6 +42,7 @@ def get_logger(name: str,
     sh = logging.StreamHandler()
     sh.setFormatter(formatter)
     sh.addFilter(CustomNameFilter())
+    sh.addFilter(SkimageWarningFilter())
     try:
         sh.setLevel(getattr(logging, console_level.upper()))
     except AttributeError:
@@ -111,3 +112,22 @@ class CustomNameFilter(logging.Filter):
     def filter(self, record):
         record.name = record.name.split('>')[-1]
         return True
+
+
+class SkimageWarningFilter(logging.Filter):
+    """
+    Used to silence warnings raised by downcasting
+    in skimage.util functions
+    """
+    def __init__(self) -> None:
+        self.seen = 0
+
+    def filter(self, record):
+        if 'Downcasting' in record.message:
+            if self.seen >= 1:
+                return False
+            self.seen += 1
+
+            return True
+        else:
+            return True
