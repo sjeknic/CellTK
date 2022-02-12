@@ -8,6 +8,7 @@ from typing import Collection, Tuple, Callable, List, Dict, Generator
 
 import numpy as np
 import skimage.measure as meas
+import skimage.util as util
 
 from cellst.core.arrays import ConditionArray
 from cellst.utils._types import (Image, Mask, Track, Arr, Same,
@@ -577,17 +578,12 @@ class BaseExtractor(Operation):
                          'orientation', 'perimeter',
                          'perimeter_crofton', 'solidity')
 
-    _metrics = ['label', 'area', 'convex_area', 'filled_area', 'bbox',
+    _metrics = ('label', 'area', 'convex_area', 'filled_area', 'bbox',
                 'centroid', 'mean_intensity', 'max_intensity', 'min_intensity',
                 'minor_axis_length', 'major_axis_length',
-                'orientation', 'perimeter', 'solidity']
+                'orientation', 'perimeter', 'solidity')
     _extra_properties = ['division_frame', 'parent_id', 'total_intensity',
                          'median_intensity']
-    _derived_metrics = {}
-    _filters = {}
-
-    # _props_to_add is what actually gets used to decide on extra metrics
-    _props_to_add = {}
 
     def __init__(self,
                  images: Collection[str] = [],
@@ -635,6 +631,12 @@ class BaseExtractor(Operation):
         # Add extract_data_from_image
         # functions are expected to be (func, save_as, user_type, kwargs)
         self.functions = [tuple(['extract_data_from_image', output, None, kwargs])]
+
+        # These cannot be class attributes
+        self._derived_metrics = {}
+        self._filters = []
+        # _props_to_add is what actually gets used to decide on extra metrics
+        self._props_to_add = {}
 
         # Add division_frame and parent_id
         # TODO: Make optional
@@ -784,8 +786,20 @@ class BaseExtractor(Operation):
         """
         Does the actual computations from add_derived_metric
         """
-        for name, (func, keys, incl, prop, args, kwargs) in self._derived_metrics.items():
+        for name, (func, keys, incl, prop, frm, args, kwargs) in self._derived_metrics.items():
             self.logger.info(f'Calculating derived metric {name}')
+            if frm:
+                try:
+                    # If only a number - take that many frames from start
+                    _rng = slice(None, int(frm))
+                except TypeError:
+                    _rng = slice(int(frm[0]), int(frm[1]))
+                except Exception as e:
+                    warnings.warn(f'Did not understand range {frm},'
+                                  f' got Exception {e}. \n', UserWarning)
+
+                keys = [k + [slice(None), _rng] for k in keys]
+
             arrs = [array[tuple(k)] for k in keys]
             arr_groups = itertools.permutations(zip(keys, arrs))
             func = getattr(np, func)
@@ -795,7 +809,8 @@ class BaseExtractor(Operation):
 
                 # Each result is saved with the first key
                 save_key = [name] + [k for k in keys[0]
-                                     if k not in self._metric_idx]
+                                     if not isinstance(k, slice) and
+                                     k not in self._metric_idx]
                 try:
                     array[tuple(save_key)] = result
                 except ValueError as e:
@@ -817,14 +832,17 @@ class BaseExtractor(Operation):
 
     def _apply_filters(self, array: ConditionArray) -> None:
         """Removes cells based on user-defined filters"""
-        for name, (metr, reg, chn, args, kws) in self._filters.items():
-            self.logger.info(f'Removing cells with filter {name}')
-            self.logger.info(f'Inputs: {[reg, chn, metr, args, kws]}')
-            self.logger.info(f'Current array size: {array.shape}')
-            mask = array.generate_mask(name, metr, reg, chn,
-                                       key=None, *args, **kws)
+        #for name, (metr, reg, chn, frm, args, kws) in self._filters.items():
+        for f in self._filters:
+            self.logger.info(f"Removing cells with filter {f['filter_name']}")
+            self.logger.info(f"Inputs: {[f['region'], f['channel'], f['metric'], f['args'], f['kwargs']]}")
+            self.logger.info(f"Current array size: {array.shape}")
+            mask = array.generate_mask(f['filter_name'], f['metric'],
+                                       f['region'], f['channel'],
+                                       f['frame_rng'],
+                                       *f['args'], **f['kwargs'])
             array.filter_cells(mask, delete=True)
-            self.logger.info(f'Post-filter array size: {array.shape}')
+            self.logger.info(f"Post-filter array size: {array.shape}")
 
     def add_extra_metric(self, name: str, func: Callable = None) -> None:
         """
@@ -853,6 +871,7 @@ class BaseExtractor(Operation):
                            func: str = 'sum',
                            inverse: bool = False,
                            propagate: (str, bool) = False,
+                           frame_rng: [int, Tuple[int]] = None,
                            *args, **kwargs
                            ) -> None:
         """
@@ -869,8 +888,9 @@ class BaseExtractor(Operation):
         assert hasattr(np, func), 'Derived metric must be numpy function.'
 
         # Save to calculated metrics to get added after extract is done
-        self._derived_metrics[metric_name] = tuple([func, keys, inverse,
-                                                    propagate, args, kwargs])
+        # TODO: Make a dictionary
+        self._derived_metrics[metric_name] = tuple([func, keys, inverse, propagate,
+                                                    frame_rng, args, kwargs])
 
         # Fill in the metric with just nan for now
         self._props_to_add[metric_name] = RandomNameProperty()
@@ -882,6 +902,7 @@ class BaseExtractor(Operation):
                    metric: str,
                    region: [str, int] = 0,
                    channel: [str, int] = 0,
+                   frame_rng: [int, Tuple[int]] = None,
                    *args, **kwargs
                    ) -> None:
         """
@@ -893,8 +914,10 @@ class BaseExtractor(Operation):
                          + list(self._derived_metrics.keys()))
         assert metric in added_metrics, f'Metric {metric} not found'
 
-        self._filters[filter_name] = tuple([metric, region, channel,
-                                            args, kwargs])
+        # TODO: Make a dictionary
+        self._filters.append(dict(filter_name=filter_name, metric=metric, region=region,
+                                  channel=channel, frame_rng=frame_rng,
+                                  args=args, kwargs=kwargs))
 
     def set_metric_list(self, metrics: Collection[str]) -> None:
         """
