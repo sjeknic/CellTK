@@ -71,7 +71,7 @@ class ConditionArray():
         # Sort given indices to the appropriate axes
         indices = self._convert_keys_to_index(key)
 
-        return self._correct_output_dimensions(self._arr[indices])
+        return self._correct_output_dimensions(indices)
 
     def __setitem__(self, key, value):
         # Sort given indices to the appropriate axes
@@ -172,7 +172,6 @@ class ConditionArray():
                                    idx: Tuple[slice, str]
                                    ) -> np.ndarray:
         """Output must be at least 2D, but no other axes of len 1"""
-
         out = np.squeeze(self._arr[idx])
         if out.ndim == 1:
             # Figure out how many cells/frames total

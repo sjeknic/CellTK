@@ -15,7 +15,6 @@ from cellst.utils._types import Mask, Track
 
 # TODO: Add label by parent function
 
-
 def gray_fill_holes(labels: np.ndarray) -> np.ndarray:
     """
     Faster (but hopefully identical) to the CellTK version
