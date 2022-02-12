@@ -67,11 +67,19 @@ def _dict_to_operation(oper_dict: Dict) -> Operation:
         except NotImplementedError:  # Means operation is Extractor
             # Save other user defined parameters
             operation.set_metric_list(val['metrics'])
-            # (func, keys, inverse, propagate, args, kwargs)
-            for nm, (f, ky, i, p, a, k) in val['derived_metrics'].items():
-                operation.add_derived_metric(nm, ky, f, i, p, *a, **k)
-            for nm, (met, rgn, chn, arg, kw) in val['filters'].items():
-                operation.add_filter(nm, met, rgn, chn, *arg, **kw)
+            # (func, keys, inverse, propagate, fr, args, kwargs)
+            for nm, (f, ky, i, p, fr, a, k) in val['derived_metrics'].items():
+                operation.add_derived_metric(nm, ky, f, i, p, fr, *a, **k)
+
+            for filt in val['filters']:
+                # Annoying, but otherwise args are hard to unpack
+                operation.add_filter(filter_name=filt['filter_name'],
+                                     metric=filt['metric'],
+                                     region=filt['region'],
+                                     channel=filt['channel'],
+                                     frame_rng=filt['frame_rng'],
+                                     *filt['args'], **filt['kwargs'])
+
             for k, v in val['extra_props'].items():
                 operation.add_extra_metric(k, v)
 

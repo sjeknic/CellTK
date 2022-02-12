@@ -503,6 +503,7 @@ class ConditionArray():
                       metric: str,
                       region: [str, int] = 0,
                       channel: [str, int] = 0,
+                      frame_rng: (Tuple[int], int) = None,
                       key: str = None,
                       *args, **kwargs
                       ) -> np.ndarray:
@@ -510,6 +511,8 @@ class ConditionArray():
         I want this function to be able to generate arbitrary
         masks from some default functions
         i.e. percentiles, abs_val, etc..
+
+        frame_rng only applies to filter_utils right now
         """
         # Format inputs to the correct type
         if isinstance(region, int):
@@ -526,7 +529,42 @@ class ConditionArray():
         elif isinstance(function, str):
             # Else mask should come from the filter utils
             try:
-                mask = getattr(filt, function)(vals, *args, **kwargs)
+                '''
+                There is a fundamental flaw to using nans to mask the frames
+                as elegant as it seems. The issue is if the frames in question
+                have nans in the data. If the user is expecting ignore_nans to
+                be False, those cells should be removed, but in this case, they
+                are not.
+                '''
+                user_mask = np.zeros_like(vals).astype(bool)
+                idx = None
+                # Select the opposite of the given idx to mark as nan
+                if isinstance(frame_rng, (int, float)):
+                    if frame_rng < 0:
+                        # If negative, all frames before it
+                        idx = slice(None, frame_rng)
+                    else:
+                        # If positive, all frames after it
+                        idx = slice(frame_rng, None)
+                elif isinstance(frame_rng, (tuple, list)):
+                    # If range, all other values
+                    assert len(frame_rng) == 2
+                    val_frames = np.arange(vals.shape[1])
+                    idx_frames = np.arange(*frame_rng)
+                    idx = ~np.in1d(val_frames, idx_frames)
+                elif isinstance(frame_rng, type(None)):
+                    # Using all the frames
+                    pass
+                else:
+                    warnings.warn(f'Could not use frame_rng {frame_rng}, '
+                                  'Using all frames by default.',
+                                  UserWarning)
+                # Mark frames to be removed
+                if idx:
+                    user_mask[:, idx] = True
+
+                mask = getattr(filt, function)(vals, mask=user_mask,
+                                               *args, **kwargs)
             except AttributeError:
                 raise AttributeError('Did not understand filtering '
                                      f'function {function}.')
@@ -784,6 +822,7 @@ class ExperimentArray():
                       metric: str,
                       region: [str, int] = 0,
                       channel: [str, int] = 0,
+                      frame_rng: (Tuple[int], int) = None,
                       key: str = None,
                       *args, **kwargs
                       ) -> np.ndarray:
@@ -792,7 +831,8 @@ class ExperimentArray():
         """
         # Build masks in each Condition with the function
         _masks = [v.generate_mask(function, metric, region,
-                                  channel, key, *args, **kwargs)
+                                  channel, frame_rng, key,
+                                  *args, **kwargs)
                   for v in self.sites.values()]
 
         # Save if needed
