@@ -489,6 +489,23 @@ class Operation():
                             ) -> Mask:
         return match_labels_linear(source, dest)
 
+    @ImageHelper(by_frame=False)
+    def invert(self,
+               image: Image,
+               signed_float: bool = False
+               ) -> Image:
+        """"""
+        return util.invert(image, signed_float)
+
+    @ImageHelper(by_frame=True)
+    def regular_seeds(self,
+                      image: Image,
+                      n_points: int = 25,
+                      dtype: type = np.uint8
+                      ) -> Mask:
+        """Labels ~n points with unique integers"""
+        return util.regular_seeds(image.shape, n_points, dtype)
+
 
 class BaseProcessor(Operation):
     __name__ = 'Processor'
