@@ -4,7 +4,8 @@ import logging
 import time
 import inspect
 import itertools
-from typing import Collection, Tuple, Callable, List, Dict, Generator
+from typing import (Collection, Tuple, Callable,
+                    List, Dict, Generator, Union)
 
 import numpy as np
 import skimage.measure as meas
@@ -112,7 +113,7 @@ class Operation():
                  masks: Collection[Mask] = [],
                  tracks: Collection[Track] = [],
                  arrays: Collection[Arr] = []
-                 ) -> (Image, Mask, Track, Arr):
+                 ) -> Union[Image, Mask, Track, Arr]:
         """
         __call__ runs operation independently of Pipeline class
 
@@ -121,6 +122,7 @@ class Operation():
               it will have to take the inputs and build the ImageContainer. Only
               question will be the keys, they have to match the inputs.
         """
+        raise NotImplementedError('Will be implemented in a future version.')
         return self.run_operation(images, masks, tracks, arrays)
 
     def __enter__(self) -> None:
@@ -888,7 +890,7 @@ class BaseExtractor(Operation):
                            func: str = 'sum',
                            inverse: bool = False,
                            propagate: (str, bool) = False,
-                           frame_rng: [int, Tuple[int]] = None,
+                           frame_rng: Union[int, Tuple[int]] = None,
                            *args, **kwargs
                            ) -> None:
         """
@@ -917,9 +919,9 @@ class BaseExtractor(Operation):
     def add_filter(self,
                    filter_name: str,
                    metric: str,
-                   region: [str, int] = 0,
-                   channel: [str, int] = 0,
-                   frame_rng: [int, Tuple[int]] = None,
+                   region: Union[str, int] = 0,
+                   channel: Union[str, int] = 0,
+                   frame_rng: Union[int, Tuple[int]] = None,
                    *args, **kwargs
                    ) -> None:
         """

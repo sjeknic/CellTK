@@ -1,3 +1,5 @@
+from typing import Union
+
 import numpy as np
 import SimpleITK as sitk
 import skimage.registration as regi
@@ -252,7 +254,7 @@ class Processor(BaseProcessor):
     def unet_predict(self,
                      image: Image,
                      weight_path: str,
-                     roi: (int, str) = 2,
+                     roi: Union[int, str] = 2,
                      batch: int = None,
                      classes: int = 3,
                      ) -> Image:

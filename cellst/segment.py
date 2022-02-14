@@ -1,4 +1,4 @@
-from typing import Tuple
+from typing import Tuple, Union
 
 import numpy as np
 import skimage.measure as meas
@@ -30,7 +30,7 @@ class Segmenter(BaseSegmenter):
                      min_radius: float = 3,
                      max_radius: float = 20,
                      open_size: int = 3,
-                     clear_border: (bool, int) = True,
+                     clear_border: Union[bool, int] = True,
                      relabel: bool = False,
                      sequential: bool = False,
                      connectivity: int = 2,
@@ -451,7 +451,7 @@ class Segmenter(BaseSegmenter):
     def level_set_mask(self,
                        image: Image,
                        levelset: str = 'checkerboard',
-                       size: (float, int) = None,
+                       size: Union[float, int] = None,
                        center: Tuple[int] = None,
                        label: bool = False
                        ) -> Mask:
@@ -471,7 +471,7 @@ class Segmenter(BaseSegmenter):
     def unet_predict(self,
                      image: Image,
                      weight_path: str,
-                     roi: (int, str) = 2,
+                     roi: Union[int, str] = 2,
                      batch: int = None,
                      classes: int = 3,
                      ) -> Image:
