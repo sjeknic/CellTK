@@ -1,11 +1,13 @@
 import warnings
 import itertools
-from typing import List, Tuple, Dict, Callable
+from typing import List, Tuple, Dict, Callable, Collection
 
 import h5py
 import numpy as np
+import plotly.graph_objects as go
 
 import cellst.utils.filter_utils as filt
+from cellst.utils.plot_utils import plot_groups
 
 
 class ConditionArray():
@@ -69,12 +71,7 @@ class ConditionArray():
         # Sort given indices to the appropriate axes
         indices = self._convert_keys_to_index(key)
 
-        # No len-1 axes, but at least2d
-        out = np.squeeze(self._arr[indices])
-        if out.ndim == 1:
-            out = np.expand_dims(out, -1)
-
-        return out
+        return self._correct_output_dimensions(indices)
 
     def __setitem__(self, key, value):
         # Sort given indices to the appropriate axes
@@ -167,10 +164,42 @@ class ConditionArray():
 
     def _getitem_w_idx(self, idx):
         """
-        Used by CustomSet to index CustomArray w/o recalculating
-        the indices each time
+        Index CustomArray w/o recalculating the indices each time
         """
-        return np.squeeze(self._arr[idx])
+        return self._correct_output_dimensions(idx)
+
+    def _correct_output_dimensions(self,
+                                   idx: Tuple[slice, str]
+                                   ) -> np.ndarray:
+        """Output must be at least 2D, but no other axes of len 1"""
+        out = np.squeeze(self._arr[idx])
+        if out.ndim == 1:
+            # Figure out how many cells/frames total
+            _cidx, _fidx = self._dim_idxs['cells'], self._dim_idxs['frames']
+            tot_cells = self._arr.shape[_cidx]
+            tot_frames = self._arr.shape[_fidx]
+
+            # Index a pretend array to figure out how many were requested
+            if isinstance(idx[_cidx], int):
+                req_cells = 1
+            else:
+                req_cells = len(np.empty(tot_cells)[idx[_cidx]])
+            if isinstance(idx[_fidx], int):
+                req_frames = 1
+            else:
+                req_frames = len(np.empty(tot_frames)[idx[_fidx]])
+            cf = [req_cells, req_frames]
+            missing = [s not in out.shape for s in cf]
+
+            # Need to add either cells or frames back
+            if all(missing):
+                # Add to last axis
+                # TODO: Not sure what makes the most sense here
+                out = np.expand_dims(out, -1)
+            elif any(missing):
+                out = np.expand_dims(out, missing.index(True))
+
+        return out
 
     def _convert_keys_to_index(self, key) -> Tuple[(int, slice)]:
         """
@@ -196,9 +225,7 @@ class ConditionArray():
                              f' Got {len(key)}.')
 
         # Get dimensions for the keys
-        # Five dimensions possible
         indices = [slice(None)] * len(self.coords)
-        # TODO: I feel like names shouldn't be hard-coded
         cell_idx = self._dim_idxs['cells']
         frame_idx = self._dim_idxs['frames']
         seen_int = 0  # This will be used to separate cells and frames
@@ -486,6 +513,7 @@ class ConditionArray():
                       metric: str,
                       region: [str, int] = 0,
                       channel: [str, int] = 0,
+                      frame_rng: (Tuple[int], int) = None,
                       key: str = None,
                       *args, **kwargs
                       ) -> np.ndarray:
@@ -493,6 +521,8 @@ class ConditionArray():
         I want this function to be able to generate arbitrary
         masks from some default functions
         i.e. percentiles, abs_val, etc..
+
+        frame_rng only applies to filter_utils right now
         """
         # Format inputs to the correct type
         if isinstance(region, int):
@@ -509,7 +539,42 @@ class ConditionArray():
         elif isinstance(function, str):
             # Else mask should come from the filter utils
             try:
-                mask = getattr(filt, function)(vals, *args, **kwargs)
+                '''
+                There is a fundamental flaw to using nans to mask the frames
+                as elegant as it seems. The issue is if the frames in question
+                have nans in the data. If the user is expecting ignore_nans to
+                be False, those cells should be removed, but in this case, they
+                are not.
+                '''
+                user_mask = np.zeros_like(vals).astype(bool)
+                idx = None
+                # Select the opposite of the given idx to mark as nan
+                if isinstance(frame_rng, (int, float)):
+                    if frame_rng < 0:
+                        # If negative, all frames before it
+                        idx = slice(None, frame_rng)
+                    else:
+                        # If positive, all frames after it
+                        idx = slice(frame_rng, None)
+                elif isinstance(frame_rng, (tuple, list)):
+                    # If range, all other values
+                    assert len(frame_rng) == 2
+                    val_frames = np.arange(vals.shape[1])
+                    idx_frames = np.arange(*frame_rng)
+                    idx = ~np.in1d(val_frames, idx_frames)
+                elif isinstance(frame_rng, type(None)):
+                    # Using all the frames
+                    pass
+                else:
+                    warnings.warn(f'Could not use frame_rng {frame_rng}, '
+                                  'Using all frames by default.',
+                                  UserWarning)
+                # Mark frames to be removed
+                if idx:
+                    user_mask[:, idx] = True
+
+                mask = getattr(filt, function)(vals, mask=user_mask,
+                                               *args, **kwargs)
             except AttributeError:
                 raise AttributeError('Did not understand filtering '
                                      f'function {function}.')
@@ -698,15 +763,15 @@ class ExperimentArray():
 
     def set_conditions(self, condition_map: Dict[str, str] = {}) -> None:
         """
-        Updates name of all Condition arrays in Experiment.
-
+        Updates name of Condition arrays in Experiment.
         condition_map should map Condition.name to desired condition.
-        NOTE: Each condition needs a unique name for this to work.
         """
-        if len(condition_map) == 0:
-            # Uses keys that were used for saving the Conditions
-            for k, v in self.sites:
-                v.set_condition(k)
+        for k, v in condition_map.items():
+            try:
+                self.sites[k].set_condition(v)
+            except KeyError:
+                # TODO: Should this warn users?
+                pass
 
     def load_condition(self,
                        path: str,
@@ -767,6 +832,7 @@ class ExperimentArray():
                       metric: str,
                       region: [str, int] = 0,
                       channel: [str, int] = 0,
+                      frame_rng: (Tuple[int], int) = None,
                       key: str = None,
                       *args, **kwargs
                       ) -> np.ndarray:
@@ -775,7 +841,8 @@ class ExperimentArray():
         """
         # Build masks in each Condition with the function
         _masks = [v.generate_mask(function, metric, region,
-                                  channel, key, *args, **kwargs)
+                                  channel, frame_rng, key,
+                                  *args, **kwargs)
                   for v in self.sites.values()]
 
         # Save if needed
@@ -880,6 +947,39 @@ class ExperimentArray():
                 self.sites[cond] = ConditionArray(**coords, name=cond,
                                                   time=cond_arrs[0].time)
                 self.sites[cond][:] = new_arr
+
+    def plot_by_condition(self,
+                          keys: Tuple[str],
+                          title: str = None,
+                          x_label: str = None,
+                          y_label: str = None,
+                          x_range: Tuple[float] = None,
+                          y_range: Tuple[float] = None,
+                          layout_spec: dict = {},
+                          ) -> go.Figure:
+        """
+        keys must return a 2D arr for this to work.
+        TODO: More generic way to group conditions
+        TODO: Add option to save figures
+        """
+        # Get the data to plot
+        keys = tuple(keys) if not isinstance(keys, tuple) else keys
+        arrs = self[keys]
+        conds = self.conditions
+        # Assume all conditions have the same time
+        time = self.time[0]
+
+        # Make the base plot
+        fig = plot_groups(arrs, conds, time=time)
+
+        # Update the figure layout
+        fig.update_xaxes(title=x_label, range=x_range)
+        fig.update_yaxes(title=y_label, range=y_range)
+        fig.update_layout(title=title, **layout_spec)
+
+        fig.show()
+
+        return fig
 
     @classmethod
     def _build_from_file(cls, f: h5py.File) -> 'ExperimentArray':

@@ -6,13 +6,15 @@ import btrack
 import btrack.utils as butils
 import btrack.constants as bconstants
 import skimage.measure as meas
+import skimage.segmentation as segm
 
 from cellst.core.operation import BaseTracker
 from cellst.utils._types import Image, Mask, Track
 from cellst.utils.utils import ImageHelper, stdout_redirected
 from cellst.utils.operation_utils import (lineage_to_track,
                                           match_labels_linear,
-                                          voronoi_boundaries)
+                                          voronoi_boundaries,
+                                          get_binary_footprint)
 
 # Tracking algorithm specific imports
 from kit_sch_ge.tracker.extract_data import get_indices_pandas
@@ -53,6 +55,48 @@ class Tracker(BaseTracker):
                     fr = meas.label(fr)
 
                 out[idx, ...] = match_labels_linear(out[idx - 1, ...], fr)
+
+        return out
+
+    @ImageHelper(by_frame=False)
+    def simple_watershed_tracker(self,
+                                 mask: Mask,
+                                 connectivity: int = 2,
+                                 watershed_line: bool = True,
+                                 keep_seeds: bool = False,
+                                 ) -> Track:
+        """
+        Use segm.watershed serially
+
+        keep_seeds: if True, seeds from previous frame will be
+        kept in the current segmentation. This is more robust
+        if the segmentation is incomplete, missing, or fragmented in some
+        frames. However, it also means the mask will be monotonically
+        increasing in size. It is not appropriate for images with a lot
+        of drift or for moving objects.
+        """
+        # Iterate over all frames
+        for idx, fr in enumerate(mask):
+            if not idx:
+                # Make output arr and save first frame
+                out = np.zeros_like(mask)
+                out[idx, ...] = mask[idx]
+            else:
+                # The last frame serves as the seeds
+                seeds = out[idx - 1, ...]
+                footprint = get_binary_footprint(connectivity)
+
+                # Generate mask of relevant area
+                if keep_seeds:
+                    # Include pixels in this OR last image
+                    mask = np.logical_or(fr, seeds)
+                else:
+                    # Only pixels in this frame can be tracked
+                    mask = fr.astype(bool)
+
+                # Fill watershed and save
+                out[idx, ...] = segm.watershed(fr, seeds, footprint, mask=mask,
+                                               watershed_line=watershed_line)
 
         return out
 

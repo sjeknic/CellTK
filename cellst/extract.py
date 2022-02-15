@@ -140,7 +140,10 @@ class Extractor(BaseExtractor):
         self._apply_filters(array)
 
         # Remove short traces
+        self.logger.info(f'Removing cells with traces < {min_trace_length} frames.')
+        self.logger.info(f'Current array size: {array.shape}')
         mask = array.remove_short_traces(min_trace_length)
         array.filter_cells(mask, delete=True)
+        self.logger.info(f'Post-filter array size: {array.shape}')
 
         return array

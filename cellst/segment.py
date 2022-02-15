@@ -1,4 +1,4 @@
-from typing import Tuple
+from typing import Tuple, Union
 
 import numpy as np
 import skimage.measure as meas
@@ -12,7 +12,8 @@ from cellst.core.operation import BaseSegmenter
 from cellst.utils._types import Image, Mask
 from cellst.utils.utils import ImageHelper
 from cellst.utils.operation_utils import (dilate_sitk, voronoi_boundaries,
-                                          skimage_level_set, gray_fill_holes)
+                                          skimage_level_set, gray_fill_holes,
+                                          match_labels_linear)
 
 
 class Segmenter(BaseSegmenter):
@@ -29,7 +30,7 @@ class Segmenter(BaseSegmenter):
                      min_radius: float = 3,
                      max_radius: float = 20,
                      open_size: int = 3,
-                     clear_border: (bool, int) = True,
+                     clear_border: Union[bool, int] = True,
                      relabel: bool = False,
                      sequential: bool = False,
                      connectivity: int = 2,
@@ -45,7 +46,7 @@ class Segmenter(BaseSegmenter):
         labels = gray_fill_holes(mask)
 
         if clear_border:
-            buff = clear_border if isinstance(clear_border, int) else 2
+            buff = clear_border if isinstance(clear_border, (int, float)) else 3
             labels = segm.clear_border(labels, buffer_size=buff)
 
         # Remove small and large objects and open
@@ -104,15 +105,36 @@ class Segmenter(BaseSegmenter):
                    image: Image,
                    nbins: int = 256,
                    connectivity: int = 2,
-                   buffer: float = 0.
+                   buffer: float = 0.,
+                   fill_holes: bool = False,
                    ) -> Mask:
         """
         Uses Otsu's method to determine the threshold. All pixels
         above the threshold are labeled
         """
         thres = (1 - buffer) * filt.threshold_otsu(image, nbins=nbins)
-        labels = meas.label(image > thres, connectivity=connectivity)
+        labels = image > thres
+
+        if fill_holes:
+            # Run binary closing first to connect broken edges
+            labels = morph.binary_closing(labels)
+            labels = ndi.binary_fill_holes(labels)
+
+        labels = meas.label(labels, connectivity=connectivity)
         return util.img_as_uint(labels)
+
+    @ImageHelper(by_frame=False)
+    def multiotsu_thres(self,
+                        image: Image,
+                        classes: int = 2,
+                        nbins: int = 256,
+                        hist: np.ndarray = None
+                        ) -> Mask:
+        """
+        """
+        thres = filt.threshold_multiotsu(image, classes, nbins,
+                                         hist=hist)
+        return np.digitize(image, bins=thres).astype(np.uint16)
 
     @ImageHelper(by_frame=True)
     def random_walk_segmentation(self,
@@ -429,7 +451,7 @@ class Segmenter(BaseSegmenter):
     def level_set_mask(self,
                        image: Image,
                        levelset: str = 'checkerboard',
-                       size: (float, int) = None,
+                       size: Union[float, int] = None,
                        center: Tuple[int] = None,
                        label: bool = False
                        ) -> Mask:
@@ -449,17 +471,12 @@ class Segmenter(BaseSegmenter):
     def unet_predict(self,
                      image: Image,
                      weight_path: str,
-                     roi: (int, str) = 2,
+                     roi: Union[int, str] = 2,
                      batch: int = None,
                      classes: int = 3,
                      ) -> Image:
         """
-        NOTE: If we had mulitple colors, then image would be 4D here. The Pipeline isn't
-        set up for that now, so for now the channels is just assumed to be 1.
-
-        roi - the prediction values are returned only for the roi
-        batch - number of frames passed to model. None is all of them.
-        classes - number of output categories from the model (has to match weights)
+        This should just call the Process version __wrapped__
         """
         _roi_dict = {'background': 0, 'bg': 0, 'edge': 1,
                      'interior': 2, 'nuc': 2, 'cyto': 2}

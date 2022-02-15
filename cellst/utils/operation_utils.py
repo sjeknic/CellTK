@@ -15,7 +15,6 @@ from cellst.utils._types import Mask, Track
 
 # TODO: Add label by parent function
 
-
 def gray_fill_holes(labels: np.ndarray) -> np.ndarray:
     """
     Faster (but hopefully identical) to the CellTK version
@@ -274,6 +273,12 @@ def skimage_level_set(shape: Tuple[int],
         raise ValueError(f'Could not find level_set function for {levelset}')
 
     return out
+
+
+def get_binary_footprint(rank: int = 2, connectivity: int = 1) -> np.ndarray:
+    """Wrapper for ndi.generate_binary_structure"""
+    assert connectivity <= rank
+    return ndi.generate_binary_structure(rank, connectivity)
 
 
 def match_labels_linear(source: np.ndarray, dest: np.ndarray) -> np.ndarray:

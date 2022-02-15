@@ -62,6 +62,11 @@ class Pipeline():
 
         Returns:
             None
+
+
+        TODO:
+            - Add atomic option (in Orch too). Should delete output folder before starting.
+
         """
         # Save some values in case Pipeline is written as yaml
         self.frame_rng = frame_rng

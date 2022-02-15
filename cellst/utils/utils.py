@@ -1,18 +1,19 @@
 import sys
 import os
-import inspect
 import functools
-import itertools
 import contextlib
 import warnings
 import logging
-from typing import List, Tuple, Generator
+import typing
+from copy import deepcopy
+from itertools import zip_longest
+from typing import Tuple, Generator, Dict
+from collections import Counter
 
 import numpy as np
 
 from cellst.utils._types import (Image, Mask, Track,
-                                 Arr, ImageContainer,
-                                 INPT_NAMES)
+                                 ImageContainer, INPT_NAMES)
 from cellst.core.arrays import ConditionArray, ExperimentArray
 from cellst.utils.operation_utils import sliding_window_generator
 from cellst.utils.log_utils import get_null_logger
@@ -72,8 +73,10 @@ class ImageHelper():
     Decorator to help with passing only the correct image stacks to functions
 
     TODO:
-        - See PEP563, should use typing.get_type_hints
-    """
+        - Pass default args if no user input. See:
+        https://stackoverflow.com/questions/12627118/get-a-function-arguments-default-value
+        - Remove self.expected_types, self.expected_names, self.expected_numbers
+     """
     __name__ = 'ImageHelper'
 
     def __init__(self, *,
@@ -91,30 +94,34 @@ class ImageHelper():
     def __call__(self, func):
         # Save information about the function from the signature
         self.func = func
-        self.output_type = inspect.signature(self.func).return_annotation
 
-        func_params = inspect.signature(self.func).parameters.values()
-        self.expected_types = [i.annotation.__name__
-                               for i in func_params
-                               if hasattr(i.annotation, '__name__')]
-        self.expected_names = [i.name for i in func_params]
-
-        # Used to determine how many of each input to pass
-        self.expected_numbers = {i: len([l for l in self.expected_types if l == i])
-                                 for i in INPT_NAMES}
+        # NOTE: self/cls is not included in these type hints
+        self.type_hints = typing.get_type_hints(self.func)
+        try:
+            # Save as type object, not __name__
+            self.output_type = self.type_hints.pop('return')
+            # Get the arguments the function expects
+            self.expected_names, self.expected_types = zip(
+                *[(k, v.__name__) for k, v in self.type_hints.items()
+                  if hasattr(v, '__name__') and v.__name__ in INPT_NAMES]
+            )
+            # Update the number of each Stack type that is expected
+            self.expected_numbers = dict(Counter(self.expected_types))
+            self.expected_numbers.update({k: 0 for k in INPT_NAMES
+                                          if k not in self.expected_types})
+        except KeyError:
+            raise KeyError(f'Type hints are missing for function {self.func}')
 
         @functools.wraps(self.func)
         def wrapper(*args, **kwargs):
             # Sort args and kwargs into the respective values
             if isinstance(args[0], ImageContainer):
                 # If first value is not self or class, then staticmethod
-                img_container = args[0]
+                img_container = deepcopy(args[0])
                 calling_cls = []
-                args = args[1:]
             else:
                 calling_cls = [args[0]]
-                img_container = args[1]
-                args = args[2:]
+                img_container = deepcopy(args[1])
 
             self.logger = self._get_calling_logger(calling_cls)
             self.logger.info(f'ImageHelper called for {self.func.__name__}')
@@ -128,12 +135,11 @@ class ImageHelper():
             # Function expects and returns a stack.
             if not self.by_frame or not pass_to_func:
                 # Pass all inputs together
-                stack = self.func(*calling_cls, *pass_to_func,
-                                  *args, **nkwargs)
+                stack = self.func(*calling_cls, **pass_to_func, **nkwargs)
             else:
                 # Pass inputs individually
                 stack = self._pass_by_frames(pass_to_func, calling_cls,
-                                             *args, **nkwargs)
+                                             **nkwargs)
 
             # Get the correct outputs and keys before returning
             keys, stack = self._correct_outputs(keys, stack, calling_cls)
@@ -146,102 +152,107 @@ class ImageHelper():
         This func is for sorting the input types and selecting the correct
         types that should get passed to the function.
         """
-        # First check if user specified names
-        img_container, kwargs = self._name_helper(img_container, **kwargs)
-
         # Check for what the function expects. Include plurals for the name
         inpt_bools = [(i in self.expected_types) for i in INPT_NAMES]
         self.logger.info('Function accepts: '
                          f'{[i for i, b in zip(INPT_NAMES, inpt_bools) if b]}')
 
-        # Get the inputs from the selected img_container
-        imgs, msks, trks, arrs = ([(k, v) for k, v in img_container.items()
-                                   if k[1] == i]
-                                  for i in INPT_NAMES)
+        # Assign images from img_container to kwargs
+        kwargs = self._name_helper(img_container, **kwargs)
 
-        # Sort the inputs based on what is requested
+        # Sort stacks into pass_to_func and save expected keys/sizes/types
+        pass_to_func = {}
         keys = []
-        pass_to_func = []
         inpt_size_type = []
-        comb_inputs = zip([imgs, msks, trks, arrs],
-                          inpt_bools,
-                          INPT_NAMES)
-        for inpt, incl, typ in comb_inputs:
-            if incl:
-                # Check how inputs are to be passed
-                if self.as_tuple:
-                    # Inputs are not trimmed or sorted if passed as tuple
-                    pass_to_func.append(tuple([i[1] for i in inpt]))
+        for kw, val in kwargs.items():
+            # Check that this kw is for a Stack
+            try:
+                assert self.type_hints[kw].__name__ in INPT_NAMES
+            except (AttributeError, AssertionError):
+                # Indicates not CellST type
+                continue
+
+            if self.as_tuple:
+                # No trimming of inputs is done if as_tuple
+                if val:
+                    key, stack = zip(*val)
+                    pass_to_func[kw] = tuple(stack)
+                    keys.extend(key)
+                    inpt_size_type.extend([(s.shape, s.dtype)
+                                           for s in stack])
                 else:
-                    # Trim the input based on the number to be passed
-                    # Reverse order so most recent entry is passed first
-                    inpt = inpt[-self.expected_numbers[typ]:][::-1]
-                    pass_to_func.extend([i[1] for i in inpt])
+                    # NOTE: This will overwrite default args. see TODO
+                    pass_to_func[kw] = tuple([])
+            else:
+                if val:
+                    # Pass only one stack, last one in list is newest
+                    key, stack = val.pop()
+                    pass_to_func[kw] = stack
+                    keys.append(key)
+                    inpt_size_type.append((stack.shape, stack.dtype))
 
-                # These are just used for naming and logging, so always flat
-                keys.extend([i[0] for i in inpt])
-                inpt_size_type.extend([(i[1].shape, i[1].dtype) for i in inpt])
-
-        # TODO: Remove this and fix copy_to_output
-        self.input_type_idx = [i for b, i, count
-                               in zip(inpt_bools,
-                                      INPT_NAMES,
-                                      [imgs, msks, trks, arrs])
-                               for c in count if b]
-
-        self.logger.info(f'Selected inputs: {list(zip(keys, inpt_size_type))}')
-
+        self.logger.info(f'Selected inputs: {list(zip(keys, inpt_size_type))} '
+                         f'for kwargs: {list(pass_to_func.keys())}')
+        # Remove inputs that are in pass_to_func so they don't get passed twice
+        kwargs = {k: v for k, v in kwargs.items() if k not in pass_to_func}
         return keys, pass_to_func, kwargs
 
     def _name_helper(self, img_container, **kwargs):
         """
         Finds images the user specified using kwargs
         """
-        new_container = ImageContainer()
+        # Load any names the user supplied in kwargs
+        kwargs_to_load = [(n, t) for n, t in zip(self.expected_names,
+                                                 self.expected_types)
+                          if t in INPT_NAMES and n in kwargs]
+        for kw, exp_typ in kwargs_to_load:
+            # Get the user input
+            names = kwargs[kw]
 
-        for exp_name, exp_typ in zip(self.expected_names, self.expected_types):
-            # First check if user provided the inputs
-            if (exp_name in kwargs) and (exp_typ in INPT_NAMES):
-                # Then check if they provided one name or multiple
-                names = kwargs[exp_name]
-                if names is None:
-                    # User does not want any image passed
-                    names = []
-                elif isinstance(names, str):
-                    # Append the expected type to the name
-                    names = [(names, exp_typ)]
-                else:
-                    names = [(nm, exp_typ) for nm in names]
-
-                # Remove from kwargs
-                del kwargs[exp_name]
-
+            if names is None:
+                # User does not want any image passed
+                names = []
+            elif isinstance(names, str):
+                # Append the expected type to the name
+                names = [(names, exp_typ)]
             else:
-                # If user did not provide name, load all images of exp_typ
-                names = [k for k in img_container if k[1] == exp_typ]
+                # First image given is first image passed
+                names = [(nm, exp_typ) for nm in names]
+                if not self.as_tuple:
+                    warnings.warn('Multiple stacks for a single keyword'
+                                  f'argument is not supported for {self.func}.'
+                                  f'Only {names[0]} will get passed.',
+                                  UserWarning)
 
-            # Load image stack for each name
-            for nm in names:
-                # The names in this container use the INPUT type
-                try:
-                    new_container[nm] = img_container[nm]
-                except KeyError:
-                    # TODO: Add a strict_type option. If False, check for nm
-                    #       of different types.
-                    self.logger.info(f'Available images of type {nm[1]}: '
-                                     f'{[i for i in img_container if i[1] == nm[1]]}')
-                    raise KeyError(f'Could not find input {nm[0]} of '
-                                   f'type {nm[1]} in the inputs to '
-                                   f'function {self.func}')
+            # Load the stacks from img_container and add to kwargs
+            try:
+                # Keep key with image for tracking purposes
+                kwargs[kw] = []
+                for n in names:
+                    kwargs[kw].append((n, img_container.pop(n)))
+            except KeyError:
+                raise KeyError(f'Could not find input {n}.')
 
-        return new_container, kwargs
+        # For unspecified args, load a single list for each type
+        # Oldest stack is first, newest is last
+        img_lists = {i: [(k, v) for k, v in img_container.items()
+                         if k[1] == i]
+                     for i in INPT_NAMES}
+
+        # Load stack lists to kwargs
+        for exp_name, exp_typ in zip(self.expected_names, self.expected_types):
+            if exp_typ in INPT_NAMES and exp_name not in kwargs:
+                kwargs[exp_name] = img_lists[exp_typ]
+
+        return kwargs
 
     def _correct_outputs(self, keys, stack, calling_cls=[]):
+        """Ensures keys and stack match and are in expected format"""
         # Store keys as list if not already
         if isinstance(keys[0], str):
             keys = [keys]
 
-        # If output_type is same out_type = in_type, else defined by function
+        # If output_type is "same" out_type = in_type, else defined by function
         if self.output_type.__name__ != 'same':
             keys = [(k[0], self.output_type.__name__) for k in keys]
 
@@ -263,7 +274,7 @@ class ImageHelper():
 
         # Check that length matches
         if len(stack) < len(keys):
-            # TODO: This doesn't work with Same type output
+            # TODO: This doesn't work with Same type output yet
             # If fewer images than keys, try to match by type
             same_type_keys = [k for k in keys
                               if k[1] == self.output_type.__name__]
@@ -277,8 +288,8 @@ class ImageHelper():
 
         elif len(stack) > len(keys):
             # Returned more images than inpupts... Will deal with if it happens
-            raise ValueError(f'Length of outputs ({len(stack)}) does not '
-                             f'match length of keys ({len(keys)}).')
+            raise ValueError(f'Length of outputs ({len(stack)}) longer '
+                             f'than length of keys ({len(keys)}).')
 
         # Adjust array dimensions if needed
         for n, (k, st) in enumerate(zip(keys, stack)):
@@ -291,47 +302,40 @@ class ImageHelper():
     def _get_calling_logger(self, calling_cls):
         """
         Gets the operation logger to record info about inputs and outputs
-
-        TODO:
-            - I think this could be cleaner
         """
-        if len(calling_cls) > 0:
+        if calling_cls:
             try:
                 logger = calling_cls[0].logger
+                return logging.getLogger(f'{logger.name}.{self.__name__}')
             except AttributeError:
                 return get_null_logger()
 
-            if logger is not None:
-                return logging.getLogger(f'{logger.name}.{self.__name__}')
-            else:
-                return get_null_logger()
-
     def _pass_by_frames(self,
-                        pass_to_func: List,
+                        pass_to_func: Dict,
                         calling_cls: Tuple,
-                        *args, **kwargs
+                        **kwargs
                         ) -> np.ndarray:
         """
         Creates output array and passes individual frames to func
 
         TODO:
             - Is it okay to convert float64 -> float32? or int32 -> int16
-            - So this actually won't work if as_tuple and by_frame
-              are both true, because the sliding window generator
-              isn't set up to accept tuples.
         """
         # Get window generators for each array in pass_to_func
         if self.as_tuple:
-            out_shape = pass_to_func[0][0].shape
-            windows = [self._multiple_sliding_windows(p) for p in pass_to_func]
+            out_shape = next(iter(pass_to_func.values()))[0].shape
+            windows = {p: self._multiple_sliding_windows(v)
+                       for p, v in pass_to_func.items()}
         else:
-            out_shape = pass_to_func[0].shape
-            windows = [sliding_window_generator(p) for p in pass_to_func]
+            out_shape = next(iter(pass_to_func.values())).shape
+            windows = {p: sliding_window_generator(v)
+                       for p, v in pass_to_func.items()}
 
         # zip_longest in case some stacks aren't found
-        # wrapped function should raise an error if needed
-        for fr, win in enumerate(itertools.zip_longest(*windows)):
-            res = self.func(*calling_cls, *win, *args, **kwargs)
+        # wrapped function should raise an error if this is a problem
+        for fr, win in enumerate(zip_longest(*windows.values())):
+            new_win = dict(zip(pass_to_func.keys(), win))
+            res = self.func(*calling_cls, **new_win, **kwargs)
             if not fr:
                 # If first frame, make the output array
                 out = np.empty(out_shape, dtype=res.dtype)
