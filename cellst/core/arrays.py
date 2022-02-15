@@ -180,13 +180,23 @@ class ConditionArray():
             tot_frames = self._arr.shape[_fidx]
 
             # Index a pretend array to figure out how many were requested
-            req_cells = len(np.empty(tot_cells)[idx[_cidx]])
-            req_frames = len(np.empty(tot_frames)[idx[_fidx]])
+            if isinstance(idx[_cidx], int):
+                req_cells = 1
+            else:
+                req_cells = len(np.empty(tot_cells)[idx[_cidx]])
+            if isinstance(idx[_fidx], int):
+                req_frames = 1
+            else:
+                req_frames = len(np.empty(tot_frames)[idx[_fidx]])
             cf = [req_cells, req_frames]
             missing = [s not in out.shape for s in cf]
 
             # Need to add either cells or frames back
-            if any(missing) and not all(missing):
+            if all(missing):
+                # Add to last axis
+                # TODO: Not sure what makes the most sense here
+                out = np.expand_dims(out, -1)
+            elif any(missing):
                 out = np.expand_dims(out, missing.index(True))
 
         return out
