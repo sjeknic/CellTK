@@ -1,3 +1,4 @@
+from itertools import groupby
 from typing import Union
 
 import numpy as np
@@ -27,7 +28,7 @@ class Processor(BaseProcessor):
     """
     @ImageHelper(by_frame=False, as_tuple=True)
     def align_by_cross_correlation(self,
-                                   image: Image,
+                                   image: Image = tuple([]),
                                    mask: Mask = tuple([]),
                                    track: Track = tuple([]),
                                    align_with: str = 'image',
@@ -39,7 +40,11 @@ class Processor(BaseProcessor):
         TODO:
             - Needs to confirm image shapes match before cropping,
               otherwise, on reruns image might be cropped multiple times
+            - Make all inputs optional
         """
+        sizes = [s.shape for s in image + mask + track]
+        assert len(tuple(groupby(sizes))) == 1, 'Stacks must be same shape'
+
         # Image that aligning will be based on - first img in align_with
         to_align = locals()[align_with][0]
 

@@ -320,9 +320,6 @@ class ImageHelper():
 
         TODO:
             - Is it okay to convert float64 -> float32? or int32 -> int16
-            - So this actually won't work if as_tuple and by_frame
-              are both true, because the sliding window generator
-              isn't set up to accept tuples.
         """
         # Get window generators for each array in pass_to_func
         if self.as_tuple:
