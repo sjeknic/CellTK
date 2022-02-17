@@ -88,8 +88,12 @@ def _line_plot(fig: go.Figure,
     """Wrapper for go.Scatter"""
     kwargs, line_kwargs = _parse_kwargs_for_plot_type('line', kwargs)
 
-    # Not sure how to handle this yet...
+    # TODO: Not sure how to handle this yet...
     x = time if time is not None else np.arange(arr.shape[0])
+    # plots one at a time, so arr must be 2D
+    if arr.ndim == 1: arr = np.expand_dims(arr, 0)
+
+    # Set up plot
     lines = []
     showlegend = True
     for idx, y in enumerate(arr):
