@@ -1,6 +1,7 @@
 import itertools
+import functools
 import inspect
-from typing import Collection
+from typing import Collection, Union, Callable
 
 import numpy as np
 import plotly.graph_objects as go
@@ -54,6 +55,28 @@ def plot_groups(arrs: Collection[np.ndarray],
     fig.update_layout(showlegend=legend, template=template, **figure_spec)
 
     return fig
+
+
+def get_timeseries_estimator(func: Union[Callable, str],
+                             *args, **kwargs
+                             ) -> functools.partial:
+    """Returns Callable object that will be applied over time axis
+
+    Args:
+        func: The function to make the estimator from. If str, looks
+            for the function in numpy. Otherwise, uses np.apply_along_axis.
+
+    Returns:
+        functools.partial object of the estimator
+    """
+    if isinstance(func, str):
+        func = getattr(np, func)
+        kwargs.pop('axis', None)  # remove axis kwarg if given
+        return functools.partial(func, axis=0, *args, **kwargs)
+    else:
+        # Need to pass positionally to make it easier to call later
+        return functools.partial(np.apply_along_axis, func, 0,
+                                 *args, **kwargs)
 
 
 def _line_plot(fig: go.Figure,
