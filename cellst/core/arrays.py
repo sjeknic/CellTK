@@ -798,21 +798,42 @@ class ExperimentArray():
         self.__setitem__(key, arr)
 
     def save(self, path: str) -> None:
-        """
-        Saves all the Conditions in Experiment
-        to an hdf5 file.
+        """Saves all the Conditions in Experiment to an hdf5 file.
 
+        Loads the hdf5 file for each condition and then saves them
+        in a single hdf5 file at path. Runs merge_conditions() first
+        to ensure data doesn't get overwritten.
+
+        Args:
+            path: Path to the location where file should be saved
+
+        Returns:
+            None
+
+        Raises:
+            ValueError: If any cell or frame is greater than 2 ** 16
+        """
+        '''
         TODO:
             - Add checking for path and overwrite options
-        """
+            - Add low memory option
+        '''
         f = h5py.File(path, 'w')
+        self.merge_conditions()
         for key, val in self.sites.items():
             # Array data stored as a dataset
             f.create_dataset(key, data=val._arr)
 
             # Axis names and coords stored as attributes
             for coord in val.coords:
-                f[key].attrs[coord] = val.coords[coord]
+                # Cells and frames have the potential to be large, so handle separately
+                if coord in ('frames', 'cells'):
+                    if np.array((val.coords[coord])).max() >= 2 ** 16:
+                        raise ValueError('Cannot save values larger than 16-bit.')
+
+                    f[key].attrs[coord] = np.array(val.coords[coord], dtype=np.uint16)
+                else:
+                    f[key].attrs[coord] = val.coords[coord]
 
         f.close()
 
@@ -827,6 +848,22 @@ class ExperimentArray():
         f = h5py.File(path, "r")
         return cls._build_from_file(f)
 
+    def remove_short_traces(self, min_trace_length: int = 0) -> None:
+        """Applies a filter to each condition to remove cells with
+        fewer good frames than min_trace_length
+
+        Args:
+            min_trace_length: Minimum number of frames allowed
+
+        Returns:
+            None
+        """
+        masks = [v.remove_short_traces(min_trace_length)
+                 for v in self.sites.values()]
+
+        for m, v in zip(masks, self.sites.values()):
+            v.filter_cells(m, delete=True)
+
     def generate_mask(self,
                       function: [Callable, str],
                       metric: str,
@@ -836,8 +873,20 @@ class ExperimentArray():
                       key: str = None,
                       *args, **kwargs
                       ) -> np.ndarray:
-        """
-        Calls generate_mask for each Condition in self.sites
+        """Generates a boolean mask for each Condition
+
+        Args:
+            function:
+            metric:
+            region:
+            channel:
+            frame_rng:
+            key:
+            *args:
+            **kwargs:
+
+        Returns:
+            np.ndarray
         """
         # Build masks in each Condition with the function
         _masks = [v.generate_mask(function, metric, region,
@@ -890,7 +939,7 @@ class ExperimentArray():
 
         return out
 
-    def merge_conditions(self, keys: List[str] = None) -> None:
+    def merge_conditions(self) -> None:
         """
         Concatenate Conditions with matching conditions
 

@@ -1,5 +1,6 @@
-from typing import Collection
 import warnings
+from typing import Collection, Tuple
+
 
 import numpy as np
 
@@ -29,6 +30,7 @@ class Extractor(BaseExtractor):
                                 condition: str = 'default',
                                 position_id: int = None,
                                 min_trace_length: int = 0,
+                                skip_frames: Tuple[int] = tuple([]),
                                 remove_parent: bool = True,
                                 parent_track: int = 0
                                 ) -> Arr:
@@ -103,9 +105,12 @@ class Extractor(BaseExtractor):
             all_measures.insert(0, 'label')
 
         # Get unique cell indexes and the number of frames
+        self.skip_frames = skip_frames
         cells = np.unique(np.concatenate([t[t > 0] for t in tracks_to_use]))
         cell_index = {int(a): i for i, a in enumerate(cells)}
-        frames = range(max([i.shape[0] for i in images]))
+        frames = max([i.shape[0] for i in images])
+        if self.skip_frames: frames += len(self.skip_frames)
+        frames = range(frames)
 
         # Initialize data structure
         array = ConditionArray(regions, channels, all_measures, cells, frames,

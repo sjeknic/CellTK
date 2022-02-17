@@ -33,7 +33,7 @@ class Orchestrator():
                  'operation_index', 'file_extension', 'name',
                  'overwrite', 'save', 'condition_map',
                  'logger', 'controller', 'log_file', 'verbose',
-                 'position_map', '__dict__')
+                 'position_map', 'skip_frames', '__dict__')
 
     def __init__(self,
                  yaml_folder: str = None,
@@ -48,6 +48,7 @@ class Orchestrator():
                  position_map: dict = None,
                  name: str = 'experiment',
                  frame_rng: Tuple[int] = None,
+                 skip_frames: Tuple[int] = None,
                  file_extension: str = 'tif',
                  overwrite: bool = True,
                  log_file: bool = True,
@@ -68,6 +69,7 @@ class Orchestrator():
         # Save some values
         self.name = name
         self.frame_rng = frame_rng
+        self.skip_frames = skip_frames
         self.file_extension = file_extension
         self.overwrite = overwrite
         self.save = save_master_df
@@ -451,6 +453,7 @@ class Orchestrator():
 
                     # Add miscellaneous options
                     self.pipelines[fol]['frame_rng'] = self.frame_rng
+                    self.pipelines[fol]['skip_frames'] = self.skip_frames
                     self.pipelines[fol]['file_extension'] = self.file_extension
                     self.pipelines[fol]['overwrite'] = self.overwrite
                     self.pipelines[fol]['log_file'] = self.log_file

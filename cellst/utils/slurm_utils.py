@@ -193,6 +193,15 @@ class SlurmController(JobController):
                 self._record_job_history(update=True)
                 self.logger.info(f'Current state: \n{self.status}')
 
+        while True:
+            finished = self._ensure_finished()
+            if finished:
+                break
+            else:
+                self.logger.info('Waiting for jobs to finish running. '
+                                 f'Sleeping {10 * self._submit_delay}s.')
+                sleep(10 * self._submit_delay)
+
         self.logger.info('Finished running jobs.')
 
     def user_controls_center(self, *args) -> (str, int):
@@ -220,9 +229,13 @@ class SlurmController(JobController):
                 # Return to launching pipelines
                 break
             elif command in ('q', 'quit'):
-                # Quit the Controller/Orchestrator
-                print('Quitting... \t')
-                sys.exit()
+                confirm = input('\nAre you sure [Y/n]?  ')
+                if confirm == 'Y':
+                    # Quit the Controller/Orchestrator
+                    print('Quitting... \t')
+                    sys.exit()
+                else:
+                    continue
             elif command in ('s', 'status'):
                 # Run status update and print results
                 print('Updating status of jobs... \n')
@@ -317,6 +330,27 @@ class SlurmController(JobController):
         display_string += f'Accounted for: {total} / {self.total_pipes}'
 
         return display_string
+
+    def _ensure_finished(self) -> bool:
+        """Checks to make sure no Pipelines are still in the queue
+
+        Args:
+
+        Returns:
+            True if finished, else False
+        """
+        # Update the current jobs
+        current_jobs = self._get_slurm_info()
+        if current_jobs:
+            return False
+        else:
+            # Check the status of all jobs
+            # Force an update
+            self.last_update_time = 0
+            self._record_job_history(update=True)
+            self.logger.info(f'All jobs appear complete. \n{self.status}')
+
+            return True
 
     def _make_slurm_kwargs(self,
                            partition: List,

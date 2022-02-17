@@ -11,6 +11,7 @@ import tifffile as tiff
 import imageio as iio
 
 from cellst.core.operation import Operation
+from cellst.extract import Extractor
 from cellst.utils._types import Image, Mask, Track, Arr, ImageContainer
 from cellst.utils.process_utils import condense_operations, extract_operations
 from cellst.utils.log_utils import get_logger, get_console_logger
@@ -22,7 +23,6 @@ class Pipeline():
     """
     TODO:
         - file_location should be dir that pipeline was called from
-        - Add calling from the command line
     """
     file_location = os.path.dirname(os.path.realpath(__file__))
     __name__ = 'Pipeline'
@@ -33,7 +33,7 @@ class Pipeline():
                  'operation_index', 'file_extension',
                  'logger', 'timer', 'overwrite',
                  'name', 'log_file', '_split_key',
-                 'completed_ops', '__dict__')
+                 'completed_ops', 'skip_frames', '__dict__')
 
     def __init__(self,
                  parent_folder: str = None,
@@ -44,6 +44,7 @@ class Pipeline():
                  array_folder: str = None,
                  name: str = None,
                  frame_rng: Tuple[int] = None,
+                 skip_frames: Tuple[int] = None,
                  file_extension: str = 'tif',
                  overwrite: bool = True,
                  log_file: bool = True,
@@ -70,6 +71,7 @@ class Pipeline():
         """
         # Save some values in case Pipeline is written as yaml
         self.frame_rng = frame_rng
+        self.skip_frames = skip_frames
         self.overwrite = overwrite
         self.log_file = log_file
         self._split_key = _split_key
@@ -89,12 +91,6 @@ class Pipeline():
         else:
             self.logger = get_console_logger()
 
-        # Copy yaml file to output
-        # if yaml_path:
-        #     targ = os.path.join(self.output_folder, yaml_path.split('/')[-1])
-        #     shutil.move(yaml_path, targ)
-        #     self.logger.info(f'Moved input yaml to: {targ}')
-
         # Prepare for getting operations and images
         self._image_container = ImageContainer()
         self.operations = []
@@ -108,6 +104,10 @@ class Pipeline():
         self.logger.info(f'Mask folder: {self.mask_folder}')
         self.logger.info(f'Track folder: {self.track_folder}')
         self.logger.info(f'Array folder: {self.array_folder}')
+        other_keys = ['name', 'frame_rng', 'skip_frames', 'overwrite', 'log_file',
+                      'file_extension']
+        self.logger.info('Other inputs: '
+                         f'{[(k, getattr(self, k)) for k in other_keys]}')
 
     def __enter__(self) -> None:
         """
@@ -165,7 +165,6 @@ class Pipeline():
 
     def add_operations(self,
                        operation: Collection[Operation],
-                       index: int = -1
                        ) -> None:
         """
         Adds Operations to the Pipeline and recalculates the index
@@ -174,36 +173,23 @@ class Pipeline():
 
         Returns:
 
-        TODO:
-            - Not sure the index results always make sense, best to add all
-              operations at once
         """
         # TODO: Dirty fix - Need to fix this in the master branch
         if isinstance(operation, Operation):
             operation = [operation]
 
-        # Adds operations to self.operations (Collection[Operation])
-        if isinstance(operation, Collection):
-            if all([isinstance(o, Operation) for o in operation]):
-                if index == -1:
-                    self.operations.extend(operation)
-                else:
-                    self.operations[index:index] = operation
-            else:
-                raise ValueError('Not all elements of operation are class Operation.')
-        elif isinstance(operation, Operation):
-            if index == -1:
-                self.operations.append(operation)
-            else:
-                self.operations.insert(index, operation)
-        else:
-            raise ValueError(f'Expected type Operation, got {type(operation)}.')
+        # Ensure we are only adding Operations
+        assert all([isinstance(o, Operation) for o in operation])
+        for o in operation:
+            # Copy skip_frames to Extractor if needed
+            if isinstance(o, Extractor) and self.skip_frames:
+                o._mark_skip_frames(self.skip_frames)
+
+            self.operations.append(o)
 
         # Log changes to the list of operations
-        self.logger.info(f'Added {len(operation)} operations at {index}. '
+        self.logger.info(f'Added {len(operation)} operations.'
                          f'\nCurrent operation list: {self.operations}.')
-
-        self.operation_index = {i: o for i, o in enumerate(self.operations)}
 
     def run(self) -> (Image, Mask, Track, Arr):
         """
@@ -284,6 +270,22 @@ class Pipeline():
                 if arr.ndim != 3:
                     warnings.warn("Expected stack with 3 dimensions."
                                   f"Got {arr.ndim} for {name}", UserWarning)
+
+                if self.skip_frames:
+                    self.logger.info('Adding blank frames for skipped '
+                                     f'frames {self.skip_frames}')
+                    # Build new array with more frames
+                    new_arr_shape = arr.shape[0] + len(self.skip_frames)
+                    new_arr_shape = tuple([new_arr_shape, *arr.shape[1:]])
+                    new_arr = np.zeros(new_arr_shape, dtype=arr.dtype)
+
+                    # Make a mask so the bad frames are not updated
+                    bool_mask = np.ones(new_arr_shape[0], dtype=bool)
+                    bool_mask[np.array(self.skip_frames)] = False
+
+                    # Add the frames back and overwrite arr
+                    new_arr[bool_mask, ...] = arr
+                    arr = new_arr
 
                 # Set length of index based on total number of frames
                 zrs = len(str(arr.shape[0]))
@@ -430,6 +432,11 @@ class Pipeline():
                 warnings.warn(f'Did not understand range {self.frame_rng},'
                               f' got Exception {e}. \n', UserWarning)
             finally:
+                if self.skip_frames:
+                    self.logger.info(f'Not loading frames {self.skip_frames}.')
+                    im_names = [i for n, i in enumerate(im_names)
+                                if n not in self.skip_frames]
+
                 self.logger.info(f'Expecting to load {len(im_names)} images.')
 
         return im_names
@@ -609,7 +616,7 @@ class Pipeline():
         init_params = ('parent_folder', 'output_folder', 'image_folder',
                        'mask_folder', 'track_folder', 'array_folder',
                        'overwrite', 'file_extension', 'log_file', 'name',
-                       'frame_rng', '_split_key')
+                       'frame_rng', 'skip_frames', '_split_key')
         pipe_dict = {att: getattr(self, att) for att in init_params}
 
         # Add Operations to dict

@@ -4,6 +4,7 @@ import logging
 import time
 import inspect
 import itertools
+from copy import deepcopy
 from typing import (Collection, Tuple, Callable,
                     List, Dict, Generator, Union)
 
@@ -618,6 +619,7 @@ class BaseExtractor(Operation):
                  output: str = 'data_frame',
                  save: bool = True,
                  force_rerun: bool = True,
+                 skip_frames: Tuple[int] = tuple([]),
                  _output_id: Tuple[str] = None,
                  **kwargs
                  ) -> None:
@@ -646,7 +648,8 @@ class BaseExtractor(Operation):
         # These kwargs get passed to self.extract_data_from_image
         kwargs = dict(channels=channels, regions=regions, lineages=lineages,
                       condition=condition, min_trace_length=min_trace_length,
-                      remove_parent=remove_parent, position_id=position_id)
+                      remove_parent=remove_parent, position_id=position_id,
+                      skip_frames=skip_frames)
         # Add extract_data_from_image
         # functions are expected to be (func, save_as, user_type, kwargs)
         self.functions = [tuple(['extract_data_from_image', output, None, kwargs])]
@@ -741,11 +744,22 @@ class BaseExtractor(Operation):
         self._metric_idx = {k: i for i, k in enumerate(all_metrics)}
 
         # Build output
-        out = np.empty((image.shape[0], len(all_metrics), len(cell_index)))
+        frames = image.shape[0] + len(self.skip_frames)
+        out = np.empty((frames, len(all_metrics), len(cell_index)))
         # TODO: Add option to use different pad
         out[:] = np.nan
 
-        for frame in range(image.shape[0]):
+        # adj_frame accounts for skip_frames
+        adj_frame = 0
+        for _frame in range(frames):
+            if _frame in self.skip_frames:
+                adj_frame += 1
+                continue
+            else:
+                frame = _frame - adj_frame
+                # This should never fail
+                assert frame >= 0
+
             # Extract metrics from each region in frame
             rp = meas.regionprops_table(mask[frame], image[frame],
                                         properties=metrics,
@@ -781,7 +795,7 @@ class BaseExtractor(Operation):
                         pass
 
                 # Save frame data
-                out[frame, :, cell_index[lab]] = frame_data[:, n]
+                out[_frame, :, cell_index[lab]] = frame_data[:, n]
 
         return np.moveaxis(out, 0, -1)
 
@@ -862,6 +876,26 @@ class BaseExtractor(Operation):
                                        *f['args'], **f['kwargs'])
             array.filter_cells(mask, delete=True)
             self.logger.info(f"Post-filter array size: {array.shape}")
+
+    def _mark_skip_frames(self, skip_frames: Tuple[int] = None) -> None:
+        """Marks any frames that should not be included
+
+        Args:
+            skip_frames: The frames to be skipped
+
+        Returns:
+            None
+        """
+        if skip_frames:
+            self.logger.info(f'Marking bad frames {skip_frames}')
+            # Mark the frames in the kwargs that are passed to extract_data
+            new_kwargs = deepcopy(self.functions[-1][-1])
+            new_kwargs['skip_frames'] = skip_frames
+
+            # Functions are tuple, so make a copy to use
+            new_func = [*self.functions[-1]]
+            new_func[-1] = new_kwargs
+            self.functions = [tuple(new_func)]
 
     def add_extra_metric(self, name: str, func: Callable = None) -> None:
         """
@@ -984,6 +1018,7 @@ class BaseExtractor(Operation):
         self.logger.info(f"Metrics: {self._metrics}")
         self.logger.info(f"Added metrics: {list(self._props_to_add.keys())}")
         self.logger.info(f"Condition: {kwargs['condition']}")
+        self.logger.info(f"Skipped frames: {kwargs['skip_frames']}")
 
         return super().run_operation(inputs)
 
