@@ -1,13 +1,15 @@
+import os
 import warnings
 import itertools
-from typing import List, Tuple, Dict, Callable, Collection
+import functools
+from typing import List, Tuple, Dict, Callable, Collection, Union
 
 import h5py
 import numpy as np
 import plotly.graph_objects as go
 
 import cellst.utils.filter_utils as filt
-from cellst.utils.plot_utils import plot_groups
+from cellst.utils.plot_utils import plot_groups, get_timeseries_estimator
 
 
 class ConditionArray():
@@ -201,16 +203,18 @@ class ConditionArray():
 
         return out
 
-    def _convert_keys_to_index(self, key) -> Tuple[(int, slice)]:
+    def _convert_keys_to_index(self,
+                               key: Tuple[(str, slice)]
+                               ) -> Tuple[(int, slice)]:
         """
         Converts strings and slices given in key to the saved
         dimensions and coordinates of self._xarr.
 
         Args:
-            - key: tuple(slices)
+            - key:
 
         Returns:
-            tuple(slices)
+            Converted keys containing no strings
 
         NOTE: integer indices are best provided last. If they are
               provided first, they will possibly get overwritten if
@@ -998,42 +1002,71 @@ class ExperimentArray():
                 self.sites[cond][:] = new_arr
 
     def plot_by_condition(self,
-                          keys: Tuple[str],
+                          keys: List[Tuple[str]],
+                          conditions: Collection[str] = None,
+                          estimator: Union[Callable, str, functools.partial] = None,
                           title: str = None,
                           x_label: str = None,
                           y_label: str = None,
                           x_range: Tuple[float] = None,
                           y_range: Tuple[float] = None,
                           layout_spec: dict = {},
+                          show: bool = False,
+                          save: str = None,
                           ) -> go.Figure:
         """
+        rename to be like time_plot or something
         keys must return a 2D arr for this to work.
         TODO: More generic way to group conditions
         TODO: Add option to save figures
         """
         # Get the data to plot
         keys = tuple(keys) if not isinstance(keys, tuple) else keys
+        conditions = conditions if conditions else self.conditions
+
+        # Get the data to plot
         arrs = self[keys]
-        conds = self.conditions
+        if isinstance(estimator, functools.partial):
+            # Assume the estimator is good to go
+            arrs = [estimator(arr) for arr in arrs]
+        elif isinstance(estimator, (Callable, str)):
+            # Assume partial is needed
+            estimator = get_timeseries_estimator(estimator)
+            arrs = [estimator(arr) for arr in arrs]
+
         # Assume all conditions have the same time
         time = self.time[0]
 
         # Make the base plot
-        fig = plot_groups(arrs, conds, time=time)
+        fig = plot_groups(arrs, conditions, time=time)
 
         # Update the figure layout
         fig.update_xaxes(title=x_label, range=x_range)
         fig.update_yaxes(title=y_label, range=y_range)
         fig.update_layout(title=title, **layout_spec)
 
-        fig.show()
+        if show:
+            fig.show()
+        if save:
+            # Determines fig type based on extension
+            html = save.split('.')[-1] == 'html'
+            if html:
+                config = {'toImageButtonOptions': {
+                            'format': 'svg',
+                            'filename': 'figure',
+                            'scale': 1
+                            }
+                         }
+                fig.write_html(save, config=config)
+            else:
+                fig.write_image(save)
 
         return fig
 
     @classmethod
     def _build_from_file(cls, f: h5py.File) -> 'ExperimentArray':
         """
-        Given an hdf5 file, returns a Experiment instance
+        Given an hdf5 file, returns a ExperimentArray instance
         """
         pos = ExperimentArray()
         for key in f:
