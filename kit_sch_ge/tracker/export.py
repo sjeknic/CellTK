@@ -126,11 +126,13 @@ class ExportResults:
 
         t_max = sorted(list(tracks_in_frame.keys()))[-1]
         z_fill = np.int(np.ceil(max(np.log10(max(1, t_max)), 3)))  # either 3 or 4 digits long frame id
+        squeezed_img_shape = np.array(img_shape)  # remove single channels
+        squeezed_img_shape = tuple(squeezed_img_shape[squeezed_img_shape > 1])
         for time, track_ids in tracks_in_frame.items():
-            tracking_mask = create_tracking_mask_image(all_tracks, time, track_ids, img_shape)
+            tracking_mask = create_tracking_mask_image(all_tracks, time, track_ids, squeezed_img_shape)
 
             file_name = self.img_file_name + str(time).zfill(z_fill) + self.img_file_ending
-            tracking_mask = np.array(np.squeeze(tracking_mask), dtype=np.uint16)
+            tracking_mask = np.array(np.squeeze(tracking_mask), dtype=np.uint16).reshape(img_shape)
             imsave(os.path.join(export_dir, file_name), tracking_mask, compress=1)
 
 

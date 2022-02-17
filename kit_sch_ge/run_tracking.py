@@ -20,7 +20,7 @@ def run_tracker(img_path, segm_path, res_path, delta_t=3, default_roi_size=2):
     # assume img shape z,x,y
     dummy = np.squeeze(imread(segm_files[max(segm_files.keys())]))
     img_shape = dummy.shape
-    masks = get_indices_pandas(imread(segm_files[max(segm_files.keys())]))
+    masks = get_indices_pandas(imread(segm_files[max(segm_files.keys())]).squeeze())
     m_shape = np.stack(masks.apply(lambda x: np.max(np.array(x), axis=-1) - np.min(np.array(x), axis=-1) +1))
 
     if len(img_shape) == 2:
@@ -37,8 +37,9 @@ def run_tracker(img_path, segm_path, res_path, delta_t=3, default_roi_size=2):
     tracker = MultiCellTracker(config)
     tracks = tracker()
 
+    segm_mask_shape = imread(segm_files[max(segm_files.keys())]).shape
     exporter = ExportResults()
-    exporter(tracks, res_path, tracker.img_shape, time_steps=sorted(img_files.keys()))
+    exporter(tracks, res_path, segm_mask_shape, time_steps=sorted(img_files.keys()))
 
 
 if __name__ == '__main__':

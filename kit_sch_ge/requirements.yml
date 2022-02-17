@@ -10,7 +10,7 @@ dependencies:
   - scikit-learn=0.23.2
   - scikit-image=0.17.2
   - cvxopt=1.2.0
-  - gurobi=9.1.1
+  - gurobi=9.0.3
   - pip=21.0.1
   - imagecodecs=2021.1.11
 

@@ -25,7 +25,8 @@ def add_dummy_masks(all_tracks, img_shape):
     Returns: dict containing all trajectories
 
     """
-    img_shape = np.array(img_shape).reshape(-1, 1)
+    img_shape = np.array(img_shape)
+    img_shape_squeezed = img_shape[img_shape > 1].reshape(-1, 1)
     for track_id in all_tracks.keys():
         track = all_tracks[track_id]
         time_steps = np.array(sorted(track.masks.keys()))
@@ -46,7 +47,7 @@ def add_dummy_masks(all_tracks, img_shape):
                            for t_s, t_e, t_span in zip(t_start, t_end, time_span)
                            for tt in range(1, t_span)}
             # mask pixels must lay in img 0...img_shape, neg indices lead to placement on other side of array
-            dummy_masks = {k: tuple(mask[..., np.all((mask > 0) & (mask < np.repeat(img_shape,
+            dummy_masks = {k: tuple(mask[..., np.all((mask > 0) & (mask < np.repeat(img_shape_squeezed,
                                                                                     mask.shape[-1],
                                                                                     axis=-1)),
                                                      axis=0)])
