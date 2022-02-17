@@ -1,18 +1,41 @@
 import itertools
 import functools
 import inspect
-from typing import Collection, Union, Callable
+from typing import Collection, Union, Callable, Generator, Tuple
 
 import numpy as np
 import plotly.graph_objects as go
 import plotly.subplots as psub
 import plotly.colors as pcol
 import plotly.io as pio
+import colorcet as cc
+
+"""
+Need some notes for myself, because this is still very hackish, but I
+don't have a good idea of how I'd rather set it up. I do know that I want
+to be able to make a variety of plots. And instead of passing errors and arrs
+around everywhere, they probably only apply to certain plots...
+
+Plotting functions I want:
+    - lines
+    - lines + shaded area (e.g. sns.tsplot)
+    - lines + shaded lines (e.g. eidos model traces)
+    - scatter
+    - scatter cluster
+    - distributions
+
+
+Need easier way to specify:
+    = line colors
+    - conditions (maybe in array can have conditions_2_keys or something??)
+
+"""
 
 
 def plot_groups(arrs: Collection[np.ndarray],
                 keys: Collection[str] = [],
                 colors: (str, Collection) = [],
+                err_arrs: Collection[np.ndarray] = [],
                 kind: str = 'line',
                 time: np.ndarray = None,
                 legend: bool = True,
@@ -24,6 +47,9 @@ def plot_groups(arrs: Collection[np.ndarray],
     Wrapper for plotly functions
 
     Assume each row in arr is a sample
+
+    TODO:
+        - This is currently set up a bit more like a private function
     """
     # Get the plotting function
     try:
@@ -32,7 +58,8 @@ def plot_groups(arrs: Collection[np.ndarray],
         raise KeyError(f'Could not find function {kind}.')
 
     # Get the color scale to use
-    colorscale = getattr(pcol.qualitative, DEF_COLORS)
+    # colorscale = getattr(pcol.qualitative, DEF_COLORS)
+    colorscale = list(cc.glasbey_dark)
     if colors:
         if isinstance(colors, str):
             colorscale = pcol.get_colorscale(colors)
@@ -43,16 +70,18 @@ def plot_groups(arrs: Collection[np.ndarray],
 
     # Make the plot and add the data
     fig = go.Figure()
-    for idx, (arr, key) in enumerate(itertools.zip_longest(arrs, keys)):
+    for idx, data in enumerate(itertools.zip_longest(arrs, err_arrs, keys)):
+        arr, err_arr, key = data
         if not key:
             key = idx
 
         # Add information to figure
         kwargs.update({'color': colorscale[idx]})
-        fig = plot_func(fig, arr, key, time, *args, **kwargs)
+        fig = plot_func(fig, arr, err_arr, key, time, *args, **kwargs)
 
+    # Update figure after it is made
     template = template if template else DEF_TEMPLATE
-    fig.update_layout(showlegend=legend, template=template, **figure_spec)
+    fig.update_layout(showlegend=legend, template=template) #, **figure_spec)
 
     return fig
 
@@ -69,9 +98,11 @@ def get_timeseries_estimator(func: Union[Callable, str],
     Returns:
         functools.partial object of the estimator
     """
+    # Remove axis kwarg from kwargs
+    kwargs = {k: v for k, v in kwargs.items() if k != 'axis'}
+
     if isinstance(func, str):
         func = getattr(np, func)
-        kwargs.pop('axis', None)  # remove axis kwarg if given
         return functools.partial(func, axis=0, *args, **kwargs)
     else:
         # Need to pass positionally to make it easier to call later
@@ -81,11 +112,15 @@ def get_timeseries_estimator(func: Union[Callable, str],
 
 def _line_plot(fig: go.Figure,
                arr: np.ndarray,
+               err_arr: np.ndarray = None,
                label: str = None,
                time: np.ndarray = None,
                *args, **kwargs
                ) -> go.Figure:
-    """Wrapper for go.Scatter"""
+    """Wrapper for go.Scatter
+
+    https://plotly.com/python/continuous-error-bars/
+    """
     kwargs, line_kwargs = _parse_kwargs_for_plot_type('line', kwargs)
 
     # TODO: Not sure how to handle this yet...
@@ -108,9 +143,36 @@ def _line_plot(fig: go.Figure,
                        name=label, *args, **kwargs)
         )
 
+        if err_arr is not None:
+            if err_arr.ndim == 1:
+                # Assume it's both high and low
+                hi = y + err_arr
+                lo = y - err_arr
+                lines.append(
+                    go.Scatter(x=np.hstack([x, x[::-1]]),
+                               y=np.hstack([hi, lo[::-1]]), fill='tozerox',
+                               fillcolor=_hex_to_rgba(line_kwargs['color'], 0.25),
+                               showlegend=False, legendgroup=label,
+                               name=label, line=dict(color='rgba(255,255,255,0)'),
+                               hoverinfo='skip')
+                )
+
     fig.add_traces(lines)
 
     return fig
+
+
+def _color_generator(colors) -> Generator:
+    """"""
+    pass
+
+
+def _hex_to_rgba(color, alpha=1.0) -> Tuple:
+    """Converst hexcode colors to RGBA to allow transparency"""
+    color = color.lstrip('#')
+    col_rgba = list(int(color[i:i+2], 16) for i in (0, 2, 4))
+    col_rgba.extend([alpha])
+    return 'rgba' + str(tuple(col_rgba))
 
 
 def _parse_kwargs_for_plot_type(func: str, kwargs: dict) -> dict:

@@ -696,7 +696,7 @@ class ExperimentArray():
         """
         try:
             # First try to return a site the user requested
-            if isinstance(key, tuple):
+            if isinstance(key, (tuple, list)):
                 return self._CondIndexer([self.sites[k] for k in key])
             else:
                 return self.sites[key]
@@ -727,7 +727,7 @@ class ExperimentArray():
         return [v.dtype for v in self.sites.values()]
 
     @property
-    def conditions(self):
+    def conditions(self) -> List:
         return [v.name for v in self.sites.values()]
 
     @property
@@ -1005,6 +1005,7 @@ class ExperimentArray():
                           keys: List[Tuple[str]],
                           conditions: Collection[str] = None,
                           estimator: Union[Callable, str, functools.partial] = None,
+                          err_estimator: Union[Callable, str, functools.partial] = None,
                           title: str = None,
                           x_label: str = None,
                           y_label: str = None,
@@ -1025,7 +1026,19 @@ class ExperimentArray():
         conditions = conditions if conditions else self.conditions
 
         # Get the data to plot
-        arrs = self[keys]
+        arrs = self[conditions][keys]
+
+        # If error estimator, it needs to be calculated before estimator
+        err_arrs = []
+        if isinstance(err_estimator, functools.partial):
+            # Assume the err_estimator is good to go
+            err_arrs = [err_estimator(arr) for arr in arrs]
+        elif isinstance(err_estimator, (Callable, str)):
+            # Assume partial is needed
+            err_estimator = get_timeseries_estimator(err_estimator)
+            err_arrs = [err_estimator(arr) for arr in arrs]
+
+        # Apply the other estimator now
         if isinstance(estimator, functools.partial):
             # Assume the estimator is good to go
             arrs = [estimator(arr) for arr in arrs]
@@ -1034,11 +1047,9 @@ class ExperimentArray():
             estimator = get_timeseries_estimator(estimator)
             arrs = [estimator(arr) for arr in arrs]
 
-        # Assume all conditions have the same time
         time = self.time[0]
-
         # Make the base plot
-        fig = plot_groups(arrs, conditions, time=time)
+        fig = plot_groups(arrs, conditions, err_arrs=err_arrs, time=time)
 
         # Update the figure layout
         fig.update_xaxes(title=x_label, range=x_range)
