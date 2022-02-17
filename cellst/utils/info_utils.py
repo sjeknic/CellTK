@@ -172,3 +172,19 @@ def subset_array(self,
         subset_arr[subset_arr < 0] = 0
 
     return subset_arr
+
+def nan_helper(y: np.ndarray) -> np.ndarray:
+    """Linear interpolation of nans in a 1D array."""
+    return np.isnan(y), lambda z: z.nonzero()[0]
+
+
+def nan_helper_2d(arr: np.ndarray) -> np.ndarray:
+    """Linear interpolation of nans along rows in 2D array."""
+    temp = np.zeros(arr.shape)
+    temp[:] = np.nan
+    for n, y in enumerate(arr.copy()):
+        nans, z = nan_helper(y)
+        y[nans] = np.interp(z(nans), z(~nans), y[~nans])
+        temp[n, :] = y
+
+    return temp

@@ -10,6 +10,7 @@ import plotly.graph_objects as go
 
 import cellst.utils.filter_utils as filt
 from cellst.utils.plot_utils import plot_groups, get_timeseries_estimator
+from cellst.utils.info_utils import nan_helper_2d
 
 
 class ConditionArray():
@@ -640,6 +641,20 @@ class ConditionArray():
         for nk in new_keys:
             self[nk] = data
 
+    def interpolate_nans(self, keys: Collection[tuple] = None) -> None:
+        """Linear interpolation of nans in each row
+
+        Args:
+
+        Returns:
+        """
+        if not keys:
+            keys = self.keys
+
+        for k in keys:
+            k = tuple(k)
+            self[k] = nan_helper_2d(self[k])
+
 
 class ExperimentArray():
     """
@@ -1000,6 +1015,16 @@ class ExperimentArray():
                 self.sites[cond] = ConditionArray(**coords, name=cond,
                                                   time=cond_arrs[0].time)
                 self.sites[cond][:] = new_arr
+
+    def interpolate_nans(self, keys: Collection[tuple] = None) -> None:
+        """Linear interpolation of nans in each row
+
+        Args:
+
+        Returns:
+        """
+        for v in self.sites.values():
+            v.interpolate_nans(keys)
 
     def plot_by_condition(self,
                           keys: List[Tuple[str]],
