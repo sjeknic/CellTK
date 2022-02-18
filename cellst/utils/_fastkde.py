@@ -4,7 +4,7 @@ import numpy as np
 # Some helper functions that I wrote
 # NOTE: Not sure this gaussian kernel is actually correct
 def gaussian_kernel(x, y, bandwidth=1):
-    return np.exp(-1. * np.linalg.norm((x-y), ord=1) ** 2 / (2 * bandwidth ** 2))
+    return np.exp(np.linalg.norm((x-y), ord=2) ** 2 / (-bandwidth ** 2))
 
 
 # The code below this line was written by Arturs Backurs, Piotr Indyk and Tal Wagner.
@@ -89,6 +89,7 @@ class FastLaplacianKDE:
         self.dimension = dataset.shape[1]
         self.bandwidth = bandwidth
         self.L = L
+
         self.sizes = np.random.binomial(self.n_points, L*1./self.n_points, self.L)
         random_samples = [np.random.choice(self.n_points, self.sizes[j], replace=False) for j in range(self.L)]
 
