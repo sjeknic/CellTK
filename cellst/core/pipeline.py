@@ -12,7 +12,7 @@ import imageio as iio
 
 from cellst.core.operation import Operation
 from cellst.extract import Extractor
-from cellst.utils._types import Image, Mask, Track, Arr, ImageContainer
+from cellst.utils._types import Image, Mask, Track, Arr, ImageContainer, INPT_NAMES
 from cellst.utils.process_utils import condense_operations, extract_operations
 from cellst.utils.log_utils import get_logger, get_console_logger
 from cellst.utils.file_utils import (save_operation_yaml, save_pipeline_yaml,
@@ -209,6 +209,8 @@ class Pipeline():
         with self:
             # Determine needed inputs and outputs and load to container
             inputs, outputs = self._input_output_handler()
+            inputs = [self._add_subdirs_to_keys(i) for i in inputs]
+            outputs = [self._add_subdirs_to_keys(o) for o in outputs]
             self._load_images_to_container(self._image_container, inputs, outputs)
 
             for inpts, otpts, oper in zip(inputs, outputs, self.operations):
@@ -441,6 +443,60 @@ class Pipeline():
 
         return im_names
 
+    def _add_subdirs_to_keys(self,
+                             keys: Collection[Tuple[str]]
+                             ) -> Collection[Tuple[str]]:
+        """"""
+        out = []
+        for kidx, key in enumerate(keys):
+            fol = [self.output_folder]
+            new_keys = []
+            stack_type = None
+            try:
+                # Try to get the folder to load
+                fol.append(getattr(self, f'{key[1]}_folder'))
+            except AttributeError:
+                # Otherwise just checks output folder
+                pass
+
+            # Look for directories that match the key
+            for f in fol:
+                for lvl, (pth, dirs, files) in enumerate(os.walk(f)):
+                    if pth.split('/')[-1] == key[0] and dirs:
+                        # Parent directory matches the key
+                        # Subdirectories indicate multiple outputs returned
+                        for d in dirs:
+                            # Infer type from file names
+                            f_names = [
+                                f.split('.')[0]
+                                for f in os.listdir(os.path.join(pth, d))
+                                if os.path.isfile(os.path.join(pth, d, f))
+                                and not f.startswith('.')
+                            ]
+                            for i in INPT_NAMES:
+                                if all([i in f for f in f_names]):
+                                    # This is the type then
+                                    stack_type = i
+                                    break
+
+                            # Check if type was found
+                            stack_type = stack_type if stack_type else key[1]
+                            new_keys.append(
+                                (f'{key[0]}{self._split_key}{d}', stack_type)
+                            )
+                        break
+
+                # If something was found, don't check remaining folders
+                if new_keys: break
+
+            # Add new_keys if found, otherwise old keys
+            if new_keys:
+                out.extend(new_keys)
+            else:
+                out.append(key)
+
+        return out
+
     def _load_images_to_container(self,
                                   container: ImageContainer,
                                   inputs: Collection[tuple],
@@ -471,11 +527,12 @@ class Pipeline():
 
         for key in to_load:
             try:
+                # Try to get the folder to load
                 fol = getattr(self, f'{key[1]}_folder')
+                pths = self._get_image_paths(fol, key)
             except AttributeError:
-                continue
-
-            pths = self._get_image_paths(fol, key)
+                fol = ''
+                pths = []
 
             if not pths:
                 # If no images are found in the path, check output_folder
@@ -520,14 +577,14 @@ class Pipeline():
                 container[key] = img_stack
 
                 self.logger.info(f'Images loaded. shape: {img_stack.shape}, '
-                                 f'type: {img_stack.dtype}.')
+                                 f'type: {img_stack.dtype}, key: {key}.')
 
         self.logger.info(f'Images loaed: {[list(container.keys())]}.')
 
         return container
 
     def _get_images_from_container(self,
-                                   input_keys: Collection[Collection],
+                                   input_keys: Collection[Tuple[str]],
                                    ) -> ImageContainer:
         """
         Checks for key in the image container and returns the corresponding stacks
