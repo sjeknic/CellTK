@@ -115,6 +115,17 @@ class Processor(BaseProcessor):
         return ndi.gaussian_laplace(image, sigma)
 
     @ImageHelper(by_frame=True)
+    def uniform_filter(self,
+                       image: Image,
+                       size: int = 3,
+                       mode: str = 'reflect',
+                       cval: int = 0
+                       ) -> Image:
+        """"""
+        return ndi.uniform_filter(image, size=size,
+                                  mode=mode, cval=cval)
+
+    @ImageHelper(by_frame=True)
     def rolling_ball_background_subtract(self,
                                          image: Image,
                                          radius: float = 100,
