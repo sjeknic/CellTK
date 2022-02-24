@@ -1,4 +1,4 @@
-from typing import Tuple, Union
+from typing import Tuple, Union, Collection
 
 import numpy as np
 import skimage.measure as meas
@@ -23,6 +23,7 @@ class Segmenter(BaseSegmenter):
         - Add more cytoring functions (thres, adaptive_thres, etc.)
         - Add levelset segmentation
         - Add mahotas/watershed_distance
+        - Make stand-alone fill_holes function
     """
     @ImageHelper(by_frame=True)
     def clean_labels(self,
@@ -127,14 +128,22 @@ class Segmenter(BaseSegmenter):
     def multiotsu_thres(self,
                         image: Image,
                         classes: int = 2,
+                        roi: Union[int, Collection[int]] = None,
                         nbins: int = 256,
                         hist: np.ndarray = None
                         ) -> Mask:
-        """
-        """
+        """"""
         thres = filt.threshold_multiotsu(image, classes, nbins,
                                          hist=hist)
-        return np.digitize(image, bins=thres).astype(np.uint16)
+        out = np.digitize(image, bins=thres).astype(np.uint8)
+
+        # If roi is given, filter the other regions, otherwise return all
+        if roi is not None:
+            roi = tuple([int(roi)]) if isinstance(roi, (int, float)) else roi
+            for r in roi:
+                out[out != r] = 0
+
+        return out
 
     @ImageHelper(by_frame=True)
     def random_walk_segmentation(self,
@@ -290,7 +299,7 @@ class Segmenter(BaseSegmenter):
             vor_mask = np.zeros(image.shape, dtype=bool)
         else:
             # Get Voronoi boundaries to use to separate objects
-            vor_mask = voronoi_boundaries(seeds, thinner=False)
+            vor_mask = voronoi_boundaries(seeds, thin=False)
 
         # Apply threshold to image. Should this happen before or after???
         if thres:
@@ -497,8 +506,7 @@ class Segmenter(BaseSegmenter):
             dims = (image.shape[1], image.shape[2], channels)
 
             self.model = UNetModel(dimensions=dims,
-                                   weight_path=weight_path,
-                                   model='unet')
+                                   weight_path=weight_path)
 
         # Pre-allocate output memory
         # TODO: Incorporate the batch here.
