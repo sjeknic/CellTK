@@ -496,7 +496,7 @@ class Segmenter(BaseSegmenter):
                 raise ValueError(f'Did not understand region of interest {roi}.')
 
         # Only import tensorflow and Keras if needed
-        from cellst.utils.unet_model import UNetModel
+        from cellst.utils.unet_model import FluorUNetModel
 
         if not hasattr(self, 'model'):
             '''NOTE: If we had mulitple colors, then image would be 4D here.
@@ -505,8 +505,8 @@ class Segmenter(BaseSegmenter):
             channels = 1
             dims = (image.shape[1], image.shape[2], channels)
 
-            self.model = UNetModel(dimensions=dims,
-                                   weight_path=weight_path)
+            self.model = FluorUNetModel(dimensions=dims,
+                                        weight_path=weight_path)
 
         # Pre-allocate output memory
         # TODO: Incorporate the batch here.
