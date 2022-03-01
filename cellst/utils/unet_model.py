@@ -8,7 +8,7 @@ from sklearn.preprocessing import MinMaxScaler, MaxAbsScaler
 from tensorflow.keras.layers import (Conv1D, MaxPooling1D, UpSampling1D,
                                      Conv2D, MaxPooling2D, UpSampling2D,
                                      BatchNormalization, Input, Activation,
-                                     Concatenate)
+                                     Concatenate, Layer)
 from tensorflow.keras import backend as K
 from keras.layers.advanced_activations import LeakyReLU
 import tensorflow.keras.models
@@ -17,8 +17,6 @@ from cellst.utils._types import Image
 
 
 # TODO: Write docstring explaining kwargs
-# TODO: Padding should use PadHelper
-# TODO: Add Original UNetModel Structure
 class _UNetStructure():
     _model_kws = {}
     _alpha = 0.3
@@ -29,7 +27,13 @@ class _UNetStructure():
                  ) -> None:
         # Build model
         adj_dim = self.pad_model_dimension(dimensions, self._model_kws['steps'])
-        self.model = self._build_model(adj_dim, **self._model_kws)
+        input_layer, output_layer = self._build_model(adj_dim, **self._model_kws)
+        self.model = self._compile_model(input_layer, output_layer)
+
+        # Make model not trainable - prevents some problems with loading weights
+        for n, l in enumerate(self.model.layers):
+            self.model.layers[n].trainable = False
+
         self.model.load_weights(weight_path)
 
     @classmethod
@@ -68,7 +72,7 @@ class _UNetStructure():
             activation = lambda x: LeakyReLU(alpha=cls._alpha)(x)
 
         # TODO: Any args that change need to be passed around
-        def _add_pool_module(input_layer,
+        def _add_pool_module(input_layer: Layer,
                              init_filters: int = 64):
             trans_layers = []
             filt = init_filters
@@ -87,7 +91,7 @@ class _UNetStructure():
 
             return input_layer, trans_layers
 
-        def _add_up_module(input_layer,
+        def _add_up_module(input_layer: Layer,
                            init_filters: int = 256,
                            trans_layers: list = []):
             # trans_layers starts at the top of the model,
@@ -109,7 +113,7 @@ class _UNetStructure():
 
             return input_layer
 
-        def _add_conv_module(input_layer, filt: int = 64):
+        def _add_conv_module(input_layer: Layer, filt: int = 64):
             """
             Build successive Conv-BatchNorm layers
             """
@@ -139,9 +143,15 @@ class _UNetStructure():
         y = conv_layer(filters=classes, kernel_size=1, strides=1,
                        activation=activation, padding=padding)(y)
 
-        # y = Activation('softmax')(y)
+        return x, y
 
-        return tensorflow.keras.models.Model(x, y)
+    @classmethod
+    def _compile_model(cls,
+                       input_layer: Layer,
+                       output_layer: Layer
+                       ) -> tensorflow.keras.models.Model:
+        """"""
+        return tensorflow.keras.models.Model(input_layer, output_layer)
 
     def _calculate_pads(self,
                         shape: Tuple[int],
@@ -209,7 +219,7 @@ class _UNetStructure():
         return tuple([int(s + sum(p)) for s, p in zip(shape, pads)])
 
 
-class UNetModel(_UNetStructure):
+class FluorUNetModel(_UNetStructure):
     """
     TODO:
         - Rename
@@ -220,8 +230,8 @@ class UNetModel(_UNetStructure):
         - Should there be a base model class and then subclasses for UNet v UPeak?
     """
     _model_kws = dict(classes=3, kernel=(3, 3), steps=3, layers=2,
-                 init_filters=64, transfer=True, activation='relu',
-                 padding='same', mode=0, momentum=0.9)
+                      init_filters=64, transfer=True, activation='relu',
+                      padding='same', mode=0, momentum=0.9)
 
     def predict(self,
                 image: Image = None,
@@ -319,6 +329,12 @@ class UNetModel(_UNetStructure):
         return image
 
 
+class OrigUNetModel(FluorUNetModel):
+    _model_kws = dict(classes=3, kernel=(3, 3), steps=4, layers=2,
+                      init_filters=64, transfer=True, activation='relu',
+                      padding='same', mode=0, momentum=0.9)
+
+
 class UPeakModel(_UNetStructure):
     """
     The user needs to know the input dimensions that correspond
@@ -329,8 +345,6 @@ class UPeakModel(_UNetStructure):
     0 - Background
     1 - Slope
     2 - Plateau
-
-    TODO: Does this need a normalize results?
     """
     _norm_methods = ['amplitude', 'zscore']
     _norm_kwargs = [{}, {'norm': True}]
@@ -350,6 +364,16 @@ class UPeakModel(_UNetStructure):
         else:
             # Otherwise, just save the weight path
             self.weight_path = weight_path
+
+    @classmethod
+    def _compile_model(cls,
+                       input_layer: Layer,
+                       output_layer: Layer
+                       ) -> tensorflow.keras.models.Model:
+        """"""
+        # An activation layer needs to be added for UPeak
+        output_layer = Activation('softmax')(output_layer)
+        return tensorflow.keras.models.Model(input_layer, output_layer)
 
     def predict(self,
                 array: np.ndarray,
@@ -371,7 +395,6 @@ class UPeakModel(_UNetStructure):
         # Predict - batch should not be required
         out = self.model.predict(array)
         out = self.undo_padding(out, pads)
-        out = self.normalize_result(out)
 
         # Returns a 3D arr...
         return out[..., roi]
@@ -434,12 +457,6 @@ class UPeakModel(_UNetStructure):
             else:
                 warnings.warn(f'Did not understand norm method {m}')
 
-        return array
-
-    def normalize_result(self, array: np.ndarray) -> np.ndarray:
-        """"""
-        # array is 3D (traces x length x 3 (roi))
-        array = array / np.sum(array, axis=-1, keepdims=True)
         return array
 
     def pad_model_dimension(self,
