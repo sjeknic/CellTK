@@ -1,4 +1,4 @@
-from typing import Dict, Generator, Tuple, List, Iterable
+from typing import Dict, Generator, Tuple, List, Iterable, Union
 
 import numpy as np
 import pywt
@@ -42,12 +42,14 @@ def dilate_sitk(labels: np.ndarray, radius: int) -> np.ndarray:
 
 
 def _close_border_holes(array: np.ndarray,
-                        max_len: int = 45,
+                        max_length: int = 45,
+                        in_place: bool = True
                         ) -> np.ndarray:
     """"""
+    if not in_place: array = array.copy()
+
     axes = (array[0, :], array[-1, :],  # top, bottom
             array[:, 0], array[:, -1])  # left, right
-
     for ax in axes:
         # Find holes by comparing to all indices
         nonzero = np.where(ax)[0]
@@ -60,30 +62,52 @@ def _close_border_holes(array: np.ndarray,
 
             # Fill them in
             for h in hole_idxs:
-                if len(h) <= max_len:
+                if len(h) <= max_length:
                     ax[h] = 1
 
     return array
 
 
-def sitk_binary_fill_holes(labels: np.ndarray) -> np.ndarray:
+def sitk_binary_fill_holes(labels: np.ndarray,
+                           fill_border: bool = True,
+                           iterations: Union[int, bool] = False,
+                           max_length: int = 45,
+                           in_place: bool = True,
+                           **kwargs
+                           ) -> np.ndarray:
     """
     TODO:
         - Add lots of options
         - Add VoteIterativeHoleFilling
         - Add closing/opening
+
+        - Should iterations be first or last?
     """
+    if iterations:
+        fil = sitk.VotingBinaryIterativeHoleFillingImageFilter()
+        fil.SetMaximumNumberOfIterations(iterations)
+    else:
+        fil = sitk.BinaryFillholeImageFilter()
+
+    # kwargs are used to set values on the filters
+    for k, v in kwargs.items():
+        getattr(fil, k)(v)
+
     # Fill the holes first
     _labels = sitk.GetImageFromArray(labels)
-    fil = sitk.BinaryFillholeImageFilter()
-
-    # Close any border
-    labels = sitk.GetArrayFromImage((fil.Execute(_labels)))
-    labels = _close_border_holes(labels)
-
-    # Second filling holes
-    _labels = sitk.GetImageFromArray(labels)
     labels = fil.Execute(_labels)
+
+    if fill_border:
+        # Close any border holes
+        labels = sitk.GetArrayFromImage(labels)
+        labels = _close_border_holes(labels, max_length, in_place)
+
+        # Re-fill so that those border holes are filled
+        # TODO: Should this use VoteIterative too?
+        fil = sitk.BinaryFillholeImageFilter()
+        _labels = sitk.GetImageFromArray(labels)
+        labels = fil.Execute(_labels)
+
     return sitk.GetArrayFromImage(labels)
 
 

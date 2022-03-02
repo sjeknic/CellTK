@@ -559,6 +559,25 @@ class Segmenter(BaseSegmenter):
         return new_cyto_mask
 
     @ImageHelper(by_frame=True)
+    def binary_fill_holes(self,
+                          mask: Mask,
+                          fill_border: bool = True,
+                          iterations: Union[bool, int] = False,
+                          max_length: int = 45,
+                          in_place: bool = True,
+                          **kwargs
+                          ) -> Mask:
+        """
+        kwargs get used to set attributes on the sitk filters that were used
+
+        TODO:
+            - Write a greyscale version (will work better on the borders,
+                but will need a new _close_border_holes)
+        """
+        return sitk_binary_fill_holes(mask, fill_border, iterations,
+                                      max_length, in_place, **kwargs)
+
+    @ImageHelper(by_frame=True)
     def level_set_mask(self,
                        image: Image,
                        levelset: str = 'checkerboard',

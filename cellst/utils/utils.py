@@ -204,7 +204,7 @@ class ImageHelper():
                 # First image given is first image passed
                 names = [(nm, exp_typ) for nm in names]
                 if not self.as_tuple:
-                    warnings.warn('Multiple stacks for a single keyword'
+                    warnings.warn('Multiple stacks for a single keyword '
                                   f'argument is not supported for {self.func}.'
                                   f'Only {names[0]} will get passed.',
                                   UserWarning)

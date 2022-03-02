@@ -7,7 +7,7 @@ from cellst.utils.info_utils import get_bootstrap_population
 
 """None of these estimators need to be wrapped in partial or anything"""
 def bootstrap_estimator(arr: np.ndarray,
-                        reps: int = 10,
+                        reps: int = 1000,
                         ci: float = 0.95,
                         ax: int = 0,
                         ignore_nans: bool = True
