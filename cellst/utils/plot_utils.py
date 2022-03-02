@@ -4,11 +4,14 @@ import inspect
 from typing import Collection, Union, Callable, Generator, Tuple
 
 import numpy as np
+import matplotlib.pyplot as plt
+import matplotlib.collections as pltcol
 import plotly.graph_objects as go
-import plotly.subplots as psub
 import plotly.colors as pcol
-import plotly.io as pio
 import colorcet as cc
+
+import cellst.utils.estimator_utils
+
 
 """
 Need some notes for myself, because this is still very hackish, but I
@@ -97,17 +100,75 @@ def get_timeseries_estimator(func: Union[Callable, str],
 
     Returns:
         functools.partial object of the estimator
+
+    TODO:
+        - Should have the option to look for already made estimators
     """
     # Remove axis kwarg from kwargs
     kwargs = {k: v for k, v in kwargs.items() if k != 'axis'}
 
     if isinstance(func, str):
-        func = getattr(np, func)
-        return functools.partial(func, axis=0, *args, **kwargs)
+        try:
+            func = getattr(cellst.utils.estimator_utils, func)
+            return functools.partial(func, *args, **kwargs)
+        except AttributeError:
+            try:
+                func = getattr(np, func)
+                return functools.partial(func, axis=0, *args, **kwargs)
+            except AttributeError:
+                raise ValueError(f'Did not understand estimator {func}')
+
     else:
         # Need to pass positionally to make it easier to call later
         return functools.partial(np.apply_along_axis, func, 0,
                                  *args, **kwargs)
+
+
+def plot_trace_predictions(traces: np.ndarray,
+                           predictions: np.ndarray,
+                           roi: Union[int, Tuple[int]] = None,
+                           cmap: str = 'plasma',
+                           color_limit: Tuple[int] = (0, 1),
+                           y_limit: Tuple[int] = (0, 6),
+                           save_path: str = 'output'
+                           ) -> plt.Figure:
+    """"""
+    rows, cols = (8, 4)
+    size = (11.69, 8.27)  # inches, sheet of paper
+    num_figs = int(np.ceil(traces.shape[0] / (rows * cols)))
+
+    # Sum the prediction values
+    if roi and predictions.ndim == 3:
+        predictions = predictions[..., roi]
+    elif predictions.ndim == 3:
+        predictions = np.nansum(predictions, axis=-1)
+
+    # Iterate over all the needed figures
+    trace_idx = 0
+
+    for fidx in range(num_figs):
+        fig, ax = plt.subplots(rows, cols, figsize=size,
+                               sharey=True, sharex=True)
+
+        # Iterate over all the axes in the figure and plot
+        for a in ax.flatten():
+            try:
+                line = _make_single_line_collection(traces[trace_idx],
+                                                    predictions[trace_idx],
+                                                    cmap, color_limit)
+                line.set_linewidth(2)
+                line = a.add_collection(line)
+                trace_idx += 1
+            except IndexError:
+                # All of the traces have been used
+                break
+
+        # Set up the plots
+        plt.setp(ax, xlim=(0, traces.shape[1]), ylim=y_limit)
+        fig.colorbar(line, ax=ax)
+
+        plt.show()
+        plt.close()
 
 
 def _line_plot(fig: go.Figure,
@@ -146,16 +207,21 @@ def _line_plot(fig: go.Figure,
         if err_arr is not None:
             if err_arr.ndim == 1:
                 # Assume it's both high and low
-                hi = y + err_arr
-                lo = y - err_arr
-                lines.append(
-                    go.Scatter(x=np.hstack([x, x[::-1]]),
-                               y=np.hstack([hi, lo[::-1]]), fill='tozerox',
-                               fillcolor=_hex_to_rgba(line_kwargs['color'], 0.25),
-                               showlegend=False, legendgroup=label,
-                               name=label, line=dict(color='rgba(255,255,255,0)'),
-                               hoverinfo='skip')
-                )
+                hi = np.nansum([y, err_arr], axis=0)
+                lo = np.nansum([y, -err_arr], axis=0)
+            else:
+                lo = err_arr[0, :]
+                hi = err_arr[-1, :]
+
+
+            lines.append(
+                go.Scatter(x=np.hstack([x, x[::-1]]),
+                           y=np.hstack([hi, lo[::-1]]), fill='tozerox',
+                           fillcolor=_hex_to_rgba(line_kwargs['color'], 0.25),
+                           showlegend=False, legendgroup=label,
+                           name=label, line=dict(color='rgba(255,255,255,0)'),
+                           hoverinfo='skip')
+            )
 
     fig.add_traces(lines)
 
@@ -190,6 +256,30 @@ def _parse_kwargs_for_plot_type(func: str, kwargs: dict) -> dict:
             other[k] = v
 
     return kept, other
+
+
+def _make_single_line_collection(trace: np.ndarray,
+                                 prediction: np.ndarray,
+                                 cmap: str = 'plasma',
+                                 limit: Tuple[int] = (0, 1)
+                                 ) -> pltcol.LineCollection:
+    """"""
+    # Should only get one trace and one probability
+    assert trace.ndim == 1
+    assert prediction.ndim == 1
+    assert len(trace) == len(prediction)
+
+    # Make an array of (ax0, ax1) points
+    points = np.array([np.arange(len(trace)), trace]).T.reshape(-1, 1, 2)
+    segments = np.concatenate([points[:-1], points[1:]], axis=1)
+
+    # Set up colors
+    norm = plt.Normalize(*limit)
+    line = pltcol.LineCollection(segments, cmap=cmap, norm=norm)
+
+    # Add the prediction data and return
+    line.set_array(prediction)
+    return line
 
 
 PLT_FUNCS = dict(line=_line_plot)
