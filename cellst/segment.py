@@ -1,4 +1,4 @@
-from typing import Tuple, Union, Collection
+from typing import Tuple, Union, Collection, Callable
 
 import numpy as np
 import skimage.measure as meas
@@ -6,14 +6,16 @@ import skimage.segmentation as segm
 import skimage.morphology as morph
 import skimage.filters as filt
 import skimage.util as util
+import skimage.feature as feat
 import scipy.ndimage as ndi
+import SimpleITK as sitk
 
 from cellst.core.operation import BaseSegmenter
 from cellst.utils._types import Image, Mask
 from cellst.utils.utils import ImageHelper
 from cellst.utils.operation_utils import (dilate_sitk, voronoi_boundaries,
                                           skimage_level_set, gray_fill_holes,
-                                          match_labels_linear)
+                                          match_labels_linear, sitk_binary_fill_holes)
 
 
 class Segmenter(BaseSegmenter):
@@ -24,7 +26,19 @@ class Segmenter(BaseSegmenter):
         - Add levelset segmentation
         - Add mahotas/watershed_distance
         - Make stand-alone fill_holes function
+        - Add _threshold_dispatcher_function
+        - Add LabelVotingImageFilter
+        - Add TileImageFilter (to Process??)
+        - Can Sitk be used instead of regionprops?
+            (https://simpleitk.org/SPIE2019_COURSE/06_segmentation_and_shape_analysis.html)
     """
+    @ImageHelper(by_frame=True)
+    def label(self,
+              mask: Mask,
+              connectivity: int = 2) -> Mask:
+        """"""
+        return util.img_as_uint(meas.label(mask, connectivity=connectivity))
+
     @ImageHelper(by_frame=True)
     def clean_labels(self,
                      mask: Mask,
@@ -74,11 +88,16 @@ class Segmenter(BaseSegmenter):
                        image: Image,
                        thres: float = 1000,
                        negative: bool = False,
-                       connectivity: int = 2
+                       connectivity: int = 2,
+                       relative: bool = False
                        ) -> Mask:
         """
         Labels pixels above or below a constant threshold
         """
+        if relative:
+            assert thres <= 1 and thres >= 0
+            thres = image.max() * thres
+
         if negative:
             test_arr = image <= thres
         else:
@@ -119,7 +138,7 @@ class Segmenter(BaseSegmenter):
         if fill_holes:
             # Run binary closing first to connect broken edges
             labels = morph.binary_closing(labels)
-            labels = ndi.binary_fill_holes(labels)
+            labels = sitk_binary_fill_holes(labels)
 
         labels = meas.label(labels, connectivity=connectivity)
         return util.img_as_uint(labels)
@@ -130,7 +149,8 @@ class Segmenter(BaseSegmenter):
                         classes: int = 2,
                         roi: Union[int, Collection[int]] = None,
                         nbins: int = 256,
-                        hist: np.ndarray = None
+                        hist: np.ndarray = None,
+                        binarize: bool = False,
                         ) -> Mask:
         """"""
         thres = filt.threshold_multiotsu(image, classes, nbins,
@@ -140,8 +160,71 @@ class Segmenter(BaseSegmenter):
         # If roi is given, filter the other regions, otherwise return all
         if roi is not None:
             roi = tuple([int(roi)]) if isinstance(roi, (int, float)) else roi
-            for r in roi:
-                out[out != r] = 0
+            classes = np.unique(out)
+            for c in classes:
+                if c not in roi:
+                    out[out == c] = 0
+
+        # Clean up
+        if binarize:
+            out[out > 0] = 1
+
+        return out
+
+    @ImageHelper(by_frame=True)
+    def li_thres(self,
+                 image: Image,
+                 tol: float = None,
+                 init_guess: Union[float, Callable] = None,
+                 connectivity: int = 2,
+                 fill_holes: bool = True
+                 ) -> Image:
+        """"""
+        thres = filt.threshold_li(image, tolerance=tol,
+                                  initial_guess=init_guess)
+        labels = (image > thres).astype(np.uint8)
+        if fill_holes:
+            labels = sitk_binary_fill_holes(labels)
+
+        labels = meas.label(labels, connectivity=connectivity)
+        return util.img_as_uint(labels)
+
+    @ImageHelper(by_frame=False)
+    def sitk_filter_pipeline(self,
+                             mask: Mask,
+                             filters: Collection[str],
+                             kwargs: Collection[dict] = [],
+                             ) -> Mask:
+        """"""
+        # TODO: Add to process
+        # TODO: Should use Stack type
+        if kwargs:
+            assert len(kwargs) == len(filters)
+
+        _sfilt = []
+        for f, kw in zip(filters, kwargs):
+            # Get the filter function
+            try:
+                _sfilt.append(getattr(sitk, f)())
+            except AttributeError:
+                raise AttributeError(f'Could not find SITK filter {f}')
+
+            # Get the attributes for the filter
+            for k, v in kw.items():
+                try:
+                    getattr(_sfilt[-1], k)(v)
+                except AttributeError:
+                    raise AttributeError('Could not find attribute '
+                                         f'{k} in {_sfilt[-1]}')
+
+        # Apply to all the frames individually
+        out = np.zeros_like(mask)
+        for n, fr in enumerate(mask):
+            _im = sitk.GetImageFromArray(fr)
+            for fil in _sfilt:
+                _im = fil.Execute(_im)
+
+            out[n, ...] = sitk.GetArrayFromImage(_im)
 
         return out
 
@@ -340,6 +423,25 @@ class Segmenter(BaseSegmenter):
         return segm.morphological_geodesic_active_contour(image, iterations,
                                                           seeds, smoothing,
                                                           threshold, balloon)
+
+    @ImageHelper(by_frame=True)
+    def canny_edge_segmentation(self,
+                                image: Image,
+                                sigma: float = 1.,
+                                low_thres: float = None,
+                                high_thres: float = None,
+                                use_quantiles: bool = False,
+                                fill_holes: bool = False
+                                ) -> Mask:
+        """"""
+        out = feat.canny(image, sigma=sigma, low_threshold=low_thres,
+                         high_threshold=high_thres,
+                         use_quantiles=use_quantiles)
+
+        if fill_holes:
+            out = sitk_binary_fill_holes(out)
+
+        return out
 
     @ImageHelper(by_frame=True)
     def find_boundaries(self,

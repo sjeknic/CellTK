@@ -31,17 +31,60 @@ def gray_fill_holes(labels: np.ndarray) -> np.ndarray:
     return labels[tuple(idx)]
 
 
-def dilate_sitk(labels: Mask, radius: int) -> np.ndarray:
+def dilate_sitk(labels: np.ndarray, radius: int) -> np.ndarray:
     """
     Direct copy from CellTK. Should dilate images
-
-    TODO:
-        - Update function (or at least understand the function)
     """
     slabels = sitk.GetImageFromArray(labels)
     gd = sitk.GrayscaleDilateImageFilter()
     gd.SetKernelRadius(radius)
     return sitk.GetArrayFromImage(gd.Execute(slabels))
+
+
+def _close_border_holes(array: np.ndarray,
+                        max_len: int = 45,
+                        ) -> np.ndarray:
+    """"""
+    axes = (array[0, :], array[-1, :],  # top, bottom
+            array[:, 0], array[:, -1])  # left, right
+
+    for ax in axes:
+        # Find holes by comparing to all indices
+        nonzero = np.where(ax)[0]
+        holes = np.setdiff1d(np.arange(len(ax)), nonzero)
+
+        if len(holes):
+            # Find holes split them up to be unique
+            diffs = np.ediff1d(holes, to_begin=1)
+            hole_idxs = np.split(holes, np.where(diffs > 1)[0])
+
+            # Fill them in
+            for h in hole_idxs:
+                if len(h) <= max_len:
+                    ax[h] = 1
+
+    return array
+
+
+def sitk_binary_fill_holes(labels: np.ndarray) -> np.ndarray:
+    """
+    TODO:
+        - Add lots of options
+        - Add VoteIterativeHoleFilling
+        - Add closing/opening
+    """
+    # Fill the holes first
+    _labels = sitk.GetImageFromArray(labels)
+    fil = sitk.BinaryFillholeImageFilter()
+
+    # Close any border
+    labels = sitk.GetArrayFromImage((fil.Execute(_labels)))
+    labels = _close_border_holes(labels)
+
+    # Second filling holes
+    _labels = sitk.GetImageFromArray(labels)
+    labels = fil.Execute(_labels)
+    return sitk.GetArrayFromImage(labels)
 
 
 def track_to_mask(track: Track, idx: np.ndarray = None) -> Mask:
@@ -396,6 +439,7 @@ class PadHelper():
     """
     TODO:
         - Add more complex padding options (e.g. pad both side, etc)
+        - Move this function to utils or something
     """
     def __init__(self,
                  target: (str, int),
