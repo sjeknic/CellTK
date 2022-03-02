@@ -12,7 +12,6 @@ import colorcet as cc
 
 import cellst.utils.estimator_utils
 
-
 """
 Need some notes for myself, because this is still very hackish, but I
 don't have a good idea of how I'd rather set it up. I do know that I want
@@ -37,8 +36,9 @@ Need easier way to specify:
 
 def plot_groups(arrs: Collection[np.ndarray],
                 keys: Collection[str] = [],
+                estimator: Union[Callable, str, functools.partial] = None,
+                err_estimator: Union[Callable, str, functools.partial] = None,
                 colors: (str, Collection) = [],
-                err_arrs: Collection[np.ndarray] = [],
                 kind: str = 'line',
                 time: np.ndarray = None,
                 legend: bool = True,
@@ -73,10 +73,21 @@ def plot_groups(arrs: Collection[np.ndarray],
 
     # Make the plot and add the data
     fig = go.Figure()
-    for idx, data in enumerate(itertools.zip_longest(arrs, err_arrs, keys)):
-        arr, err_arr, key = data
+    for idx, data in enumerate(itertools.zip_longest(arrs, keys)):
+        arr, key = data
+
+        # Add the number of cells used to the legend label
         if not key:
             key = idx
+        key += f' | n={arr.shape[0]}'
+
+        # Need to calculate error before estimating arr
+        if err_estimator:
+            err_arr = _apply_estimator(arr, err_estimator)
+        else:
+            err_arr = None
+
+        arr = _apply_estimator(arr, estimator)
 
         # Add information to figure
         kwargs.update({'color': colorscale[idx]})
@@ -84,7 +95,7 @@ def plot_groups(arrs: Collection[np.ndarray],
 
     # Update figure after it is made
     template = template if template else DEF_TEMPLATE
-    fig.update_layout(showlegend=legend, template=template) #, **figure_spec)
+    fig.update_layout(showlegend=legend, template=template, **figure_spec)
 
     return fig
 
@@ -171,6 +182,24 @@ def plot_trace_predictions(traces: np.ndarray,
         plt.close()
 
 
+def _apply_estimator(arr: np.ndarray,
+                     estimator: Union[Callable, str, functools.partial] = None,
+                     ) -> np.ndarray:
+    """"""
+    if estimator:
+        arr = arr.copy()
+        if isinstance(estimator, functools.partial):
+            # Assume that the estimator is ready to go
+            arr = estimator(arr)
+        elif isinstance(estimator, (Callable, str)):
+            estimator = get_timeseries_estimator(estimator)
+            arr = estimator(arr)
+        else:
+            raise TypeError(f'Did not understand estimator {estimator}')
+
+    return arr
+
+
 def _line_plot(fig: go.Figure,
                arr: np.ndarray,
                err_arr: np.ndarray = None,
@@ -205,6 +234,7 @@ def _line_plot(fig: go.Figure,
         )
 
         if err_arr is not None:
+            # TODO: Are there other forms err_arr could take?
             if err_arr.ndim == 1:
                 # Assume it's both high and low
                 hi = np.nansum([y, err_arr], axis=0)
@@ -212,7 +242,6 @@ def _line_plot(fig: go.Figure,
             else:
                 lo = err_arr[0, :]
                 hi = err_arr[-1, :]
-
 
             lines.append(
                 go.Scatter(x=np.hstack([x, x[::-1]]),

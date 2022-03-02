@@ -1052,29 +1052,10 @@ class ExperimentArray():
 
         # Get the data to plot
         arrs = self[conditions][keys]
-
-        # If error estimator, it needs to be calculated before estimator
-        err_arrs = []
-        if isinstance(err_estimator, functools.partial):
-            # Assume the err_estimator is good to go
-            err_arrs = [err_estimator(arr) for arr in arrs]
-        elif isinstance(err_estimator, (Callable, str)):
-            # Assume partial is needed
-            err_estimator = get_timeseries_estimator(err_estimator)
-            err_arrs = [err_estimator(arr) for arr in arrs]
-
-        # Apply the other estimator now
-        if isinstance(estimator, functools.partial):
-            # Assume the estimator is good to go
-            arrs = [estimator(arr) for arr in arrs]
-        elif isinstance(estimator, (Callable, str)):
-            # Assume partial is needed
-            estimator = get_timeseries_estimator(estimator)
-            arrs = [estimator(arr) for arr in arrs]
-
         time = self.time[0]
+
         # Make the base plot
-        fig = plot_groups(arrs, conditions, err_arrs=err_arrs, time=time)
+        fig = plot_groups(arrs, conditions, estimator, err_estimator, time=time)
 
         # Update the figure layout
         fig.update_xaxes(title=x_label, range=x_range)
