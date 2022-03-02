@@ -24,7 +24,6 @@ class Processor(BaseProcessor):
     TODO:
         - Add stand-alone crop function
         - Add optical-flow registration
-        - Add sobel filter
     """
     @ImageHelper(by_frame=False, as_tuple=True)
     def align_by_cross_correlation(self,
@@ -150,7 +149,7 @@ class Processor(BaseProcessor):
                                   ) -> Image:
         """
         """
-        return util.img_as_float32(
+        return util.img_as_uint(
             segm.inverse_gaussian_gradient(image, alpha, sigma)
         )
 
@@ -174,7 +173,59 @@ class Processor(BaseProcessor):
         else:
             sobel = filt.sobel(image)
 
-        return util.img_as_float32(sobel)
+        return util.img_as_uint(sobel)
+
+    @ImageHelper(by_frame=True)
+    def sobel_edge_magnitude(self,
+                             image: Image,
+                             ) -> Image:
+        """"""
+        y = ndi.sobel(image, axis=1)
+        x = ndi.sobel(image, axis=0)
+        return np.hypot(x, y)
+
+    @ImageHelper(by_frame=True)
+    def roberts_edge_detection(self, image: Image) -> Image:
+        """"""
+        return filt.roberts(image)
+
+    @ImageHelper(by_frame=True)
+    def recurssive_gauss_gradient(self,
+                                  image: Image,
+                                  sigma: float = 1.,
+                                  use_direction: bool = True
+                                  ) -> Image:
+        """"""
+        # Set up the filter
+        fil = sitk.GradientRecursiveGaussianImageFilter()
+        fil.SetSigma(sigma)
+        fil.SetUseImageDirection(use_direction)
+
+        # Convert image and return
+        # TODO: Type casting needed?
+        im = sitk.GetImageFromArray(image)
+        im = fil.Execute(im)
+        im = sitk.GetArrayFromImage(im)
+
+        # Get the total magnitude from both channels
+        x, y = im[..., 0], im[..., 1]
+        return np.hypot(x, y)
+
+    @ImageHelper(by_frame=True)
+    def recurssive_gauss_magnitude(self,
+                                   image: Image,
+                                   sigma: float = 1.,
+                                   ) -> Image:
+        """"""
+        # Set up the filter
+        fil = sitk.GradientMagnitudeRecursiveGaussianImageFilter()
+        fil.SetSigma(sigma)
+
+        # Convert image and return
+        # TODO: Type casting needed?
+        im = sitk.GetImageFromArray(image)
+        im = fil.Execute(im)
+        return sitk.GetArrayFromImage(im)
 
     @ImageHelper(by_frame=False)
     def histogram_matching(self,
