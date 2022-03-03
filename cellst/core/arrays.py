@@ -1031,6 +1031,7 @@ class ExperimentArray():
                           conditions: Collection[str] = None,
                           estimator: Union[Callable, str, functools.partial] = None,
                           err_estimator: Union[Callable, str, functools.partial] = None,
+                          kind: str = 'line',
                           title: str = None,
                           x_label: str = None,
                           y_label: str = None,
@@ -1055,7 +1056,7 @@ class ExperimentArray():
         time = self.time[0]
 
         # Make the base plot
-        fig = plot_groups(arrs, conditions, estimator, err_estimator, time=time)
+        fig = plot_groups(arrs, conditions, estimator, err_estimator, kind=kind, time=time)
 
         # Update the figure layout
         fig.update_xaxes(title=x_label, range=x_range)

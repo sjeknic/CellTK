@@ -257,6 +257,48 @@ def _line_plot(fig: go.Figure,
     return fig
 
 
+def _overlay_line_plot(fig: go.Figure,
+                       arr: np.ndarray,
+                       err_arr: np.ndarray,
+                       label: str = None,
+                       time: np.ndarray = None,
+                       *args, **kwargs
+                       ) -> go.Figure:
+    """"""
+    kwargs, line_kwargs = _parse_kwargs_for_plot_type('line', kwargs)
+
+    # TODO: Not sure how to handle this yet...
+    x = time if time is not None else np.arange(arr.shape[0])
+    # plots one at a time, so arr must be 2D
+    if arr.ndim == 1: arr = np.expand_dims(arr, 0)
+
+    # Plot the overlay lines
+    lines = []
+    # TODO: Check shape of arr here - probably look for order of magnitude
+    # alpha = 10. / arr.shape[0]
+    alpha = 0.1
+    for idx, y in enumerate(arr):
+        # Legend is not shown for any of these lines
+
+        lines.append(
+            go.Scatter(x=x, y=y, legendgroup=label,
+                       showlegend=False, mode='lines',
+                       line=dict(color=_hex_to_rgba(line_kwargs['color'], alpha)),
+                       name=label, *args, **kwargs)
+        )
+
+    # Plot the median line
+    line_kwargs.update({'width': 5})
+    lines.append(
+        go.Scatter(x=x, y=np.nanmedian(arr, axis=0),
+                   showlegend=True, legendgroup=label, mode='lines',
+                   line=line_kwargs, name=label, *args, **kwargs)
+    )
+
+    fig.add_traces(lines)
+
+    return fig
+
 def _color_generator(colors) -> Generator:
     """"""
     pass
@@ -311,6 +353,6 @@ def _make_single_line_collection(trace: np.ndarray,
     return line
 
 
-PLT_FUNCS = dict(line=_line_plot)
+PLT_FUNCS = dict(line=_line_plot, overlay=_overlay_line_plot)
 DEF_COLORS = 'Safe'
 DEF_TEMPLATE = 'simple_white'
