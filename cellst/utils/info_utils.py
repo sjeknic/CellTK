@@ -6,10 +6,10 @@ import sklearn.preprocessing as skpre
 import sklearn.neighbors as neigh
 import sklearn.decomposition as decomp
 import sklearn.cluster as clust
-import hdbscan
-import umap
+# import hdbscan
+# import umap
 
-from cellst.utils._fastkde import FastLaplacianKDE
+# from cellst.utils._fastkde import FastLaplacianKDE
 
 
 SEED = 69420

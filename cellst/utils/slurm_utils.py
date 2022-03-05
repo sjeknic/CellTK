@@ -5,6 +5,7 @@ import shutil
 import sys
 import signal
 import itertools
+import yaml
 import time as time_module
 from time import sleep
 from datetime import date
@@ -478,6 +479,10 @@ class SlurmController(JobController):
 
                 self.last_update_time = time_module.time()
 
+        # TODO: Add cleanner file save and load
+        with open(os.path.join(os.getcwd(), '.job_hist.yaml'), 'w') as f:
+            yaml.dump(self.job_history, f, sort_keys=False)
+
     def _check_ended_job_status(self, jobs: List[str]) -> None:
         """
         Check the logs of the given jobs to see if the Pipeline is complete.
@@ -686,6 +691,12 @@ class SlurmController(JobController):
 
         # TODO: Is the blank line really needed?
         string = _add_line(string, '', '', '')
+
+        # These are added to load the shared Gurobi license on Sherlock
+        string = _add_line(string, 'source ~/.bash_profile', '', '')
+        string = _add_line(string, 'source ~/.bashrc', '', '')
+        string = _add_line(string, 'echo $GRB_LICENSE_FILE', '', '')
+        string = _add_line(string, 'echo $PATH', '', '')
 
         if self.modules:
             mods = f'module restore {self.modules}'

@@ -198,7 +198,7 @@ class Orchestrator():
             raise KeyError(f'Failed to find Operations in {path}.')
 
     def build_experiment_file(self,
-                              arrays: Collection[Arr] = None
+                              match_str: str = None,
                               ) -> None:
         """
         Search folders in self.pipelines for hdf5 data frames
@@ -207,7 +207,12 @@ class Orchestrator():
             - Increase efficiency by grouping sites by condition before loading
         """
         # Make ExperimentArray to hold data
-        out = ExperimentArray(name=self.name)
+        if match_str:
+            out = ExperimentArray(name=match_str)
+            name = match_str
+        else:
+            out = ExperimentArray(name=self.name)
+            name = self.name
 
         self.logger.info(f'Building ExperimentArray {out}')
 
@@ -217,6 +222,7 @@ class Orchestrator():
 
             # NOTE: if df.name is already in Experiment, will be overwritten
             for df in glob(os.path.join(otpt_fol, '*.hdf5')):
+                if match_str and match_str not in df: continue
                 out.load_condition(df)
                 self.logger.info(f'Loaded {df}')
 
@@ -224,7 +230,7 @@ class Orchestrator():
         out.merge_conditions()
 
         # Save the master df file
-        save_path = os.path.join(self.output_folder, f'{self.name}.hdf5')
+        save_path = os.path.join(self.output_folder, f'{match_str}.hdf5')
         out.save(save_path)
         self.logger.info(f'Saved ExperimentArray at {save_path}')
 
