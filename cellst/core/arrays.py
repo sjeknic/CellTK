@@ -140,7 +140,18 @@ class ConditionArray():
         f.create_dataset(self.name, data=self._arr)
         for coord in self.coords:
             # Axis names and coords stored as attributes
-            f[self.name].attrs[coord] = self.coords[coord]
+            if coord in ('frames', 'cells'):
+                if isinstance(self.coords[coord], (int, float)):
+                    pass
+                elif not len(self.coords[coord]):
+                    self.coords[coord] = np.array(self.coords[coord])
+                elif np.array((self.coords[coord])).max() >= 2 ** 16:
+                    raise ValueError('Cannot save values larger than 16-bit.')
+
+                f[self.name].attrs[coord] = np.array(self.coords[coord],
+                                                     dtype=np.uint16)
+            else:
+                f[self.name].attrs[coord] = self.coords[coord]
 
         f[self.name].attrs['pos_id'] = self.pos_id
         f[self.name].attrs['time'] = self.time
@@ -855,7 +866,11 @@ class ExperimentArray():
             for coord in val.coords:
                 # Cells and frames have the potential to be large, so handle separately
                 if coord in ('frames', 'cells'):
-                    if np.array((val.coords[coord])).max() >= 2 ** 16:
+                    if isinstance(val.coords[coord], (int, float)):
+                        pass
+                    elif not len(val.coords[coord]):
+                        val.coords[coord] = np.array(val.coords[coord])
+                    elif np.array((val.coords[coord])).max() >= 2 ** 16:
                         raise ValueError('Cannot save values larger than 16-bit.')
 
                     f[key].attrs[coord] = np.array(val.coords[coord], dtype=np.uint16)
