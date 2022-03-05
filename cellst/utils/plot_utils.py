@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 import matplotlib.collections as pltcol
 import plotly.graph_objects as go
 import plotly.colors as pcol
-#import colorcet as cc
+import colorcet as cc
 
 import cellst.utils.estimator_utils
 

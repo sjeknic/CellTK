@@ -117,9 +117,6 @@ class Tracker(BaseTracker):
             - Use non-consecutive timesteps (mainly for naming of files)
             - Add saving of lineage file (probably in a separate run_operation function)
         """
-        # If nothing is in mask, return an empty stack
-        if not mask.sum():
-            return np.zeros_like(mask)
 
         assert image.shape == mask.shape, f'Image/Mask mismatch {image.shape} {mask.shape}'
 
@@ -143,18 +140,15 @@ class Tracker(BaseTracker):
                                 cut_off_distance=cut_off_distance,
                                 allow_cell_division=allow_cell_division)
 
-        try:
-            tracker = MultiCellTracker(config)
-            # Add context management to supress printing to terminal
-            # TODO: make this optional, log to file
-            with stdout_redirected():
-                tracks = tracker()
+        tracker = MultiCellTracker(config)
+        # Add context management to supress printing to terminal
+        # TODO: make this optional, log to file
+        with stdout_redirected():
+            tracks = tracker()
 
-                exporter = ExportResults(postprocessing_key)
-                mask, lineage = exporter(tracks, img_shape=img_shape,
-                                         time_steps=list(range(image.shape[0])))
-        except ValueError as e:
-            return np.zeros_like(mask)
+            exporter = ExportResults(postprocessing_key)
+            mask, lineage = exporter(tracks, img_shape=img_shape,
+                                     time_steps=list(range(image.shape[0])))
 
         return lineage_to_track(mask, lineage)
 
