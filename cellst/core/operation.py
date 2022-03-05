@@ -140,8 +140,9 @@ class Operation():
                          f'{hex(id(self))} entered.')
         # Log requests for each data type
         for name in INPT_NAMES:
-            if getattr(self, f'{name}s'):
+            if hasattr(self, f'{name}s'):
                 self.logger.info(f"{name}:{getattr(self, f'{name}s')}")
+
         self.logger.info(f"Output ID: {self.output_id}")
 
         return self
@@ -214,12 +215,8 @@ class Operation():
                 else:
                     check_key = (None, None)
 
-                # The output already exists - skip the function
-                # TODO: Add ability to use keys with _split_key
-                if check_key in inputs:
-                    self.logger.info(f'Output already loaded: {check_key} '
-                                     f'{inputs[check_key].shape}, '
-                                     f'{inputs[check_key].dtype}.')
+                # If outputs are already loaded, skip the function
+                if self._check_if_loaded(check_key, inputs):
                     self.logger.info(f'Skipping {func.__name__}.')
                     continue
 
@@ -330,10 +327,13 @@ class Operation():
         # Get all the inputs that were passed to __init__
         inputs = []
         for i in INPT_NAMES:
-            inputs.extend([(g, i) for g in getattr(self, f'{i}s')])
+            # Messy fix, but not folder for Same/Stack input
+            if i != Same.__name__:
+                inputs.extend([(g, i) for g in getattr(self, f'{i}s')])
 
         # Check if save_as was set for last function
         if self.functions[-1][1]:
+            # TODO: If save name was set, this is already in outputs
             last_name = (self.functions[-1][1],
                          self.output_id[1])
         else:
@@ -346,6 +346,33 @@ class Operation():
             inputs += f_keys_for_inputs + [last_name]
 
         return inputs, outputs
+
+    def _check_if_loaded(self,
+                         check_key: Tuple[str],
+                         inputs: ImageContainer
+                         ) -> bool:
+        """"""
+        # Check if input is already loaded
+        # TODO: Add ability to use keys with _split_key
+        if check_key not in inputs:
+            # Try with the split_key
+            _split = lambda x: x[0].split(self._split_key)[0]
+            matches = [k for k in inputs.keys()
+                       if _split(k) == check_key[0]]
+            if not matches:
+                return False
+            else:
+                # TODO: Matches now need to be filtered by type
+                pass
+        else:
+            matches = [check_key]
+
+        # Log information if something is found
+        self.logger.info(f'Output for {check_key} already loaded.')
+        for m in matches:
+            self.logger.info(f'{m}, {inputs[m].shape}, {inputs[m].dtype}.')
+
+        return True
 
     def _get_func_output_type(self, func: (Callable, str)) -> str:
         """Returns the annotated output type of the function"""
