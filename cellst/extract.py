@@ -65,13 +65,13 @@ class Extractor(BaseExtractor):
         tracks_to_use = []
         if len(tracks) != 0:
             # Uses tracks first if provided
-            tracks_to_use = tracks
+            tracks_to_use = list(tracks)
         if len(masks) != 0:
             # Check that sufficient lineages are provided
             if len(lineages) == 0:
                 warnings.warn('Got mask but not lineage file. No cell division'
                               ' can be tracked.', UserWarning)
-                tracks_to_use.extend(masks)
+                tracks_to_use.extend(list(masks))
             elif len(masks) != len(lineages):
                 # TODO: This could probably be a warning and pad lineages
                 raise ValueError(f'Got {len(masks)} masks '
