@@ -1,5 +1,5 @@
 import warnings
-from typing import Collection, Tuple
+from typing import Collection, Tuple, Union
 
 
 import numpy as np
@@ -27,6 +27,7 @@ class Extractor(BaseExtractor):
                                 channels: Collection[str] = [],
                                 regions: Collection[str] = [],
                                 lineages: Collection[np.ndarray] = [],
+                                time: Union[float, np.ndarray] = None,
                                 condition: str = 'default',
                                 position_id: int = None,
                                 min_trace_length: int = 0,
@@ -115,6 +116,14 @@ class Extractor(BaseExtractor):
         # Initialize data structure
         array = ConditionArray(regions, channels, all_measures, cells, frames,
                                name=condition, pos_id=position_id)
+
+        # Check to see if all axes have something
+        if any([not a for a in array.shape]):
+            missing = [k for k, a in zip(array.coordinates, array.shape)
+                       if not a]
+            # If axes are missing, we skip everything and save nothing.
+            warnings.warn(f'The following dimensions are missing: {missing}')
+        if time: array.set_time(time)
 
         # Extract data for all channels and regions individually
         for c_idx, cnl in enumerate(channels):

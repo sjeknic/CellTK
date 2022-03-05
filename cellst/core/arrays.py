@@ -32,7 +32,7 @@ class ConditionArray():
                  cells: List[int] = [0],
                  frames: List[int] = [0],
                  name: str = 'default',
-                 time: float = None,
+                 time: Union[float, np.ndarray] = None,
                  pos_id: int = 0
                  ) -> None:
         """
@@ -100,6 +100,14 @@ class ConditionArray():
         return self._arr.dtype
 
     @property
+    def coordinates(self):
+        return tuple(self.coords.keys())
+
+    @property
+    def coordinate_dimensions(self):
+        return {k: len(v) for k, v in self.coords.items()}
+
+    @property
     def condition(self):
         return self.name
 
@@ -127,7 +135,6 @@ class ConditionArray():
 
         TODO:
             - Add checking for path and overwrite options
-            - Can time be saved as an attribute
         """
         f = h5py.File(path, 'w')
         f.create_dataset(self.name, data=self._arr)
@@ -157,8 +164,7 @@ class ConditionArray():
         Given an hdf5 file, returns a ConditionArray instance
         """
         if len(f) != 1:
-            raise TypeError('Did not understand hdf5 file format.')
-
+            raise TypeError('Too many keys in hdf5 file.')
         for key in f:
             _arr = ConditionArray(**f[key].attrs, name=key)
             _arr[:] = f[key]
@@ -599,6 +605,8 @@ class ConditionArray():
         """
         if time is None:
             self.time = self.coords['frames']
+        elif isinstance(time, np.ndarray):
+            self.time = time
         else:
             self.time = np.arange(len(self.coords['frames'])) * time
 

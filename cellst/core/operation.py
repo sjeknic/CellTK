@@ -612,6 +612,7 @@ class BaseExtractor(Operation):
                  channels: Collection[str] = [],
                  regions: Collection[str] = [],
                  lineages: Collection[np.ndarray] = [],
+                 time: float = None,
                  condition: str = 'condition',
                  position_id: int = 0,
                  min_trace_length: int = 0,
@@ -649,7 +650,7 @@ class BaseExtractor(Operation):
         kwargs = dict(channels=channels, regions=regions, lineages=lineages,
                       condition=condition, min_trace_length=min_trace_length,
                       remove_parent=remove_parent, position_id=position_id,
-                      skip_frames=skip_frames)
+                      skip_frames=skip_frames, time=time)
         # Add extract_data_from_image
         # functions are expected to be (func, save_as, user_type, kwargs)
         self.functions = [tuple(['extract_data_from_image', output, None, kwargs])]
@@ -680,8 +681,8 @@ class BaseExtractor(Operation):
         """
         kwargs = dict(channels=channels, regions=regions,
                       condition=condition, lineages=lineages)
-        return self.extract_data_from_image(images, masks, tracks,
-                                            **kwargs)
+        return self.extract_data_from_image.__wrapped__(self, images, masks,
+                                                        tracks, **kwargs)
 
     @property
     def metrics(self) -> list:
@@ -833,6 +834,7 @@ class BaseExtractor(Operation):
 
                 keys = [k + [slice(None), _rng] for k in keys]
 
+            # Get the data and group with the key
             arrs = [array[tuple(k)] for k in keys]
             arr_groups = itertools.permutations(zip(keys, arrs))
             func = getattr(np, func)
@@ -938,7 +940,7 @@ class BaseExtractor(Operation):
         # Assert that keys include channel, region, and metric
         for key in keys:
             assert len(key) == 3
-        assert hasattr(np, func), 'Derived metric must be numpy function.'
+        assert hasattr(np, func) or hasattr(metric_utils, func), 'Derived metric must be numpy function.'
 
         # Save to calculated metrics to get added after extract is done
         # TODO: Make a dictionary
