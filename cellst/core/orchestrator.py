@@ -240,34 +240,36 @@ class Orchestrator():
                          f'to {len(self)} Pipelines.')
         for pipe, kwargs in self.pipelines.items():
             # If Extractor is in operations, update the condition
-            # TODO: This won't work for multiple Extractor operations
-            if 'extractor' in op_dict:
-                if op_dict['extractor']['condition'] == 'condition':
-                    condition = kwargs['name']
-                else:
-                    condition = op_dict['extractor']['condition']
-
-                # Get position if needed
-                try:
-                    pos = self.position_map[pipe]
-                except (KeyError, AttributeError, TypeError):
-                    pos = 0
-
-                # Make new extract dictionary
-                new_extract = {}
-                for k, v in op_dict['extractor'].items():
-                    if k == 'condition':
-                        new_extract[k] = condition
-                    elif k == 'position_id':
-                        new_extract[k] = pos
+            # TODO: This could be done outside of this loop for efficiency
+            for opname in op_dict:
+                if 'extractor' in opname:
+                    # Check if the name is the default and update
+                    if op_dict[opname]['condition'] == 'condition':
+                        condition = kwargs['name']
                     else:
-                        new_extract[k] = v
+                        condition = op_dict[opname]['condition']
 
-                # Copy values to new operation dictionary
-                op = {k: v for k, v in op_dict.items() if k != 'extractor'}
-                op.update({'extractor': new_extract})
-            else:
-                op = op_dict
+                    # Get position if needed for multiple positions
+                    try:
+                        pos = self.position_map[pipe]
+                    except (KeyError, AttributeError, TypeError):
+                        pos = 0
+
+                    # Make new extract dictionary - cannot edit in place
+                    new_extract = {}
+                    for k, v in op_dict[opname].items():
+                        if k == 'condition':
+                            new_extract[k] = condition
+                        elif k == 'position_id':
+                            new_extract[k] = pos
+                        else:
+                            new_extract[k] = v
+
+                    # Copy values to new operation dictionary
+                    op = {k: v for k, v in op_dict.items() if k != opname}
+                    op.update({opname: new_extract})
+                else:
+                    op = op_dict
 
             # First try to append operations before overwriting
             try:
