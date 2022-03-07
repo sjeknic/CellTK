@@ -102,9 +102,9 @@ def _sitk_types(test: Union[str, "sitk.BasicPixelID"] = None) -> dict:
 def _sitk_enum_to_string(test: int) -> str:
     # https://simpleitk.org/doxygen/latest/html/namespaceitk_1_1simple.html
     # #ae40bd64640f4014fba1a8a872ab4df98
-    _inorder_list = ['sitkUnknown', 'sitkUInt8', 'sitkInt8', 'sitkUInt16',
-                     'sitkInt16', 'sitkUInt32', 'sitkInt32', 'sitkUInt64',
-                     'sitkInt64', 'sitkFloat32', 'sitkFloat64',
+    _inorder_list = ['sitkInt8', 'sitkUInt8', 'sitkInt16',
+                     'sitkUInt16', 'sitkInt32', 'sitkUInt32', 'sitkInt64',
+                     'sitkUInt64', 'sitkFloat32', 'sitkFloat64',
                      'sitkComplexFloat32', 'sitkComplexFloat64']
     _pixel_values = {i: p for i, p in enumerate(_inorder_list)}
 
@@ -143,11 +143,11 @@ def _casting_up(inp: Union[str, int], out: Union[str, int]) -> bool:
     elif igrp in ('float') and ogrp in ('complex'):
         cast_up = True
     elif igrp in ('integer', 'sinteger') and ogrp in ('integer', 'sinteger'):
-        cast_up = _digit(inp) > _digit(out)
+        cast_up = _digit(inp) < _digit(out)
     elif igrp in ('float') and ogrp in ('float'):
-        cast_up = _digit(inp) > _digit(out)
+        cast_up = _digit(inp) < _digit(out)
     elif igrp in ('complex') and ogrp in ('complex'):
-        cast_up = _digit(inp) > _digit(out)
+        cast_up = _digit(inp) < _digit(out)
 
     return cast_up
 
