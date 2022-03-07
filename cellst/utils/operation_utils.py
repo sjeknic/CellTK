@@ -68,6 +68,139 @@ def _close_border_holes(array: np.ndarray,
     return array
 
 
+def _np_types() -> dict:
+    _np_dtypes = {'integer': (np.uint, np.uint8, np.uint16,
+                              np.uint32, np.uint64),
+                  'sinteger': (int, np.int, np.int8, np.int16,
+                               np.int32, np.int64),
+                  'float': (np.single, np.float32, np.double,
+                            np.float64, np.float128),
+                  'complex': (np.csingle, np.complex64, np.cdouble,
+                              np.complex128, np.cfloat)}
+    return _np_dtypes
+
+
+def _sitk_types(test: Union[str, "sitk.BasicPixelID"] = None) -> dict:
+    _sitk_types = {'integer': (sitk.sitkUInt8, sitk.sitkUInt16,
+                               sitk.sitkUInt32, sitk.sitkUInt64),
+                   'sinteger': (sitk.sitkInt8, sitk.sitkInt16,
+                                sitk.sitkInt32, sitk.sitkInt64),
+                   'float': (sitk.sitkFloat32, sitk.sitkFloat64),
+                   'complex': (sitk.sitkComplexFloat32,
+                               sitk.sitkComplexFloat64)}
+
+    if test is None:
+        return _sitk_types
+    else:
+        if isinstance(test, str):
+            test = getattr(sitk, test)
+
+        return [k for k, v in _sitk_types.items()
+                if test in v][0]
+
+
+def _sitk_enum_to_string(test: int) -> str:
+    # https://simpleitk.org/doxygen/latest/html/namespaceitk_1_1simple.html
+    # #ae40bd64640f4014fba1a8a872ab4df98
+    _inorder_list = ['sitkUnknown', 'sitkUInt8', 'sitkInt8', 'sitkUInt16',
+                     'sitkInt16', 'sitkUInt32', 'sitkInt32', 'sitkUInt64',
+                     'sitkInt64', 'sitkFloat32', 'sitkFloat64',
+                     'sitkComplexFloat32', 'sitkComplexFloat64']
+    _pixel_values = {i: p for i, p in enumerate(_inorder_list)}
+
+    return _pixel_values[test]
+
+
+def _casting_up(inp: Union[str, int], out: Union[str, int]) -> bool:
+    # Returns trailing digits
+    def _digit(test) -> int:
+        i = 0
+        while True:
+            i -= 1
+            if test[i].isdigit():
+                pass
+            else:
+                i += 1  # stopped on non-digit
+                break
+
+        return int(test[i:])
+
+    # Get everything in strings
+    if isinstance(inp, int):
+        inp = _sitk_enum_to_string(inp)
+    if isinstance(inp, int):
+        out = _sitk_enum_to_string(out)
+
+    # Get groups
+    igrp = _sitk_types(inp)
+    ogrp = _sitk_types(out)
+
+    # By default
+    cast_up = False
+
+    if igrp in ('integer', 'sinteger') and ogrp in ('float', 'complex'):
+        cast_up = True
+    elif igrp in ('float') and ogrp in ('complex'):
+        cast_up = True
+    elif igrp in ('integer', 'sinteger') and ogrp in ('integer', 'sinteger'):
+        cast_up = _digit(inp) > _digit(out)
+    elif igrp in ('float') and ogrp in ('float'):
+        cast_up = _digit(inp) > _digit(out)
+    elif igrp in ('complex') and ogrp in ('complex'):
+        cast_up = _digit(inp) > _digit(out)
+
+    return cast_up
+
+
+def get_image_pixel_type(image: Union[np.ndarray, sitk.Image]) -> str:
+    """"""
+    _np_dtypes = _np_types()
+    _sitk_dtypes = _sitk_types()
+
+    try:
+        if isinstance(image, np.ndarray):
+            pxl = image.dtype
+            key = [k for k, v in _np_dtypes.items()
+                   if pxl in v][0]
+        elif isinstance(image, sitk.Image):
+            pxl = sitk.GetPixelIDType()
+            key = [k for k, v in _sitk_dtypes.items()
+                   if pxl in v][0]
+        else:
+            raise IndexError
+    except IndexError:
+        raise TypeError('Did not understand type of '
+                        f'input image {type(image)}')
+
+    return key
+
+
+def cast_sitk(image: sitk.Image,
+              req_type: str,
+              cast_up: bool = False
+              ) -> sitk.Image:
+    """"""
+    # Get the relevant types
+    # This returns an integer of the required type
+    input_type = _sitk_enum_to_string(image.GetPixelIDValue())
+    assert hasattr(sitk, req_type)
+
+    # Check if casting up for early exit
+    if not cast_up:
+        up = _casting_up(input_type, req_type)
+        # Requested type is greater than input type
+        if up:
+            return image
+
+    # Cast and return
+    if input_type != req_type:
+        cast = sitk.CastImageFilter()
+        cast.SetOutputPixelType(getattr(sitk, req_type))
+        image = cast.Execute(image)
+
+    return image
+
+
 def sitk_binary_fill_holes(labels: np.ndarray,
                            fill_border: bool = True,
                            iterations: Union[int, bool] = False,
