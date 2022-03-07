@@ -129,6 +129,11 @@ class ConditionArray():
                                       self.coords['channels'],
                                       self.coords['metrics']))
 
+    @property
+    def _is_empty(self) -> bool:
+        """"""
+        return any([not s for s in self.shape])
+
     def save(self, path: str) -> None:
         """
         Saves ConditionArray to an hdf5 file.
@@ -889,6 +894,11 @@ class ExperimentArray():
         """
         f = h5py.File(path, "r")
         return cls._build_from_file(f)
+
+    def remove_empty_sites(self) -> None:
+        """Removes all sites that have any empty dimension"""
+        self.sites = {k: v for k, v in self.sites.items()
+                      if not v._is_empty}
 
     def remove_short_traces(self, min_trace_length: int = 0) -> None:
         """Applies a filter to each condition to remove cells with
