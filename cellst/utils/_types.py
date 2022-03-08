@@ -3,14 +3,15 @@ from typing import NewType, Tuple
 
 import numpy as np
 
-from cellst.core.arrays import ConditionArray
 
+class BaseArray():
+    """Just for typing now"""
 
 # Define custom types to make output tracking esier
 Image = NewType('image', np.ndarray)
 Mask = NewType('mask', np.ndarray)
 Track = NewType('track', np.ndarray)
-Arr = NewType('array', ConditionArray)  # For ConditionArray/ExperimentArray
+Arr = NewType('array', BaseArray)  # For ConditionArray/ExperimentArray
 Same = NewType('same', np.ndarray)  # Allows functions to return multiple types
 
 

@@ -9,8 +9,9 @@ import numpy as np
 import plotly.graph_objects as go
 
 import cellst.utils.filter_utils as filt
-from cellst.utils.plot_utils import plot_groups, get_timeseries_estimator
+from cellst.utils.plot_utils import plot_groups
 from cellst.utils.info_utils import nan_helper_2d
+from cellst.utils.unet_model import UPeakModel
 
 
 class ConditionArray():
@@ -378,6 +379,22 @@ class ConditionArray():
             for a in all_poss
         }
 
+    def _get_key_components(self,
+                            key: Tuple[int, str],
+                            exclude: str = 'metrics'
+                            ) -> Tuple[int, str]:
+        """Returns the components in key that are NOT in the target axis"""
+        assert exclude in self.coords, f'Coordinate {exclude} not found.'
+
+        # Get axis for each key and compare to exclude
+        out = []
+        for k in key:
+            coord = self._key_dim_pairs[k]
+            if coord != exclude:
+                out.append(k)
+
+        return tuple(out)
+
     def set_position_id(self, pos: int = None) -> None:
         """
         Adds unique identifiers for cells in ConditionArray
@@ -678,6 +695,34 @@ class ConditionArray():
         for k in keys:
             k = tuple(k)
             self[k] = nan_helper_2d(self[k])
+
+    def predict_peaks(self,
+                      key: Tuple[int, str],
+                      model: UPeakModel = None,
+                      weight_path: str = 'cellst/config/upeak_example_weights.tf',
+                      propagate: bool = True,
+                      ) -> None:
+        """"""
+        # Get the data that will be used for prediction
+        assert isinstance(key, tuple)
+        data = self[key]
+        assert data.ndim == 2
+
+        # Make the destination metric slots and keys
+        slots = ['slope_prob', 'plateau_prob']
+        self.add_metric_slots(slots)
+        base = self._get_key_components(key, 'metrics')
+        dest_keys = [base + tuple([s]) for s in slots]
+
+        # Initialize the UPeak model if needed
+        if not model:
+            model = UPeakModel(weight_path)
+
+        predictions = model.predict(data, roi=(1, 2))  # slope, plateau
+        for i, d in enumerate(dest_keys):
+            self[d] = predictions[..., i]
+            if propagate:
+                self.propagate_values(d, prop_to=propagate)
 
 
 class ExperimentArray():
@@ -1058,6 +1103,24 @@ class ExperimentArray():
         """
         for v in self.sites.values():
             v.interpolate_nans(keys)
+
+    def predict_peaks(self,
+                      key: Tuple[int, str],
+                      weight_path: str = 'cellst/config/upeak_example_weights.tf',
+                      propagate: bool = True,
+                      ) -> None:
+        """
+
+        TODO: Initialize the UPeak model here and pass to the sites
+        """
+        '''
+        NOTE: This will fail if any of the sites have different dimensions
+        This is important to remember if adding groups to Arrays.
+        Follows same assumption as made for keys - i.e. all are the same
+        '''
+        model = UPeakModel(weight_path)
+        for v in self.sites.values():
+            v.predict_peaks(key, model, propagate=propagate)
 
     def plot_by_condition(self,
                           keys: List[Tuple[str]],
