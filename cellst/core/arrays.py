@@ -12,6 +12,7 @@ import cellst.utils.filter_utils as filt
 from cellst.utils.plot_utils import plot_groups
 from cellst.utils.info_utils import nan_helper_2d
 from cellst.utils.unet_model import UPeakModel
+from cellst.utils.upeak.peak_utils import segment_peaks_agglomeration
 
 
 class ConditionArray():
@@ -701,6 +702,8 @@ class ConditionArray():
                       model: UPeakModel = None,
                       weight_path: str = 'cellst/config/upeak_example_weights.tf',
                       propagate: bool = True,
+                      segment: bool = True,
+                      **kwargs
                       ) -> None:
         """"""
         # Get the data that will be used for prediction
@@ -710,7 +713,12 @@ class ConditionArray():
 
         # Make the destination metric slots and keys
         slots = ['slope_prob', 'plateau_prob']
-        self.add_metric_slots(slots)
+        if segment:
+            # Add the extra slot here
+            self.add_metric_slots(slots + ['peaks'])
+        else:
+            self.add_metric_slots(slots)
+
         base = self._get_key_components(key, 'metrics')
         dest_keys = [base + tuple([s]) for s in slots]
 
@@ -718,11 +726,19 @@ class ConditionArray():
         if not model:
             model = UPeakModel(weight_path)
 
+        # Get predictions of where peaks exist
         predictions = model.predict(data, roi=(1, 2))  # slope, plateau
         for i, d in enumerate(dest_keys):
             self[d] = predictions[..., i]
-            if propagate:
-                self.propagate_values(d, prop_to=propagate)
+            if propagate: self.propagate_values(d, prop_to=propagate)
+
+        # Segment peaks if needed
+        if segment:
+            k = base + ('peaks',)
+            peaks = segment_peaks_agglomeration(data, predictions, **kwargs)
+            self[k] = peaks
+            if propagate: self.propagate_values(k, prop_to=propagate)
+
 
 
 class ExperimentArray():
@@ -1108,9 +1124,11 @@ class ExperimentArray():
                       key: Tuple[int, str],
                       weight_path: str = 'cellst/config/upeak_example_weights.tf',
                       propagate: bool = True,
+                      segment: bool = True,
+                      **kwargs
                       ) -> None:
         """
-
+        kwargs are passed to the segmentation algorithm
         TODO: Initialize the UPeak model here and pass to the sites
         """
         '''
