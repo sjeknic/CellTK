@@ -66,14 +66,13 @@ class _UNetStructure():
             up_layer = UpSampling2D
         else:
             raise ValueError(f'Model can not be built for dimensions {dimensions}.')
-
         # Add LeakyRelU as an option
         if activation == 'leaky':
             activation = lambda x: LeakyReLU(alpha=cls._alpha)(x)
 
         # TODO: Any args that change need to be passed around
         def _add_pool_module(input_layer: Layer,
-                             init_filters: int = 64):
+                             init_filters: int):
             trans_layers = []
             filt = init_filters
             for _ in range(steps):
@@ -92,7 +91,7 @@ class _UNetStructure():
             return input_layer, trans_layers
 
         def _add_up_module(input_layer: Layer,
-                           init_filters: int = 256,
+                           init_filters: int,
                            trans_layers: list = []):
             # trans_layers starts at the top of the model,
             # we are the bottom when this module starts
@@ -113,7 +112,7 @@ class _UNetStructure():
 
             return input_layer
 
-        def _add_conv_module(input_layer: Layer, filt: int = 64):
+        def _add_conv_module(input_layer: Layer, filt: int):
             """
             Build successive Conv-BatchNorm layers
             """
@@ -131,7 +130,7 @@ class _UNetStructure():
         # Input
         x = Input(dimensions)
         # Pooling
-        y, trans_layers = _add_pool_module(x)
+        y, trans_layers = _add_pool_module(x, init_filters)
         # Base layer
         new_filt = init_filters * 2 ** steps
         y = _add_conv_module(y, filt=new_filt)
