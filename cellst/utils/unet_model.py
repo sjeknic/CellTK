@@ -4,6 +4,8 @@ from typing import Tuple, List, Collection
 
 import numpy as np
 import scipy.stats as stats
+import scipy.signal as signal
+import sklearn.preprocessing as preproc
 from sklearn.preprocessing import MinMaxScaler, MaxAbsScaler
 from tensorflow.keras.layers import (Conv1D, MaxPooling1D, UpSampling1D,
                                      Conv2D, MaxPooling2D, UpSampling2D,
@@ -14,6 +16,7 @@ from keras.layers.advanced_activations import LeakyReLU
 import tensorflow.keras.models
 
 from cellst.utils._types import Image
+from cellst.utils.info_utils import nan_helper_2d, get_split_idxs
 
 
 # TODO: Write docstring explaining kwargs
@@ -336,20 +339,19 @@ class OrigUNetModel(FluorUNetModel):
 
 class UPeakModel(_UNetStructure):
     """
-    The user needs to know the input dimensions that correspond
-    to the normalization methods that they chose.Only the first
-    two model dimensions are determined by the array size.
-
     Regions of interest:
     0 - Background
     1 - Slope
     2 - Plateau
+
+    Current model requires 64 different iterations of cwt to be added to the
+    input
     """
-    _norm_methods = ['amplitude', 'zscore']
-    _norm_kwargs = [{}, {'norm': True}]
+    _norm_methods = ['amplitude', 'cwt']
+    _norm_kwargs = [{}, {}]
     _norm_inplace = [True, False]
-    _model_kws = dict(classes=3, kernel=4, steps=2, layers=2,
-                      init_filters=64, transfer=False, activation='leaky',
+    _model_kws = dict(classes=3, kernel=8, steps=3, layers=2,
+                      init_filters=64, transfer=True, activation='leaky',
                       padding='same', mode=0, momentum=0.9)
 
     def __init__(self,
@@ -388,7 +390,6 @@ class UPeakModel(_UNetStructure):
 
         # Check if a model needs to be built
         if not hasattr(self, 'model'):
-            # TODO: Can't I just call __init__ again?
             super().__init__(array.shape, self.weight_path)
 
         # Predict - batch should not be required
@@ -444,6 +445,10 @@ class UPeakModel(_UNetStructure):
                 return _res
             return wrapper
 
+        # Linearly interpolate any nans if they exist
+        if np.isnan(array).any():
+            array = nan_helper_2d(array)
+
         # Iterate through the defined inputs
         inputs = zip(self._norm_methods,
                      self._norm_kwargs,
@@ -453,6 +458,8 @@ class UPeakModel(_UNetStructure):
                 array = _dim_handler(self.normalize_amplitude)(array, k, i)
             elif m == 'zscore':
                 array = _dim_handler(self.normalize_zscore)(array, k, i)
+            elif m == 'cwt':
+                array = _dim_handler(self.create_cwt)(array, k, i)
             else:
                 warnings.warn(f'Did not understand norm method {m}')
 
@@ -520,16 +527,13 @@ class UPeakModel(_UNetStructure):
         """This function should not be directly called, but will
         get called by normalize_inputs. Not private for API documentation
 
-        TODO: Test applied to correct axis"""
+        TODO: Test applied to correct axis
+        TODO: by_row did not work, so I removed it
+        """
         assert array.ndim == 2  # Normalize before adding features
         input_shape = array.shape
-        # Move all samples into same row
-        if not by_row:
-            array = array.copy().reshape(1, -1)
-
-        array = MaxAbsScaler().fit_transform(array)
-
-        return array.reshape(input_shape)
+        array = preproc.maxabs_scale(array, axis=1)[..., None]
+        return array
 
     def normalize_zscore(self,
                           array: np.ndarray,
@@ -537,7 +541,9 @@ class UPeakModel(_UNetStructure):
                           offset: float = 0.,
                           norm: bool = False
                           ) -> np.ndarray:
-        """TODO: Test applied to correct axis"""
+        """TODO: Test applied to correct axis
+        I don't think this works. Normalizes all features independently??
+        """
         assert array.ndim == 2  # Normalize before adding features
         input_shape = array.shape
         # Move all samples into same row
@@ -552,3 +558,31 @@ class UPeakModel(_UNetStructure):
             array = MaxAbsScaler().fit_transform(array)
 
         return array.reshape(input_shape)
+
+    def create_cwt(self, traces: np.ndarray,
+                    widths: np.ndarray = None,
+                     wavelet = signal.ricker
+                    ) -> np.ndarray:
+        """"""
+        # Get sizes of the wavelets
+        splits = np.array_split(traces, 64, axis=1)
+        widths = get_split_idxs(splits, axis=1)
+
+
+        out = np.zeros((traces.shape[0], traces.shape[1], len(widths)), dtype=float)
+        for idx, tr in enumerate(traces):
+            tr = np.squeeze(tr)
+            assert tr.ndim == 1
+            if np.isnan(tr).any():
+                # Assume traces were interpolated and then padded with nans
+                # Need to remove any trailing nans - More for UPeak than here...
+                first_nan = np.logical_not(np.isnan(tr)).argmin()
+                tr = tr[:first_nan]
+            else:
+                first_nan = None
+
+            cwt = signal.cwt(tr, wavelet=wavelet, widths=widths).T
+
+            out[idx, :first_nan, : ] = cwt
+
+        return out
