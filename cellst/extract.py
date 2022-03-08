@@ -69,8 +69,7 @@ class Extractor(BaseExtractor):
         if len(masks) != 0:
             # Check that sufficient lineages are provided
             if len(lineages) == 0:
-                warnings.warn('Got mask but not lineage file. No cell division'
-                              ' can be tracked.', UserWarning)
+                warnings.warn('Got mask but not lineage file.', UserWarning)
                 tracks_to_use.extend(list(masks))
             elif len(masks) != len(lineages):
                 # TODO: This could probably be a warning and pad lineages
@@ -135,7 +134,7 @@ class Extractor(BaseExtractor):
                     extra_funcs,
                     cell_index
                 )
-            array[rgn, cnl, :, :, :] = cnl_rgn_data
+                array[rgn, cnl, :, :, :] = cnl_rgn_data
 
         if remove_parent:
             # Get parent information from a single track
