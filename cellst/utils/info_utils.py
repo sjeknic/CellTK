@@ -302,7 +302,7 @@ def get_bootstrap_population(arr: np.ndarray,
     """
     boot_arrs = [_RNG.choice(arr, size=arr.shape[0], replace=True)
                  for _ in range(boot_reps)]
-    arr = np.vstack([b.mean(0) for b in boot_arrs])
+    arr = np.vstack([np.nanmean(b, 0) for b in boot_arrs])
 
     return arr
 
@@ -354,7 +354,11 @@ def nan_helper(y: np.ndarray) -> np.ndarray:
 
 
 def nan_helper_2d(arr: np.ndarray) -> np.ndarray:
-    """Linear interpolation of nans along rows in 2D array."""
+    """Linear interpolation of nans along rows in 2D array.
+
+    TODO:
+        - Move to a more sensible util file
+    """
     temp = np.zeros(arr.shape)
     temp[:] = np.nan
     for n, y in enumerate(arr.copy()):
@@ -365,10 +369,10 @@ def nan_helper_2d(arr: np.ndarray) -> np.ndarray:
     return temp
 
 
-def get_split_idxs(arrays: Collection[np.ndarray]) -> List[int]:
+def get_split_idxs(arrays: Collection[np.ndarray], axis: int = 0) -> List[int]:
     """
     """
-    row_idxs = [s.shape[0] for s in arrays]
+    row_idxs = [s.shape[axis] for s in arrays]
     split_idxs = [np.sum(row_idxs[:i + 1])
                   for i in range(len(row_idxs))]
     return split_idxs
