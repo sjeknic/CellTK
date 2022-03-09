@@ -426,6 +426,11 @@ class ConditionArray():
         if isinstance(name, str):
             name = [name]
 
+        # Remove names that have already been added
+        name = [n for n in name if n not in self.coords['metrics']]
+        # If all names are gone - give up
+        if not name: return
+
         # Get dimensions and set the metric dimension to 1
         new_dim = list(self._arr_dim)
         new_dim[self._dim_idxs['metrics']] = len(name)

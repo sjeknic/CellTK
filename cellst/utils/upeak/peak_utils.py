@@ -13,7 +13,8 @@ def segment_peaks_agglomeration(traces: np.ndarray,
                                 steps: int = 15,
                                 min_seed_prob: float = 0.8,
                                 min_peak_prob: float = 0.5,
-                                min_seed_length: int = 2
+                                min_seed_length: int = 2,
+                                **kwargs  # Messy fix for running this from derived metrics
                                 ) -> np.ndarray:
     """Returns an array with peaks incrementally counted in each trace
 
