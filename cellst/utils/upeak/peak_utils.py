@@ -127,4 +127,3 @@ def _idxs_to_labels(trace: np.ndarray, indexes: List[np.ndarray]) -> np.ndarray:
         out[pts] = label + 1
 
     return out
-

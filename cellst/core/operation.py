@@ -10,14 +10,16 @@ from typing import (Collection, Tuple, Callable,
 
 import numpy as np
 import skimage.measure as meas
+import skimage.morphology as morph
 import skimage.util as util
+import SimpleITK as sitk
 
 from cellst.core.arrays import ConditionArray
 from cellst.utils._types import (Image, Mask, Track, Arr, Same,
                                  ImageContainer, INPT_NAMES,
                                  RandomNameProperty)
 from cellst.utils.operation_utils import (track_to_mask, parents_from_track,
-                                          match_labels_linear)
+                                          match_labels_linear, mask_to_seeds)
 from cellst.utils.log_utils import get_console_logger
 from cellst.utils.utils import ImageHelper
 import cellst.utils.metric_utils as metric_utils
@@ -536,6 +538,13 @@ class Operation():
         """Labels ~n points with unique integers"""
         return util.regular_seeds(image.shape, n_points, dtype)
 
+    @ImageHelper(by_frame=True)
+    def mask_to_seeds(self,
+                      mask: Mask
+                      ) -> Mask:
+        """"""
+        return mask_to_seeds(mask)
+
 
 class BaseProcessor(Operation):
     __name__ = 'Processor'
@@ -700,14 +709,15 @@ class BaseExtractor(Operation):
                  channels: Collection[str] = [],
                  regions: Collection[str] = [],
                  lineages: Collection[np.ndarray] = [],
-                 condition: str = None
+                 condition: str = None,
+                 **kwargs,
                  ) -> Arr:
         """
         This directly calls extract_data_from_image
         instead of using run_operation
         """
-        kwargs = dict(channels=channels, regions=regions,
-                      condition=condition, lineages=lineages)
+        kwargs.update(dict(channels=channels, regions=regions,
+                           condition=condition, lineages=lineages))
         return self.extract_data_from_image.__wrapped__(self, images, masks,
                                                         tracks, **kwargs)
 
@@ -861,6 +871,15 @@ class BaseExtractor(Operation):
 
                 keys = [k + [slice(None), _rng] for k in keys]
 
+            # A few metrics are special and calculated by ConditionArray
+            # Assume only one key and user specified kwargs
+            if name == 'predict_peaks':
+                array.predict_peaks(keys[0], propagate=prop, **kwargs)
+                return
+            elif name in ('active_cells', 'active', 'cumulative_active'):
+                array.mark_active_cells(keys[0], propagate=prop, **kwargs)
+                return
+
             # Get the data and group with the key
             arrs = [array[tuple(k)] for k in keys]
             arr_groups = itertools.permutations(zip(keys, arrs))
@@ -962,12 +981,15 @@ class BaseExtractor(Operation):
         propagate can be bool, or the name of dimension to propagate to
 
         TODO: Add possiblity for custom Callable function
+        TODO: Peaks could probably be passed here???
+        TODO: So could segmentation of peaks???
         """
         # Check the inputs now before calculation
         # Assert that keys include channel, region, and metric
         for key in keys:
             assert len(key) == 3
-        assert hasattr(np, func) or hasattr(metric_utils, func), 'Derived metric must be numpy function.'
+        if not hasattr(np, func) and not hasattr(metric_utils, func):
+            raise ValueError('Metric must be numpy func or in metric_utils.')
 
         # Save to calculated metrics to get added after extract is done
         # TODO: Make a dictionary
@@ -975,7 +997,18 @@ class BaseExtractor(Operation):
                                                     frame_rng, args, kwargs])
 
         # Fill in the metric with just nan for now
-        self._props_to_add[metric_name] = RandomNameProperty()
+        peak_metrics = ('predict_peaks', 'active_cells',
+                        'cumulative_active', 'active')
+        if metric_name in peak_metrics:
+            if metric_name == 'predict_peaks':
+                self._props_to_add['slope_prob'] = RandomNameProperty()
+                self._props_to_add['plateau_prob'] = RandomNameProperty()
+                self._props_to_add['peaks'] = RandomNameProperty()
+            else:
+                self._props_to_add['active'] = RandomNameProperty()
+                self._props_to_add['cumulative_active'] = RandomNameProperty()
+        else:
+            self._props_to_add[metric_name] = RandomNameProperty()
 
         self.logger.info(f'Added derived metric {metric_name}')
 
