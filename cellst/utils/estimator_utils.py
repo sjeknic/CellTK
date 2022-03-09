@@ -27,3 +27,14 @@ def bootstrap_estimator(arr: np.ndarray,
     hi_end = func(boot, 50. + ci / 2., axis=ax, keepdims=True)
 
     return np.vstack((low_end, hi_end))
+
+
+def fraction_of_total(arr: np.ndarray,
+                      ignore_nans: bool = True,
+                      ax: int = 0
+                      ) -> np.ndarray:
+    """"""
+    if ignore_nans:
+        return np.nansum(arr, axis=ax, keepdims=True) / arr.shape[0]
+    else:
+        return np.sum(arr, axis=ax, keepdims=True) / arr.shape[0]

@@ -13,6 +13,7 @@ from cellst.utils.plot_utils import plot_groups
 from cellst.utils.info_utils import nan_helper_2d
 from cellst.utils.unet_model import UPeakModel
 from cellst.utils.upeak.peak_utils import segment_peaks_agglomeration
+from cellst.utils.metric_utils import active_cells, cumulative_active
 
 
 class ConditionArray():
@@ -739,6 +740,32 @@ class ConditionArray():
             self[k] = peaks
             if propagate: self.propagate_values(k, prop_to=propagate)
 
+    def mark_active_cells(self,
+                          key: Tuple[int, str],
+                          thres: float = 1,
+                          propagate: bool = True
+                          ) -> None:
+        """"""
+        # Get the data that will be used for prediction
+        assert isinstance(key, tuple)
+        data = self[key]
+        assert data.ndim == 2
+
+        # Make the destination slots and keys
+        slots = ['active', 'cumulative_active']
+        self.add_metric_slots(slots)
+        base = self._get_key_components(key, 'metrics')
+        dest_keys = [base + tuple([s]) for s in slots]
+
+        # Calculate the active cells
+        active = active_cells(data, thres)
+        cumul_active = cumulative_active(active)
+        self[dest_keys[0]] = active
+        self[dest_keys[1]] = cumul_active
+
+        if propagate:
+            [self.propagate_values(d, prop_to=propagate)
+             for d in dest_keys]
 
 
 class ExperimentArray():
@@ -1139,6 +1166,15 @@ class ExperimentArray():
         model = UPeakModel(weight_path)
         for v in self.sites.values():
             v.predict_peaks(key, model, propagate=propagate)
+
+    def mark_active_cells(self,
+                          key: Tuple[int, str],
+                          thres: float = 1,
+                          propagate: bool = True
+                          ) -> None:
+        """"""
+        for v in self.sites.values():
+            v.mark_active_cells(key, thres, propagate)
 
     def plot_by_condition(self,
                           keys: List[Tuple[str]],
