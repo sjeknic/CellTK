@@ -378,26 +378,41 @@ class UPeakModel(_UNetStructure):
 
     def predict(self,
                 array: np.ndarray,
-                roi: Tuple[int] = (1, 2)
+                roi: Tuple[int] = (1, 2),
+                min_nonnan: int = 2
                 ) -> np.ndarray:
         """
-
         By default, returns slope and plateau summed
         """
+        # Create default output - all nans
+        out = np.empty((*array.shape, len(roi)))
+        out[:] = np.nan
+
+        # Cells with all or nearly all nans need to be removed
+        # Mask is saved, so that they can be added back after it's all done
+        nan_mask = np.isnan(array).sum(1) > min_nonnan
+        nonan_arr = array[~nan_mask, :]
+        # check that something is left...
+        if nonan_arr.shape[0] == 0: return out
+        if nonan_arr.ndim == 1: nonan_arr = nonan_arr[:, None]
+
         # Normalize the inputs
-        array = self.normalize_inputs(array)
-        array, pads = self.pad_1d(array, self._model_kws['steps'])
+        nonan_arr = self.normalize_inputs(nonan_arr)
+        nonan_arr, pads = self.pad_1d(nonan_arr, self._model_kws['steps'])
 
         # Check if a model needs to be built
         if not hasattr(self, 'model'):
-            super().__init__(array.shape, self.weight_path)
+            super().__init__(nonan_arr.shape, self.weight_path)
 
         # Predict - batch should not be required
-        out = self.model.predict(array)
-        out = self.undo_padding(out, pads)
+        preds = self.model.predict(nonan_arr)
+        preds = self.undo_padding(preds, pads)
+
+        # Add predictions back to out
+        out[~nan_mask, ...] = preds[..., roi]
 
         # Returns a 3D arr...
-        return out[..., roi]
+        return out
 
     def set_normalization_method(self,
                                  method: Collection[str] = None,
