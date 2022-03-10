@@ -103,6 +103,18 @@ class Processor(BaseProcessor):
                              output=np.empty(image.shape, dtype=dtype))
 
     @ImageHelper(by_frame=True)
+    def binomial_blur(self,
+                      image: Image,
+                      iterations: int = 7
+                      ) -> Image:
+        """"""
+        fil = sitk.BinomialBlurImageFilter()
+        fil.SetRepetitions(iterations)
+
+        img = fil.Execute(sitk.GetImageFromArray(image))
+        return sitk.GetArrayFromImage(img)
+
+    @ImageHelper(by_frame=True)
     def gaussian_laplace_filter(self,
                                 image: Image,
                                 sigma: float = 2.5,
