@@ -17,9 +17,7 @@ from cellst.utils.utils import ImageHelper
 from cellst.utils.operation_utils import (sliding_window_generator,
                                           shift_array, crop_array, PadHelper,
                                           wavelet_background_estimate,
-                                          wavelet_noise_estimate,
-                                          sitk_binary_fill_holes,
-                                          cast_sitk)
+                                          wavelet_noise_estimate, cast_sitk)
 
 
 class Processor(BaseProcessor):
@@ -27,6 +25,8 @@ class Processor(BaseProcessor):
     TODO:
         - Add stand-alone crop function
         - Add optical-flow registration
+        - Add N4 bias correction https://simpleitk.readthedocs.io/en/master/link_N4BiasFieldCorrection_docs.html
+        - Add flat fielding from reference
     """
     @ImageHelper(by_frame=False, as_tuple=True)
     def align_by_cross_correlation(self,
@@ -257,15 +257,15 @@ class Processor(BaseProcessor):
                                    sigma: float = 1.,
                                    ) -> Image:
         """"""
-        # Set up the filter
+        # Only constraint on type is to be Real
         fil = sitk.GradientMagnitudeRecursiveGaussianImageFilter()
         fil.SetSigma(sigma)
-
-        # Convert image and return
-        # TODO: Type casting needed?
         im = sitk.GetImageFromArray(image)
         im = fil.Execute(im)
+
+        im = cast_sitk(im, 'sitkFloat32')
         return sitk.GetArrayFromImage(im)
+
     @ImageHelper(by_frame=True)
     def make_edge_potential_image(self,
                                   image: Image,
@@ -302,7 +302,7 @@ class Processor(BaseProcessor):
                 # Convert to array and use np to find values
                 _arr = sitk.GetArrayFromImage(_ma)
                 _arr = _arr[_arr > 0]
-                k1 = np.percentile(_arr, 95)
+                k1 = np.percentile(_arr, 95 )
                 k2 = np.mean(_arr)
                 if k1 <= k2: warnings.warn('Sigmoid param estimation poor.')
                 alpha = (k2 - k1) / 6.
@@ -471,7 +471,6 @@ class Processor(BaseProcessor):
                                         weight_path=weight_path)
 
         # Pre-allocate output memory
-        # TODO: Incorporate the batch here.
         if batch is None:
             output = self.model.predict(image[:, :, :], roi=roi)
         else:
