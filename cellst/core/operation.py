@@ -4,19 +4,22 @@ import logging
 import time
 import inspect
 import itertools
+from copy import deepcopy
 from typing import (Collection, Tuple, Callable,
                     List, Dict, Generator, Union)
 
 import numpy as np
 import skimage.measure as meas
+import skimage.morphology as morph
 import skimage.util as util
+import SimpleITK as sitk
 
 from cellst.core.arrays import ConditionArray
 from cellst.utils._types import (Image, Mask, Track, Arr, Same,
                                  ImageContainer, INPT_NAMES,
                                  RandomNameProperty)
 from cellst.utils.operation_utils import (track_to_mask, parents_from_track,
-                                          match_labels_linear)
+                                          match_labels_linear, mask_to_seeds)
 from cellst.utils.log_utils import get_console_logger
 from cellst.utils.utils import ImageHelper
 import cellst.utils.metric_utils as metric_utils
@@ -139,8 +142,9 @@ class Operation():
                          f'{hex(id(self))} entered.')
         # Log requests for each data type
         for name in INPT_NAMES:
-            if getattr(self, f'{name}s'):
+            if hasattr(self, f'{name}s'):
                 self.logger.info(f"{name}:{getattr(self, f'{name}s')}")
+
         self.logger.info(f"Output ID: {self.output_id}")
 
         return self
@@ -213,12 +217,8 @@ class Operation():
                 else:
                     check_key = (None, None)
 
-                # The output already exists - skip the function
-                # TODO: Add ability to use keys with _split_key
-                if check_key in inputs:
-                    self.logger.info(f'Output already loaded: {check_key} '
-                                     f'{inputs[check_key].shape}, '
-                                     f'{inputs[check_key].dtype}.')
+                # If outputs are already loaded, skip the function
+                if self._check_if_loaded(check_key, inputs):
                     self.logger.info(f'Skipping {func.__name__}.')
                     continue
 
@@ -329,10 +329,13 @@ class Operation():
         # Get all the inputs that were passed to __init__
         inputs = []
         for i in INPT_NAMES:
-            inputs.extend([(g, i) for g in getattr(self, f'{i}s')])
+            # Messy fix, but not folder for Same/Stack input
+            if i != Same.__name__:
+                inputs.extend([(g, i) for g in getattr(self, f'{i}s')])
 
         # Check if save_as was set for last function
         if self.functions[-1][1]:
+            # TODO: If save name was set, this is already in outputs
             last_name = (self.functions[-1][1],
                          self.output_id[1])
         else:
@@ -345,6 +348,33 @@ class Operation():
             inputs += f_keys_for_inputs + [last_name]
 
         return inputs, outputs
+
+    def _check_if_loaded(self,
+                         check_key: Tuple[str],
+                         inputs: ImageContainer
+                         ) -> bool:
+        """"""
+        # Check if input is already loaded
+        # TODO: Add ability to use keys with _split_key
+        if check_key not in inputs:
+            # Try with the split_key
+            _split = lambda x: x[0].split(self._split_key)[0]
+            matches = [k for k in inputs.keys()
+                       if _split(k) == check_key[0]]
+            if not matches:
+                return False
+            else:
+                # TODO: Matches now need to be filtered by type
+                pass
+        else:
+            matches = [check_key]
+
+        # Log information if something is found
+        self.logger.info(f'Output for {check_key} already loaded.')
+        for m in matches:
+            self.logger.info(f'{m}, {inputs[m].shape}, {inputs[m].dtype}.')
+
+        return True
 
     def _get_func_output_type(self, func: (Callable, str)) -> str:
         """Returns the annotated output type of the function"""
@@ -508,6 +538,35 @@ class Operation():
         """Labels ~n points with unique integers"""
         return util.regular_seeds(image.shape, n_points, dtype)
 
+    @ImageHelper(by_frame=True)
+    def mask_to_seeds(self,
+                      mask: Mask
+                      ) -> Mask:
+        """"""
+        return mask_to_seeds(mask)
+
+    @ImageHelper(by_frame=True)
+    def binary_threshold(self,
+                         image: Image,
+                         lower: float = None,
+                         upper: float = None,
+                         inside: float = None,
+                         outside: float = None
+                         ) -> Image:
+        """"""
+        out = np.where(image>0, 0, 1)
+        return out.astype(np.uint8)
+
+        # Set up the filter
+        fil = sitk.BinaryThresholdImageFilter()
+        if lower is not None: fil.SetLowerThreshold(lower)
+        if upper is not None: fil.SetUpperThreshold(upper)
+        if inside is not None: fil.SetInsideValue(inside)
+        if outside is not None: fil.SetOutsideValue(outside)
+
+        img = sitk.GetImageFromArray(image)
+        return sitk.GetArrayFromImage(fil.Execute(img))
+
 
 class BaseProcessor(Operation):
     __name__ = 'Processor'
@@ -611,6 +670,7 @@ class BaseExtractor(Operation):
                  channels: Collection[str] = [],
                  regions: Collection[str] = [],
                  lineages: Collection[np.ndarray] = [],
+                 time: float = None,
                  condition: str = 'condition',
                  position_id: int = 0,
                  min_trace_length: int = 0,
@@ -618,6 +678,7 @@ class BaseExtractor(Operation):
                  output: str = 'data_frame',
                  save: bool = True,
                  force_rerun: bool = True,
+                 skip_frames: Tuple[int] = tuple([]),
                  _output_id: Tuple[str] = None,
                  **kwargs
                  ) -> None:
@@ -646,7 +707,8 @@ class BaseExtractor(Operation):
         # These kwargs get passed to self.extract_data_from_image
         kwargs = dict(channels=channels, regions=regions, lineages=lineages,
                       condition=condition, min_trace_length=min_trace_length,
-                      remove_parent=remove_parent, position_id=position_id)
+                      remove_parent=remove_parent, position_id=position_id,
+                      skip_frames=skip_frames, time=time)
         # Add extract_data_from_image
         # functions are expected to be (func, save_as, user_type, kwargs)
         self.functions = [tuple(['extract_data_from_image', output, None, kwargs])]
@@ -669,16 +731,17 @@ class BaseExtractor(Operation):
                  channels: Collection[str] = [],
                  regions: Collection[str] = [],
                  lineages: Collection[np.ndarray] = [],
-                 condition: str = None
+                 condition: str = None,
+                 **kwargs,
                  ) -> Arr:
         """
         This directly calls extract_data_from_image
         instead of using run_operation
         """
-        kwargs = dict(channels=channels, regions=regions,
-                      condition=condition, lineages=lineages)
-        return self.extract_data_from_image(images, masks, tracks,
-                                            **kwargs)
+        kwargs.update(dict(channels=channels, regions=regions,
+                           condition=condition, lineages=lineages))
+        return self.extract_data_from_image.__wrapped__(self, images, masks,
+                                                        tracks, **kwargs)
 
     @property
     def metrics(self) -> list:
@@ -741,11 +804,22 @@ class BaseExtractor(Operation):
         self._metric_idx = {k: i for i, k in enumerate(all_metrics)}
 
         # Build output
-        out = np.empty((image.shape[0], len(all_metrics), len(cell_index)))
+        frames = image.shape[0] + len(self.skip_frames)
+        out = np.empty((frames, len(all_metrics), len(cell_index)))
         # TODO: Add option to use different pad
         out[:] = np.nan
 
-        for frame in range(image.shape[0]):
+        # adj_frame accounts for skip_frames
+        adj_frame = 0
+        for _frame in range(frames):
+            if _frame in self.skip_frames:
+                adj_frame += 1
+                continue
+            else:
+                frame = _frame - adj_frame
+                # This should never fail
+                assert frame >= 0
+
             # Extract metrics from each region in frame
             rp = meas.regionprops_table(mask[frame], image[frame],
                                         properties=metrics,
@@ -781,7 +855,7 @@ class BaseExtractor(Operation):
                         pass
 
                 # Save frame data
-                out[frame, :, cell_index[lab]] = frame_data[:, n]
+                out[_frame, :, cell_index[lab]] = frame_data[:, n]
 
         return np.moveaxis(out, 0, -1)
 
@@ -819,6 +893,16 @@ class BaseExtractor(Operation):
 
                 keys = [k + [slice(None), _rng] for k in keys]
 
+            # A few metrics are special and calculated by ConditionArray
+            # Assume only one key and user specified kwargs
+            if name == 'predict_peaks':
+                array.predict_peaks(keys[0], propagate=prop, **kwargs)
+                return
+            elif name in ('active_cells', 'active', 'cumulative_active'):
+                array.mark_active_cells(keys[0], propagate=prop, **kwargs)
+                return
+
+            # Get the data and group with the key
             arrs = [array[tuple(k)] for k in keys]
             arr_groups = itertools.permutations(zip(keys, arrs))
             func = getattr(np, func)
@@ -863,6 +947,26 @@ class BaseExtractor(Operation):
             array.filter_cells(mask, delete=True)
             self.logger.info(f"Post-filter array size: {array.shape}")
 
+    def _mark_skip_frames(self, skip_frames: Tuple[int] = None) -> None:
+        """Marks any frames that should not be included
+
+        Args:
+            skip_frames: The frames to be skipped
+
+        Returns:
+            None
+        """
+        if skip_frames:
+            self.logger.info(f'Marking bad frames {skip_frames}')
+            # Mark the frames in the kwargs that are passed to extract_data
+            new_kwargs = deepcopy(self.functions[-1][-1])
+            new_kwargs['skip_frames'] = skip_frames
+
+            # Functions are tuple, so make a copy to use
+            new_func = [*self.functions[-1]]
+            new_func[-1] = new_kwargs
+            self.functions = [tuple(new_func)]
+
     def add_extra_metric(self, name: str, func: Callable = None) -> None:
         """
         Allows for adding custom metrics. If function is none, value will just
@@ -899,12 +1003,19 @@ class BaseExtractor(Operation):
         propagate can be bool, or the name of dimension to propagate to
 
         TODO: Add possiblity for custom Callable function
+        TODO: Peaks could probably be passed here???
+        TODO: So could segmentation of peaks???
         """
         # Check the inputs now before calculation
         # Assert that keys include channel, region, and metric
+        peak_metrics = ('predict_peaks', 'active_cells',
+                        'cumulative_active', 'active')
         for key in keys:
             assert len(key) == 3
-        assert hasattr(np, func), 'Derived metric must be numpy function.'
+        if not hasattr(np, func) and not hasattr(metric_utils, func):
+            if metric_name not in peak_metrics:
+                raise ValueError('Metric must be numpy func '
+                                 'or in metric_utils.')
 
         # Save to calculated metrics to get added after extract is done
         # TODO: Make a dictionary
@@ -912,7 +1023,16 @@ class BaseExtractor(Operation):
                                                     frame_rng, args, kwargs])
 
         # Fill in the metric with just nan for now
-        self._props_to_add[metric_name] = RandomNameProperty()
+        if metric_name in peak_metrics:
+            if metric_name == 'predict_peaks':
+                self._props_to_add['slope_prob'] = RandomNameProperty()
+                self._props_to_add['plateau_prob'] = RandomNameProperty()
+                self._props_to_add['peaks'] = RandomNameProperty()
+            else:
+                self._props_to_add['active'] = RandomNameProperty()
+                self._props_to_add['cumulative_active'] = RandomNameProperty()
+        else:
+            self._props_to_add[metric_name] = RandomNameProperty()
 
         self.logger.info(f'Added derived metric {metric_name}')
 
@@ -984,6 +1104,7 @@ class BaseExtractor(Operation):
         self.logger.info(f"Metrics: {self._metrics}")
         self.logger.info(f"Added metrics: {list(self._props_to_add.keys())}")
         self.logger.info(f"Condition: {kwargs['condition']}")
+        self.logger.info(f"Skipped frames: {kwargs['skip_frames']}")
 
         return super().run_operation(inputs)
 

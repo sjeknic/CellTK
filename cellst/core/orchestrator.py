@@ -31,9 +31,9 @@ class Orchestrator():
     __slots__ = ('pipelines', 'operations', 'yaml_folder',
                  'parent_folder', 'output_folder',
                  'operation_index', 'file_extension', 'name',
-                 'overwrite', 'save', 'condition_map',
+                 'overwrite', 'save', 'condition_map', 'cond_map_only',
                  'logger', 'controller', 'log_file', 'verbose',
-                 'position_map', '__dict__')
+                 'position_map', 'skip_frames', '__dict__')
 
     def __init__(self,
                  yaml_folder: str = None,
@@ -46,8 +46,10 @@ class Orchestrator():
                  array_folder: str = None,
                  condition_map: dict = {},
                  position_map: dict = None,
+                 cond_map_only: bool = False,
                  name: str = 'experiment',
                  frame_rng: Tuple[int] = None,
+                 skip_frames: Tuple[int] = None,
                  file_extension: str = 'tif',
                  overwrite: bool = True,
                  log_file: bool = True,
@@ -68,11 +70,13 @@ class Orchestrator():
         # Save some values
         self.name = name
         self.frame_rng = frame_rng
+        self.skip_frames = skip_frames
         self.file_extension = file_extension
         self.overwrite = overwrite
         self.save = save_master_df
         self.condition_map = condition_map
         self.position_map = self._set_position_map(position_map)
+        self.cond_map_only = cond_map_only
         self.controller = job_controller
         self.log_file = log_file
         self.verbose = verbose
@@ -196,7 +200,7 @@ class Orchestrator():
             raise KeyError(f'Failed to find Operations in {path}.')
 
     def build_experiment_file(self,
-                              arrays: Collection[Arr] = None
+                              match_str: str = None,
                               ) -> None:
         """
         Search folders in self.pipelines for hdf5 data frames
@@ -205,7 +209,12 @@ class Orchestrator():
             - Increase efficiency by grouping sites by condition before loading
         """
         # Make ExperimentArray to hold data
-        out = ExperimentArray(name=self.name)
+        if match_str:
+            out = ExperimentArray(name=match_str)
+            name = match_str
+        else:
+            out = ExperimentArray(name=self.name)
+            name = self.name
 
         self.logger.info(f'Building ExperimentArray {out}')
 
@@ -215,6 +224,7 @@ class Orchestrator():
 
             # NOTE: if df.name is already in Experiment, will be overwritten
             for df in glob(os.path.join(otpt_fol, '*.hdf5')):
+                if match_str and match_str not in df: continue
                 out.load_condition(df)
                 self.logger.info(f'Loaded {df}')
 
@@ -222,7 +232,7 @@ class Orchestrator():
         out.merge_conditions()
 
         # Save the master df file
-        save_path = os.path.join(self.output_folder, f'{self.name}.hdf5')
+        save_path = os.path.join(self.output_folder, f'{name}.hdf5')
         out.save(save_path)
         self.logger.info(f'Saved ExperimentArray at {save_path}')
 
@@ -238,34 +248,35 @@ class Orchestrator():
                          f'to {len(self)} Pipelines.')
         for pipe, kwargs in self.pipelines.items():
             # If Extractor is in operations, update the condition
-            # TODO: This won't work for multiple Extractor operations
-            if 'extractor' in op_dict:
-                if op_dict['extractor']['condition'] == 'condition':
-                    condition = kwargs['name']
-                else:
-                    condition = op_dict['extractor']['condition']
-
-                # Get position if needed
-                try:
-                    pos = self.position_map[pipe]
-                except (KeyError, AttributeError, TypeError):
-                    pos = 0
-
-                # Make new extract dictionary
-                new_extract = {}
-                for k, v in op_dict['extractor'].items():
-                    if k == 'condition':
-                        new_extract[k] = condition
-                    elif k == 'position_id':
-                        new_extract[k] = pos
+            op = {k: v for k, v in op_dict.items()
+                  if 'extractor' not in k}
+            # TODO: This could be done outside of the outer loop
+            for opname in op_dict:
+                if 'extractor' in opname:
+                    # Check if the name is the default and update
+                    if op_dict[opname]['condition'] == 'condition':
+                        condition = kwargs['name']
                     else:
-                        new_extract[k] = v
+                        condition = op_dict[opname]['condition']
 
-                # Copy values to new operation dictionary
-                op = {k: v for k, v in op_dict.items() if k != 'extractor'}
-                op.update({'extractor': new_extract})
-            else:
-                op = op_dict
+                    # Get position if needed for multiple positions
+                    try:
+                        pos = self.position_map[pipe]
+                    except (KeyError, AttributeError, TypeError):
+                        pos = 0
+
+                    # Make new extract dictionary - cannot edit in place
+                    new_extract = {}
+                    for k, v in op_dict[opname].items():
+                        if k == 'condition':
+                            new_extract[k] = condition
+                        elif k == 'position_id':
+                            new_extract[k] = pos
+                        else:
+                            new_extract[k] = v
+
+                    # Copy values to new operation dictionary
+                    op.update({opname: new_extract})
 
             # First try to append operations before overwriting
             try:
@@ -414,8 +425,11 @@ class Orchestrator():
             self.logger.info(f'Found {len(os.listdir(self.parent_folder))} '
                              f'possible pipelines in {self.parent_folder}')
             for fol in os.listdir(self.parent_folder):
+                # Check if positions have to be in condition_map
+                if self.cond_map_only and fol not in self.condition_map:
+                    continue
                 # Check for the match_str
-                if match_str and match_str not in fol:
+                elif match_str and match_str not in fol:
                     continue
 
                 # Make sure the path is a directory
@@ -451,6 +465,7 @@ class Orchestrator():
 
                     # Add miscellaneous options
                     self.pipelines[fol]['frame_rng'] = self.frame_rng
+                    self.pipelines[fol]['skip_frames'] = self.skip_frames
                     self.pipelines[fol]['file_extension'] = self.file_extension
                     self.pipelines[fol]['overwrite'] = self.overwrite
                     self.pipelines[fol]['log_file'] = self.log_file

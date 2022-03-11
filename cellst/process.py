@@ -1,5 +1,6 @@
+import warnings
 from itertools import groupby
-from typing import Union
+from typing import Union, Collection
 
 import numpy as np
 import SimpleITK as sitk
@@ -16,7 +17,7 @@ from cellst.utils.utils import ImageHelper
 from cellst.utils.operation_utils import (sliding_window_generator,
                                           shift_array, crop_array, PadHelper,
                                           wavelet_background_estimate,
-                                          wavelet_noise_estimate)
+                                          wavelet_noise_estimate, cast_sitk)
 
 
 class Processor(BaseProcessor):
@@ -24,7 +25,8 @@ class Processor(BaseProcessor):
     TODO:
         - Add stand-alone crop function
         - Add optical-flow registration
-        - Add sobel filter
+        - Add N4 bias correction https://simpleitk.readthedocs.io/en/master/link_N4BiasFieldCorrection_docs.html
+        - Add flat fielding from reference
     """
     @ImageHelper(by_frame=False, as_tuple=True)
     def align_by_cross_correlation(self,
@@ -101,6 +103,18 @@ class Processor(BaseProcessor):
                              output=np.empty(image.shape, dtype=dtype))
 
     @ImageHelper(by_frame=True)
+    def binomial_blur(self,
+                      image: Image,
+                      iterations: int = 7
+                      ) -> Image:
+        """"""
+        fil = sitk.BinomialBlurImageFilter()
+        fil.SetRepetitions(iterations)
+
+        img = fil.Execute(sitk.GetImageFromArray(image))
+        return sitk.GetArrayFromImage(img)
+
+    @ImageHelper(by_frame=True)
     def gaussian_laplace_filter(self,
                                 image: Image,
                                 sigma: float = 2.5,
@@ -113,6 +127,17 @@ class Processor(BaseProcessor):
             - SimpleITK implementation should be faster
         """
         return ndi.gaussian_laplace(image, sigma)
+
+    @ImageHelper(by_frame=True)
+    def uniform_filter(self,
+                       image: Image,
+                       size: int = 3,
+                       mode: str = 'reflect',
+                       cval: int = 0
+                       ) -> Image:
+        """"""
+        return ndi.uniform_filter(image, size=size,
+                                  mode=mode, cval=cval)
 
     @ImageHelper(by_frame=True)
     def rolling_ball_background_subtract(self,
@@ -132,6 +157,31 @@ class Processor(BaseProcessor):
         return image - bg
 
     @ImageHelper(by_frame=True)
+    def curvature_anisotropic_diffusion(self,
+                                        image: Image,
+                                        iterations: int = 5,
+                                        time_step: float = 0.125,
+                                        conductance: float = 1.
+                                        ) -> Image:
+        """"""
+        # Set up the filter
+        fil = sitk.CurvatureAnisotropicDiffusionImageFilter()
+        fil.SetNumberOfIterations(iterations)
+        fil.SetTimeStep(time_step)
+        fil.SetConductanceParameter(conductance)
+
+        # Check the input image type and execute filter
+        img = sitk.GetImageFromArray(image)
+        out = cast_sitk(img, 'sitkFloat64', cast_up=True)
+        out = fil.Execute(out)
+
+        # Prevent float64 output to display in Fiji
+        out = cast_sitk(out, 'sitkFloat32')
+        out = sitk.GetArrayFromImage(out)
+
+        return out
+
+    @ImageHelper(by_frame=True)
     def inverse_gaussian_gradient(self,
                                   image: Image,
                                   alpha: float = 100.0,
@@ -139,7 +189,7 @@ class Processor(BaseProcessor):
                                   ) -> Image:
         """
         """
-        return util.img_as_float32(
+        return util.img_as_uint(
             segm.inverse_gaussian_gradient(image, alpha, sigma)
         )
 
@@ -163,7 +213,138 @@ class Processor(BaseProcessor):
         else:
             sobel = filt.sobel(image)
 
-        return util.img_as_float32(sobel)
+        return util.img_as_uint(sobel)
+
+    @ImageHelper(by_frame=True)
+    def sobel_edge_magnitude(self,
+                             image: Image,
+                             ) -> Image:
+        """"""
+        y = ndi.sobel(image, axis=1)
+        x = ndi.sobel(image, axis=0)
+        return np.hypot(x, y)
+
+    @ImageHelper(by_frame=True)
+    def roberts_edge_detection(self, image: Image) -> Image:
+        """"""
+        return filt.roberts(image)
+
+    @ImageHelper(by_frame=True)
+    def recurssive_gauss_gradient(self,
+                                  image: Image,
+                                  sigma: float = 1.,
+                                  use_direction: bool = True
+                                  ) -> Image:
+        """"""
+        # Set up the filter
+        fil = sitk.GradientRecursiveGaussianImageFilter()
+        fil.SetSigma(sigma)
+        fil.SetUseImageDirection(use_direction)
+
+        # Convert image and return
+        # TODO: Type casting needed?
+        im = sitk.GetImageFromArray(image)
+        im = fil.Execute(im)
+        im = sitk.GetArrayFromImage(im)
+
+        # Get the total magnitude from both channels
+        x, y = im[..., 0], im[..., 1]
+        return np.hypot(x, y)
+
+    @ImageHelper(by_frame=True)
+    def recurssive_gauss_magnitude(self,
+                                   image: Image,
+                                   sigma: float = 1.,
+                                   ) -> Image:
+        """"""
+        # Only constraint on type is to be Real
+        fil = sitk.GradientMagnitudeRecursiveGaussianImageFilter()
+        fil.SetSigma(sigma)
+        im = sitk.GetImageFromArray(image)
+        im = fil.Execute(im)
+
+        im = cast_sitk(im, 'sitkFloat32')
+        return sitk.GetArrayFromImage(im)
+
+    @ImageHelper(by_frame=True)
+    def make_edge_potential_image(self,
+                                  image: Image,
+                                  method: str = 'sigmoid',
+                                  alpha: float = None,
+                                  beta: float = None,
+                                  k1: float = None,
+                                  k2: float = None
+                                  ) -> Image:
+        """
+        method = sigmoid, exp, reciprocal
+
+        K1 is the minimum value along the contour
+        K2 is the avg value inside the countour
+        K1 should be > K2
+
+        alpha should be (K2 - K1) / 6
+        beta should be (K1 + K2) / 2
+        """
+        img = sitk.GetImageFromArray(image)
+        if method == 'sigmoid':
+            if all([not a for a in (alpha, beta, k1, k2)]):
+                # Need to estimate the values for the sigmoid params
+                # Use Li Threshold to find ROI
+                li = sitk.LiThresholdImageFilter()
+                li.SetInsideValue(0)
+                li.SetOutsideValue(1)
+                _li = li.Execute(img)
+
+                # Mask the Li region on the original image
+                mask = sitk.MaskImageFilter()
+                _ma = mask.Execute(img, _li)
+
+                # Convert to array and use np to find values
+                _arr = sitk.GetArrayFromImage(_ma)
+                _arr = _arr[_arr > 0]
+                k1 = np.percentile(_arr, 95 )
+                k2 = np.mean(_arr)
+                if k1 <= k2: warnings.warn('Sigmoid param estimation poor.')
+                alpha = (k2 - k1) / 6.
+                beta = (k1 + k2) / 2.
+            elif alpha and beta:
+                # Alpha and beta have preference over k1/k2
+                pass
+            elif k1 and k2:
+                alpha = (k2 - k1) / 6
+                beta = (k1 + k2) / 2
+            else:
+                raise ValueError('Must provide either alpha/beta or k1/k2.')
+
+            # Set the Sigmoid filter
+            fil = sitk.SigmoidImageFilter()
+            fil.SetOutputMaximum(1.)
+            fil.SetOutputMinimum(0.)
+            fil.SetAlpha(alpha)
+            fil.SetBeta(beta)
+        elif method == 'exp':
+            fil = sitk.ExpNegativeImageFilter()
+        elif method == 'reciprocal':
+            fil = sitk.BoundedReciprocalImageFilter()
+
+        return sitk.GetArrayFromImage(fil.Execute(img))
+
+    @ImageHelper(by_frame=True)
+    def make_maurer_distance_map(self,
+                                 image: Image,
+                                 value_range: Collection[float] = None,
+                                 inside_positive: bool = False,
+                                 use_euclidian: bool = False,
+                                 use_image_spacing: bool = False
+                                 ) -> Image:
+        """"""
+        # Needs to be integer image in most cases
+        img = sitk.GetImageFromArray(image)
+        img = cast_sitk(img, 'sitkUInt16')
+
+        sign = sitk.SignedMaurerDistanceMapImageFilter()
+        sign.SetUseImageSpacing(False)
+        return sitk.GetArrayFromImage(sign.Execute(img))
 
     @ImageHelper(by_frame=False)
     def histogram_matching(self,
@@ -277,7 +458,7 @@ class Processor(BaseProcessor):
                 raise ValueError(f'Did not understand region of interest {roi}.')
 
         # Only import tensorflow and Keras if needed
-        from cellst.utils.unet_model import UNetModel
+        from cellst.utils.unet_model import FluorUNetModel
 
         if not hasattr(self, 'model'):
             '''NOTE: If we had mulitple colors, then image would be 4D here.
@@ -286,12 +467,10 @@ class Processor(BaseProcessor):
             channels = 1
             dims = (image.shape[1], image.shape[2], channels)
 
-            self.model = UNetModel(dimensions=dims,
-                                   weight_path=weight_path,
-                                   model='unet')
+            self.model = FluorUNetModel(dimensions=dims,
+                                        weight_path=weight_path)
 
         # Pre-allocate output memory
-        # TODO: Incorporate the batch here.
         if batch is None:
             output = self.model.predict(image[:, :, :], roi=roi)
         else:

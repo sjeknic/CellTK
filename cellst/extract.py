@@ -1,5 +1,6 @@
-from typing import Collection
 import warnings
+from typing import Collection, Tuple, Union
+
 
 import numpy as np
 
@@ -26,9 +27,11 @@ class Extractor(BaseExtractor):
                                 channels: Collection[str] = [],
                                 regions: Collection[str] = [],
                                 lineages: Collection[np.ndarray] = [],
+                                time: Union[float, np.ndarray] = None,
                                 condition: str = 'default',
                                 position_id: int = None,
                                 min_trace_length: int = 0,
+                                skip_frames: Tuple[int] = tuple([]),
                                 remove_parent: bool = True,
                                 parent_track: int = 0
                                 ) -> Arr:
@@ -62,13 +65,12 @@ class Extractor(BaseExtractor):
         tracks_to_use = []
         if len(tracks) != 0:
             # Uses tracks first if provided
-            tracks_to_use = tracks
+            tracks_to_use = list(tracks)
         if len(masks) != 0:
             # Check that sufficient lineages are provided
             if len(lineages) == 0:
-                warnings.warn('Got mask but not lineage file. No cell division'
-                              ' can be tracked.', UserWarning)
-                tracks_to_use.extend(masks)
+                warnings.warn('Got mask but not lineage file.', UserWarning)
+                tracks_to_use.extend(list(masks))
             elif len(masks) != len(lineages):
                 # TODO: This could probably be a warning and pad lineages
                 raise ValueError(f'Got {len(masks)} masks '
@@ -103,13 +105,24 @@ class Extractor(BaseExtractor):
             all_measures.insert(0, 'label')
 
         # Get unique cell indexes and the number of frames
+        self.skip_frames = skip_frames
         cells = np.unique(np.concatenate([t[t > 0] for t in tracks_to_use]))
         cell_index = {int(a): i for i, a in enumerate(cells)}
-        frames = range(max([i.shape[0] for i in images]))
+        frames = max([i.shape[0] for i in images])
+        if self.skip_frames: frames += len(self.skip_frames)
+        frames = range(frames)
 
         # Initialize data structure
         array = ConditionArray(regions, channels, all_measures, cells, frames,
                                name=condition, pos_id=position_id)
+
+        # Check to see if all axes have something
+        if any([not a for a in array.shape]):
+            missing = [k for k, a in zip(array.coordinates, array.shape)
+                       if not a]
+            # If axes are missing, we skip everything and save nothing.
+            warnings.warn(f'The following dimensions are missing: {missing}')
+        if time: array.set_time(time)
 
         # Extract data for all channels and regions individually
         for c_idx, cnl in enumerate(channels):
@@ -121,7 +134,7 @@ class Extractor(BaseExtractor):
                     extra_funcs,
                     cell_index
                 )
-            array[rgn, cnl, :, :, :] = cnl_rgn_data
+                array[rgn, cnl, :, :, :] = cnl_rgn_data
 
         if remove_parent:
             # Get parent information from a single track
@@ -134,16 +147,16 @@ class Extractor(BaseExtractor):
             # Remove cells
             array.filter_cells(mask, delete=True)
 
-        # Check for calculated metrics to add and filters
-        # TODO: Does it make a difference before or after parent??
-        self._calculate_derived_metrics(array)
-        self._apply_filters(array)
-
         # Remove short traces
         self.logger.info(f'Removing cells with traces < {min_trace_length} frames.')
         self.logger.info(f'Current array size: {array.shape}')
         mask = array.remove_short_traces(min_trace_length)
         array.filter_cells(mask, delete=True)
         self.logger.info(f'Post-filter array size: {array.shape}')
+
+        # Check for calculated metrics to add and filters
+        # TODO: Does it make a difference before or after parent??
+        self._calculate_derived_metrics(array)
+        self._apply_filters(array)
 
         return array

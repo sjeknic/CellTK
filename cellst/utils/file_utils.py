@@ -21,8 +21,7 @@ def load_yaml(path: str, loader: str = 'Loader') -> dict:
 def save_yaml_file(data: dict, path: str, warning: bool = True) -> None:
     """
     """
-    warning_text = ('This file was automatically generated. Do not edit '
-                    'manually unless you are know what you are doing.',
+    warning_text = ('This file was automatically generated. Do not edit. '
                     'To generate a new file use the methods of Pipeline '
                     'or Orchestrator.',
                     'Or use the save_operation_yaml and save_pipeline_yaml '

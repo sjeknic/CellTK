@@ -1,4 +1,5 @@
-from typing import Tuple, Union
+import warnings
+from typing import Tuple, Union, Collection, Callable
 
 import numpy as np
 import skimage.measure as meas
@@ -6,14 +7,18 @@ import skimage.segmentation as segm
 import skimage.morphology as morph
 import skimage.filters as filt
 import skimage.util as util
+import skimage.feature as feat
 import scipy.ndimage as ndi
+import SimpleITK as sitk
 
 from cellst.core.operation import BaseSegmenter
 from cellst.utils._types import Image, Mask
 from cellst.utils.utils import ImageHelper
 from cellst.utils.operation_utils import (dilate_sitk, voronoi_boundaries,
                                           skimage_level_set, gray_fill_holes,
-                                          match_labels_linear)
+                                          match_labels_linear, cast_sitk,
+                                          sitk_binary_fill_holes,
+                                          ndi_binary_fill_holes)
 
 
 class Segmenter(BaseSegmenter):
@@ -23,7 +28,28 @@ class Segmenter(BaseSegmenter):
         - Add more cytoring functions (thres, adaptive_thres, etc.)
         - Add levelset segmentation
         - Add mahotas/watershed_distance
+        - Add _threshold_dispatcher_function
+        - Add LabelVotingImageFilter
+        - Add TileImageFilter (to Process??)
+        - Can Sitk be used instead of regionprops?
+            (https://simpleitk.org/SPIE2019_COURSE/06_segmentation_and_shape_analysis.html)
     """
+    @ImageHelper(by_frame=True)
+    def label(self,
+              mask: Mask,
+              connectivity: int = 2) -> Mask:
+        """"""
+        return util.img_as_uint(meas.label(mask, connectivity=connectivity))
+
+    @ImageHelper(by_frame=True)
+    def sitk_label(self,
+                   mask: Mask,
+                   ) -> Mask:
+        """"""
+        fil = sitk.ConnectedComponentImageFilter()
+        msk = sitk.GetImageFromArray(mask)
+        return sitk.GetArrayFromImage(fil.Execute(msk))
+
     @ImageHelper(by_frame=True)
     def clean_labels(self,
                      mask: Mask,
@@ -73,11 +99,16 @@ class Segmenter(BaseSegmenter):
                        image: Image,
                        thres: float = 1000,
                        negative: bool = False,
-                       connectivity: int = 2
+                       connectivity: int = 2,
+                       relative: bool = False
                        ) -> Mask:
         """
         Labels pixels above or below a constant threshold
         """
+        if relative:
+            assert thres <= 1 and thres >= 0
+            thres = image.max() * thres
+
         if negative:
             test_arr = image <= thres
         else:
@@ -96,9 +127,9 @@ class Segmenter(BaseSegmenter):
         Applies Gaussian blur to the image and selects pixels that
         are relative_thres brighter than the blurred image.
         """
-        filt = ndi.gaussian_filter(image, sigma)
-        filt = image > filt * (1 + relative_thres)
-        return meas.label(filt, connectivity=connectivity)
+        fil = ndi.gaussian_filter(image, sigma)
+        fil = image > fil * (1 + relative_thres)
+        return meas.label(fil, connectivity=connectivity)
 
     @ImageHelper(by_frame=True)
     def otsu_thres(self,
@@ -118,7 +149,7 @@ class Segmenter(BaseSegmenter):
         if fill_holes:
             # Run binary closing first to connect broken edges
             labels = morph.binary_closing(labels)
-            labels = ndi.binary_fill_holes(labels)
+            labels = sitk_binary_fill_holes(labels)
 
         labels = meas.label(labels, connectivity=connectivity)
         return util.img_as_uint(labels)
@@ -127,14 +158,126 @@ class Segmenter(BaseSegmenter):
     def multiotsu_thres(self,
                         image: Image,
                         classes: int = 2,
+                        roi: Union[int, Collection[int]] = None,
                         nbins: int = 256,
-                        hist: np.ndarray = None
+                        hist: np.ndarray = None,
+                        binarize: bool = False,
                         ) -> Mask:
-        """
-        """
+        """"""
         thres = filt.threshold_multiotsu(image, classes, nbins,
                                          hist=hist)
-        return np.digitize(image, bins=thres).astype(np.uint16)
+        out = np.digitize(image, bins=thres).astype(np.uint8)
+
+        # If roi is given, filter the other regions, otherwise return all
+        if roi is not None:
+            roi = tuple([int(roi)]) if isinstance(roi, (int, float)) else roi
+            classes = np.unique(out)
+            for c in classes:
+                if c not in roi:
+                    out[out == c] = 0
+
+        # Clean up
+        if binarize:
+            out[out > 0] = 1
+
+        return out
+
+    @ImageHelper(by_frame=True)
+    def li_thres(self,
+                 image: Image,
+                 tol: float = None,
+                 init_guess: Union[float, Callable] = None,
+                 connectivity: int = 2,
+                 fill_holes: bool = True
+                 ) -> Mask:
+        """"""
+        fil = sitk.LiThresholdImageFilter()
+        fil.SetInsideValue(0)
+        fil.SetOutsideValue(1)
+        out = fil.Execute(sitk.GetImageFromArray(image))
+
+        out = cast_sitk(out, 'sitkUInt16')
+        return sitk.GetArrayFromImage(out)
+
+    @ImageHelper(by_frame=True)
+    def regional_extrema(self,
+                         image: Image,
+                         find: str = 'minima',
+                         fully_connected: bool = True,
+                         thres: float = None,
+                         min_size: int = 12
+                         ) -> Mask:
+        """Finds regional minima/maxima within flat areas.
+
+        TODO:
+            - Is it possible to remove large objects here.
+        """
+        if thres:
+            assert 0 <= thres and thres <= 1
+            # Seems less variable than using max
+            thres *= np.nanpercentile(image, 97)
+
+        # Get the appropriate filter
+        if find == 'maxima':
+            if thres:
+                fil = sitk.HConvexImageFilter()
+                fil.SetHeight(thres)
+            else: fil = sitk.RegionalMaximaImageFilter()
+        else:
+            if thres:
+                fil = sitk.HConcaveImageFilter()
+                fil.SetHeight(thres)
+            else: fil = sitk.RegionalMinimaImageFilter()
+        fil.SetFullyConnected(fully_connected)
+
+        extrema = fil.Execute(sitk.GetImageFromArray(image))
+
+        extrema = cast_sitk(extrema, 'sitkUInt16')
+        conn = sitk.ConnectedComponentImageFilter()
+        relab = sitk.RelabelComponentImageFilter()
+        relab.SetMinimumObjectSize(min_size)
+        labels = relab.Execute(conn.Execute(extrema))
+
+        return sitk.GetArrayFromImage(labels)
+
+    @ImageHelper(by_frame=False)
+    def sitk_filter_pipeline(self,
+                             mask: Mask,
+                             filters: Collection[str],
+                             kwargs: Collection[dict] = [],
+                             ) -> Mask:
+        """"""
+        # TODO: Add to process
+        # TODO: Should use Stack type
+        if kwargs:
+            assert len(kwargs) == len(filters)
+
+        _sfilt = []
+        for f, kw in zip(filters, kwargs):
+            # Get the filter function
+            try:
+                _sfilt.append(getattr(sitk, f)())
+            except AttributeError:
+                raise AttributeError(f'Could not find SITK filter {f}')
+
+            # Get the attributes for the filter
+            for k, v in kw.items():
+                try:
+                    getattr(_sfilt[-1], k)(v)
+                except AttributeError:
+                    raise AttributeError('Could not find attribute '
+                                         f'{k} in {_sfilt[-1]}')
+
+        # Apply to all the frames individually
+        out = np.zeros_like(mask)
+        for n, fr in enumerate(mask):
+            _im = sitk.GetImageFromArray(fr)
+            for fil in _sfilt:
+                _im = fil.Execute(_im)
+
+            out[n, ...] = sitk.GetArrayFromImage(_im)
+
+        return out
 
     @ImageHelper(by_frame=True)
     def random_walk_segmentation(self,
@@ -247,13 +390,13 @@ class Segmenter(BaseSegmenter):
             seeds = morph.remove_small_objects(seeds, seed_min_size, connectivity=2)
 
         # Convert background pixels to negative
-        seeds = seeds.astype(np.int16)  # convert to signed integers
-        seeds[seeds == 0] = -1
+        seeds = seeds.astype(np.uint16)  # convert to signed integers
+        # seeds[seeds == 0] = -1
         # Search area is equivalent to connectivity = 2
-        struct = np.ones((3, 3))
+        struct = np.ones((3, 3)).astype(np.uint8)
 
         # Watershed and remove negatives
-        out = ndi.watershed_ift(image, seeds, struct)
+        out = ndi.watershed_ift(util.img_as_uint(image), seeds, struct)
         out[out < 0] = 0
 
         return out
@@ -290,7 +433,7 @@ class Segmenter(BaseSegmenter):
             vor_mask = np.zeros(image.shape, dtype=bool)
         else:
             # Get Voronoi boundaries to use to separate objects
-            vor_mask = voronoi_boundaries(seeds, thinner=False)
+            vor_mask = voronoi_boundaries(seeds, thin=False)
 
         # Apply threshold to image. Should this happen before or after???
         if thres:
@@ -311,7 +454,7 @@ class Segmenter(BaseSegmenter):
                 regions = self.clean_labels.__wrapped__(self, regions)
             regions = match_labels_linear(seeds, regions)
 
-        return regions
+        return util.img_as_uint(regions)
 
     @ImageHelper(by_frame=True)
     def morphological_geodesic_active_contour(self,
@@ -331,6 +474,25 @@ class Segmenter(BaseSegmenter):
         return segm.morphological_geodesic_active_contour(image, iterations,
                                                           seeds, smoothing,
                                                           threshold, balloon)
+
+    @ImageHelper(by_frame=True)
+    def canny_edge_segmentation(self,
+                                image: Image,
+                                sigma: float = 1.,
+                                low_thres: float = None,
+                                high_thres: float = None,
+                                use_quantiles: bool = False,
+                                fill_holes: bool = False
+                                ) -> Mask:
+        """"""
+        out = feat.canny(image, sigma=sigma, low_threshold=low_thres,
+                         high_threshold=high_thres,
+                         use_quantiles=use_quantiles)
+
+        if fill_holes:
+            out = sitk_binary_fill_holes(out)
+
+        return out
 
     @ImageHelper(by_frame=True)
     def find_boundaries(self,
@@ -448,6 +610,32 @@ class Segmenter(BaseSegmenter):
         return new_cyto_mask
 
     @ImageHelper(by_frame=True)
+    def binary_fill_holes(self,
+                          mask: Mask,
+                          fill_border: bool = True,
+                          iterations: Union[bool, int] = False,
+                          kernel_radius: int = 4,
+                          max_length: int = 45,
+                          in_place: bool = True,
+                          method: str = 'sitk',
+                          **kwargs
+                          ) -> Mask:
+        """
+        kwargs get used to set attributes on the sitk filters that were used
+
+        TODO:
+            - Write a greyscale version (will work better on the borders,
+                but will need a new _close_border_holes)
+        """
+        if method == 'sitk':
+            return sitk_binary_fill_holes(mask, fill_border, iterations,
+                                          kernel_radius, max_length,
+                                          in_place, **kwargs)
+        elif method == 'ndi':
+            return ndi_binary_fill_holes(mask, fill_border, kernel_radius,
+                                         max_length, in_place)
+
+    @ImageHelper(by_frame=True)
     def level_set_mask(self,
                        image: Image,
                        levelset: str = 'checkerboard',
@@ -466,6 +654,148 @@ class Segmenter(BaseSegmenter):
             mask = meas.label(mask)
 
         return mask
+
+    @ImageHelper(by_frame=True)
+    def shape_detection_level_set(self,
+                                  edge_potential: Image,
+                                  initial_level_set: Mask,
+                                  curvature: float = 1,
+                                  propagation: float = 1,
+                                  iterations: int = 1000,
+                                  ) -> Mask:
+        """"""
+        fil = sitk.GeodesicActiveContourLevelSetImageFilter()
+        fil.SetCurvatureScaling(curvature)
+        fil.SetPropagationScaling(propagation)
+        fil.SetNumberOfIterations(iterations)
+
+        if edge_potential.max() > 1 or edge_potential.min() < 0:
+            warnings.warn('Edge potential image seems poorly formatted. '
+                          'Should be 0 at edges and 1 elsewhere.', UserWarning)
+
+        init = sitk.GetImageFromArray(initial_level_set)
+        edge = sitk.GetImageFromArray(edge_potential)
+        init = cast_sitk(init, 'sitkFloat32', cast_up=True)
+        edge = cast_sitk(edge, 'sitkFloat32')
+
+        out = fil.Execute(edge, init)
+        return sitk.GetArrayFromImage(out)
+
+    @ImageHelper(by_frame=True)
+    def threshold_level_set(self,
+                            image: Image,
+                            initial_level_set: Mask,
+                            lower_thres: float = None,
+                            upper_thres: float = None,
+                            propagation: float = 1,
+                            curvature: float = 1,
+                            iterations: int = 1000,
+                            max_rms_error: float = 0.02,
+                            ) -> Mask:
+        """"""
+        # Set up the level set filter
+        fil = sitk.ThresholdSegmentationLevelSetImageFilter()
+        fil.SetCurvatureScaling(curvature)
+        fil.SetPropagationScaling(propagation)
+        fil.SetNumberOfIterations(iterations)
+        fil.SetMaximumRMSError(max_rms_error)
+        if lower_thres: fil.SetLowerThreshold(lower_thres)
+        if upper_thres: fil.SetUpperThreshold(upper_thres)
+
+        # Cast inputs and apply the change
+        init = sitk.GetImageFromArray(initial_level_set)
+        img = sitk.GetImageFromArray(image)
+        init = cast_sitk(init, 'sitkFloat32', cast_up=True)
+        img = cast_sitk(img, 'sitkFloat32', cast_up=True)
+
+        out = fil.Execute(init, img)
+        return sitk.GetArrayFromImage(out)
+
+    @ImageHelper(by_frame=True)
+    def confidence_connected(self,
+                             image: Image,
+                             seeds: Mask,
+                             radius: int = 1,
+                             multiplier: float = 4.5,
+                             iterations: int = 10
+                             ) -> Mask:
+        """"""
+        # Set up filter
+        fil = sitk.ConfidenceConnectedImageFilter()
+        fil.SetMultiplier(multiplier)
+        fil.SetInitialNeighborhoodRadius(radius)
+        fil.SetNumberOfIterations(iterations)
+
+        # Get seed points from the provided mask
+        seeds = list(zip(*np.where(seeds)))
+        seeds = [(int(s[0]), int(s[1])) for s in seeds]
+        fil.SetSeedList(seeds)
+
+        # Execute and return
+        img = fil.Execute(sitk.GetImageFromArray(image))
+        return sitk.GetArrayFromImage(img)
+
+    @ImageHelper(by_frame=True)
+    def fast_marching_level_set(self,
+                                image: Image,
+                                seeds: Mask = None,
+                                n_points: int = 0
+                                ) -> Mask:
+        """"""
+        # TODO: Add using regular seeds instead of a mask
+        if n_points:
+            seeds = self.regular_seeds(image, n_points)
+
+        # Set up filter with trial points from seeds
+        pts = list(zip(*np.where(seeds)))
+        fil = sitk.FastMarchingImageFilter()
+        for pt in pts:
+            fil.AddTrialPoint((int(pt[0]), int(pt[1]), int(0)))
+
+        # Cast inputs and run
+        img = sitk.GetImageFromArray(image)
+        img = fil.Execute(img)
+        img = cast_sitk(img, 'sitkFloat32')
+        return sitk.GetArrayFromImage(img)
+
+    @ImageHelper(by_frame=True)
+    def watershed_from_markers(self,
+                               image: Image,
+                               mask: Mask,
+                               watershed_line: bool = True
+                               ) -> Mask:
+        """"""
+        fil = sitk.MorphologicalWatershedFromMarkersImageFilter()
+        fil.SetMarkWatershedLine(watershed_line)
+
+        # Must be scalar type for watershed filter
+        img = sitk.GetImageFromArray(image)
+        msk = sitk.GetImageFromArray(mask)
+        img = cast_sitk(img, 'sitkUInt16', cast_up=True)
+        msk = cast_sitk(msk, 'sitkUInt16', cast_up=True)
+
+        out = fil.Execute(img, msk)
+        return sitk.GetArrayFromImage(out)
+
+    @ImageHelper(by_frame=False, as_tuple=True)
+    def label_by_voting(self,
+                        mask: Mask,
+                        label_undecided: int = 0
+                        ) -> Mask:
+        """"""
+        # Set up the vector
+        fil = sitk.LabelVotingImageFilter()
+        fil.SetLabelForUndecidedPixels(label_undecided)
+
+        # Get the images
+        imgs = [sitk.GetImageFromArray(m) for m in mask]
+        imgs = [cast_sitk(i, 'sitkUInt16') for i in imgs]
+        if len(imgs) > 5:
+            mask = fil.Execute(imgs)
+        else:
+            mask = fil.Execute(*imgs)
+
+        return sitk.GetArrayFromImage(mask)
 
     @ImageHelper(by_frame=False)
     def unet_predict(self,
@@ -487,7 +817,7 @@ class Segmenter(BaseSegmenter):
                 raise ValueError(f'Did not understand region of interest {roi}.')
 
         # Only import tensorflow and Keras if needed
-        from cellst.utils.unet_model import UNetModel
+        from cellst.utils.unet_model import FluorUNetModel
 
         if not hasattr(self, 'model'):
             '''NOTE: If we had mulitple colors, then image would be 4D here.
@@ -496,9 +826,8 @@ class Segmenter(BaseSegmenter):
             channels = 1
             dims = (image.shape[1], image.shape[2], channels)
 
-            self.model = UNetModel(dimensions=dims,
-                                   weight_path=weight_path,
-                                   model='unet')
+            self.model = FluorUNetModel(dimensions=dims,
+                                        weight_path=weight_path)
 
         # Pre-allocate output memory
         # TODO: Incorporate the batch here.
@@ -510,4 +839,30 @@ class Segmenter(BaseSegmenter):
                                      for a in arrs], axis=0)
 
         # TODO: dtype can probably be downsampled from float32 before returning
+        return output
+
+    @ImageHelper(by_frame=False)
+    def misic_predict(self,
+                      image: Image,
+                      model_path: str = 'cellst/external/MiSiCv2.h5',
+                      weight_path: str = None,
+                      batch: int = None,
+                      ) -> Mask:
+        """Wrapper for implementation of Misic paper.
+
+        TODO:
+            - Make custom structure to speed up calculations
+        """
+        # Only import tensorflow if needed
+        from cellst.utils.unet_model import MisicModel
+        self.model = MisicModel(model_path)
+
+        # Use model for predictions
+        if batch is None:
+            output = self.model.predict(image[:, :, :], )
+        else:
+            arrs = np.array_split(image, image.shape[0] // batch, axis=0)
+            output = np.concatenate([self.model.predict(a) for a in arrs],
+                                    axis=0)
+
         return output

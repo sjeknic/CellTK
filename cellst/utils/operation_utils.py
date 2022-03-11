@@ -1,4 +1,4 @@
-from typing import Dict, Generator, Tuple, List, Iterable
+from typing import Dict, Generator, Tuple, List, Iterable, Union
 
 import numpy as np
 import pywt
@@ -31,17 +31,282 @@ def gray_fill_holes(labels: np.ndarray) -> np.ndarray:
     return labels[tuple(idx)]
 
 
-def dilate_sitk(labels: Mask, radius: int) -> np.ndarray:
+def dilate_sitk(labels: np.ndarray, radius: int) -> np.ndarray:
     """
     Direct copy from CellTK. Should dilate images
-
-    TODO:
-        - Update function (or at least understand the function)
     """
     slabels = sitk.GetImageFromArray(labels)
     gd = sitk.GrayscaleDilateImageFilter()
     gd.SetKernelRadius(radius)
     return sitk.GetArrayFromImage(gd.Execute(slabels))
+
+
+def _np_types() -> dict:
+    _np_dtypes = {'integer': (np.uint, np.uint8, np.uint16,
+                              np.uint32, np.uint64),
+                  'sinteger': (int, np.int, np.int8, np.int16,
+                               np.int32, np.int64),
+                  'float': (np.single, np.float32, np.double,
+                            np.float64, np.float128),
+                  'complex': (np.csingle, np.complex64, np.cdouble,
+                              np.complex128, np.cfloat)}
+    return _np_dtypes
+
+
+def _sitk_types(test: Union[str, "sitk.BasicPixelID"] = None) -> dict:
+    _sitk_types = {'integer': (sitk.sitkUInt8, sitk.sitkUInt16,
+                               sitk.sitkUInt32, sitk.sitkUInt64),
+                   'sinteger': (sitk.sitkInt8, sitk.sitkInt16,
+                                sitk.sitkInt32, sitk.sitkInt64),
+                   'float': (sitk.sitkFloat32, sitk.sitkFloat64),
+                   'complex': (sitk.sitkComplexFloat32,
+                               sitk.sitkComplexFloat64)}
+
+    if test is None:
+        return _sitk_types
+    else:
+        if isinstance(test, str):
+            test = getattr(sitk, test)
+
+        return [k for k, v in _sitk_types.items()
+                if test in v][0]
+
+
+def _sitk_enum_to_string(test: int) -> str:
+    # https://simpleitk.org/doxygen/latest/html/namespaceitk_1_1simple.html
+    # #ae40bd64640f4014fba1a8a872ab4df98
+    _inorder_list = ['sitkInt8', 'sitkUInt8', 'sitkInt16',
+                     'sitkUInt16', 'sitkInt32', 'sitkUInt32', 'sitkInt64',
+                     'sitkUInt64', 'sitkFloat32', 'sitkFloat64',
+                     'sitkComplexFloat32', 'sitkComplexFloat64']
+    _pixel_values = {i: p for i, p in enumerate(_inorder_list)}
+
+    return _pixel_values[test]
+
+
+def _casting_up(inp: Union[str, int], out: Union[str, int]) -> bool:
+    # Returns trailing digits
+    def _digit(test) -> int:
+        i = 0
+        while True:
+            i -= 1
+            if test[i].isdigit():
+                pass
+            else:
+                i += 1  # stopped on non-digit
+                break
+
+        return int(test[i:])
+
+    # Get everything in strings
+    if isinstance(inp, int):
+        inp = _sitk_enum_to_string(inp)
+    if isinstance(inp, int):
+        out = _sitk_enum_to_string(out)
+
+    # Get groups
+    igrp = _sitk_types(inp)
+    ogrp = _sitk_types(out)
+
+    # By default
+    cast_up = False
+
+    if igrp in ('integer', 'sinteger') and ogrp in ('float', 'complex'):
+        cast_up = True
+    elif igrp in ('float') and ogrp in ('complex'):
+        cast_up = True
+    elif igrp in ('integer', 'sinteger') and ogrp in ('integer', 'sinteger'):
+        cast_up = _digit(inp) < _digit(out)
+    elif igrp in ('float') and ogrp in ('float'):
+        cast_up = _digit(inp) < _digit(out)
+    elif igrp in ('complex') and ogrp in ('complex'):
+        cast_up = _digit(inp) < _digit(out)
+
+    return cast_up
+
+
+def get_image_pixel_type(image: Union[np.ndarray, sitk.Image]) -> str:
+    """"""
+    _np_dtypes = _np_types()
+    _sitk_dtypes = _sitk_types()
+
+    try:
+        if isinstance(image, np.ndarray):
+            pxl = image.dtype
+            key = [k for k, v in _np_dtypes.items()
+                   if pxl in v][0]
+        elif isinstance(image, sitk.Image):
+            pxl = sitk.GetPixelIDType()
+            key = [k for k, v in _sitk_dtypes.items()
+                   if pxl in v][0]
+        else:
+            raise IndexError
+    except IndexError:
+        raise TypeError('Did not understand type of '
+                        f'input image {type(image)}')
+
+    return key
+
+
+def cast_sitk(image: sitk.Image,
+              req_type: str,
+              cast_up: bool = False
+              ) -> sitk.Image:
+    """"""
+    # Get the relevant types
+    # This returns an integer of the required type
+    input_type = _sitk_enum_to_string(image.GetPixelIDValue())
+    assert hasattr(sitk, req_type)
+
+    # Check if casting up for early exit
+    if not cast_up:
+        up = _casting_up(input_type, req_type)
+        # Requested type is greater than input type
+        if up:
+            return image
+
+    # Cast and return
+    if input_type != req_type:
+        cast = sitk.CastImageFilter()
+        cast.SetOutputPixelType(getattr(sitk, req_type))
+        image = cast.Execute(image)
+
+    return image
+
+
+def _close_border_holes(array: np.ndarray,
+                        max_length: int = 45,
+                        in_place: bool = True
+                        ) -> np.ndarray:
+    """"""
+    if not in_place: array = array.copy()
+
+    axes = (array[0, :], array[-1, :],  # top, bottom
+            array[:, 0], array[:, -1])  # left, right
+    for ax in axes:
+        # Find holes by comparing to all indices
+        nonzero = np.where(ax)[0]
+        holes = np.setdiff1d(np.arange(len(ax)), nonzero)
+
+        if len(holes):
+            # Find holes split them up to be unique
+            diffs = np.ediff1d(holes, to_begin=1)
+            nonzero_diffs = np.ediff1d(holes, to_begin=1)
+
+
+            hole_idxs = np.split(holes, np.where(diffs > 1)[0])
+
+            # Fill them in
+            for h in hole_idxs:
+                #TODO: Add minlength of filled in criteria
+                if len(h) <= max_length:
+                    ax[h] = 1
+
+    return array
+
+
+def sitk_binary_fill_holes(labels: np.ndarray,
+                           fill_border: bool = True,
+                           iterations: Union[int, bool] = False,
+                           kernel_radius: int = 4,
+                           max_length: int = 45,
+                           in_place: bool = True,
+                           **kwargs
+                           ) -> np.ndarray:
+    """
+    TODO:
+        - Add lots of options
+        - Add VoteIterativeHoleFilling
+        - Add closing/opening
+
+        - Should iterations be first or last?
+    """
+    if iterations:
+        fil = sitk.VotingBinaryIterativeHoleFillingImageFilter()
+        fil.SetMaximumNumberOfIterations(iterations)
+        fil.SetRadius(kernel_radius)
+    else:
+        fil = sitk.BinaryFillholeImageFilter()
+
+    # kwargs are used to set values on the filters
+    for k, v in kwargs.items():
+        getattr(fil, k)(v)
+
+    # Fill the holes first
+    if isinstance(labels, np.ndarray):
+        _labels = sitk.GetImageFromArray(labels)
+    elif isinstance(labels, sitk.Image):
+        _labels = labels
+
+    labels = fil.Execute(_labels)
+
+    if fill_border:
+        # Close any border holes
+        labels = sitk.GetArrayFromImage(labels)
+        labels = _close_border_holes(labels, max_length, in_place)
+
+        labels = np.pad(labels, ((1, 1), (1, 1)), mode='constant', constant_values=0)
+
+        # Re-fill so that those border holes are filled
+        fil = sitk.VotingBinaryHoleFillingImageFilter()
+        fil.SetRadius(kernel_radius)
+        _labels = sitk.GetImageFromArray(labels)
+        labels = fil.Execute(_labels)
+
+        labels = labels[1:-1, 1:-1]
+
+    return sitk.GetArrayFromImage(labels)
+
+
+def ndi_binary_fill_holes(labels: np.ndarray,
+                          fill_border: bool = True,
+                          kernel_radius: int = 2,
+                          max_length: int = 45,
+                          in_place: bool = False,
+                          ) -> np.ndarray:
+    """"""
+    labels = ndi.binary_fill_holes(labels, get_binary_footprint(kernel_radius))
+
+    if fill_border:
+        labels = _close_border_holes(labels, max_length, in_place)
+        labels = np.pad(labels, ((1, 1), (1, 1)),
+                        mode='constant', constant_values=0)
+        labels = ndi.binary_fill_holes(labels,
+                                       get_binary_footprint(kernel_radius)
+                                       )
+        labels = morph.binary_opening(labels)
+        labels = labels[1:-1, 1:-1]
+
+    return labels
+
+
+def mask_to_seeds(mask: np.ndarray,
+                  method: str = 'sitk',
+                  output: str = 'mask',
+                  binary: bool = True) -> Union[np.ndarray, list]:
+    """Find centroid of all objects and return, either as list of points or labeled mask
+    If binary, all seeds are 1, otherwise, preserve labels
+
+    Currently, none of the options d anything
+    """
+    if method == 'sitk':
+        img = sitk.GetImageFromArray(mask)
+        img = cast_sitk(img, 'sitkUInt16')
+        stats = sitk.LabelShapeStatisticsImageFilter()
+        stats.Execute(img)
+        centroids = [stats.GetCentroid(i) for i in stats.GetLabels()]
+        pixels = [stats.GetNumberOfPixels(i) for i in stats.GetLabels()]
+        perim = [stats.GetPerimeter(i) for i in stats.GetLabels()]
+
+    if output == 'mask':
+        out = np.zeros_like(mask)
+        pt0, pt1 = zip(*centroids)
+        pt0 = np.array([int(round(p)) for p in pt0])
+        pt1 = np.array([int(round(p)) for p in pt1])
+
+        out[pt1, pt0] = 1
+
+    return out
 
 
 def track_to_mask(track: Track, idx: np.ndarray = None) -> Mask:
@@ -396,6 +661,7 @@ class PadHelper():
     """
     TODO:
         - Add more complex padding options (e.g. pad both side, etc)
+        - Move this function to utils or something
     """
     def __init__(self,
                  target: (str, int),

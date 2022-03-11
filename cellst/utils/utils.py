@@ -19,21 +19,6 @@ from cellst.utils.operation_utils import sliding_window_generator
 from cellst.utils.log_utils import get_null_logger
 
 
-def nan_helper(y: np.ndarray) -> np.ndarray:
-    """Linear interpolation of nans in a 1D array."""
-    return np.isnan(y), lambda z: z.nonzero()[0]
-
-
-def nan_helper_2d(arr: np.ndarray) -> np.ndarray:
-    """Linear interpolation of nans along rows in 2D array."""
-    temp = np.zeros(arr.shape)
-    temp[:] = np.nan
-    for n, y in enumerate(arr.copy()):
-        nans, z = nan_helper(y)
-        y[nans] = np.interp(z(nans), z(~nans), y[~nans])
-        temp[n, :] = y
-
-
 # Functions to block output to Terminal
 def fileno(file_or_fd):
     fd = getattr(file_or_fd, 'fileno', lambda: file_or_fd)()
@@ -219,7 +204,7 @@ class ImageHelper():
                 # First image given is first image passed
                 names = [(nm, exp_typ) for nm in names]
                 if not self.as_tuple:
-                    warnings.warn('Multiple stacks for a single keyword'
+                    warnings.warn('Multiple stacks for a single keyword '
                                   f'argument is not supported for {self.func}.'
                                   f'Only {names[0]} will get passed.',
                                   UserWarning)

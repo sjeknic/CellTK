@@ -1,6 +1,8 @@
+import os
 import warnings
 import itertools
-from typing import List, Tuple, Dict, Callable, Collection
+import functools
+from typing import List, Tuple, Dict, Callable, Collection, Union
 
 import h5py
 import numpy as np
@@ -8,6 +10,10 @@ import plotly.graph_objects as go
 
 import cellst.utils.filter_utils as filt
 from cellst.utils.plot_utils import plot_groups
+from cellst.utils.info_utils import nan_helper_2d
+from cellst.utils.unet_model import UPeakModel
+from cellst.utils.upeak.peak_utils import segment_peaks_agglomeration
+from cellst.utils.metric_utils import active_cells, cumulative_active
 
 
 class ConditionArray():
@@ -29,7 +35,7 @@ class ConditionArray():
                  cells: List[int] = [0],
                  frames: List[int] = [0],
                  name: str = 'default',
-                 time: float = None,
+                 time: Union[float, np.ndarray] = None,
                  pos_id: int = 0
                  ) -> None:
         """
@@ -97,6 +103,14 @@ class ConditionArray():
         return self._arr.dtype
 
     @property
+    def coordinates(self):
+        return tuple(self.coords.keys())
+
+    @property
+    def coordinate_dimensions(self):
+        return {k: len(v) for k, v in self.coords.items()}
+
+    @property
     def condition(self):
         return self.name
 
@@ -118,19 +132,34 @@ class ConditionArray():
                                       self.coords['channels'],
                                       self.coords['metrics']))
 
+    @property
+    def _is_empty(self) -> bool:
+        """"""
+        return any([not s for s in self.shape])
+
     def save(self, path: str) -> None:
         """
         Saves ConditionArray to an hdf5 file.
 
         TODO:
             - Add checking for path and overwrite options
-            - Can time be saved as an attribute
         """
         f = h5py.File(path, 'w')
         f.create_dataset(self.name, data=self._arr)
         for coord in self.coords:
             # Axis names and coords stored as attributes
-            f[self.name].attrs[coord] = self.coords[coord]
+            if coord in ('frames', 'cells'):
+                if isinstance(self.coords[coord], (int, float)):
+                    pass
+                elif not len(self.coords[coord]):
+                    self.coords[coord] = np.array(self.coords[coord])
+                elif np.array((self.coords[coord])).max() >= 2 ** 16:
+                    raise ValueError('Cannot save values larger than 16-bit.')
+
+                f[self.name].attrs[coord] = np.array(self.coords[coord],
+                                                     dtype=np.uint16)
+            else:
+                f[self.name].attrs[coord] = self.coords[coord]
 
         f[self.name].attrs['pos_id'] = self.pos_id
         f[self.name].attrs['time'] = self.time
@@ -154,8 +183,7 @@ class ConditionArray():
         Given an hdf5 file, returns a ConditionArray instance
         """
         if len(f) != 1:
-            raise TypeError('Did not understand hdf5 file format.')
-
+            raise TypeError('Too many keys in hdf5 file.')
         for key in f:
             _arr = ConditionArray(**f[key].attrs, name=key)
             _arr[:] = f[key]
@@ -201,16 +229,18 @@ class ConditionArray():
 
         return out
 
-    def _convert_keys_to_index(self, key) -> Tuple[(int, slice)]:
+    def _convert_keys_to_index(self,
+                               key: Tuple[(str, slice)]
+                               ) -> Tuple[(int, slice)]:
         """
         Converts strings and slices given in key to the saved
         dimensions and coordinates of self._xarr.
 
         Args:
-            - key: tuple(slices)
+            - key:
 
         Returns:
-            tuple(slices)
+            Converted keys containing no strings
 
         NOTE: integer indices are best provided last. If they are
               provided first, they will possibly get overwritten if
@@ -351,6 +381,22 @@ class ConditionArray():
             for a in all_poss
         }
 
+    def _get_key_components(self,
+                            key: Tuple[int, str],
+                            exclude: str = 'metrics'
+                            ) -> Tuple[int, str]:
+        """Returns the components in key that are NOT in the target axis"""
+        assert exclude in self.coords, f'Coordinate {exclude} not found.'
+
+        # Get axis for each key and compare to exclude
+        out = []
+        for k in key:
+            coord = self._key_dim_pairs[k]
+            if coord != exclude:
+                out.append(k)
+
+        return tuple(out)
+
     def set_position_id(self, pos: int = None) -> None:
         """
         Adds unique identifiers for cells in ConditionArray
@@ -379,6 +425,11 @@ class ConditionArray():
         # Format inputs
         if isinstance(name, str):
             name = [name]
+
+        # Remove names that have already been added
+        name = [n for n in name if n not in self.coords['metrics']]
+        # If all names are gone - give up
+        if not name: return
 
         # Get dimensions and set the metric dimension to 1
         new_dim = list(self._arr_dim)
@@ -594,6 +645,8 @@ class ConditionArray():
         """
         if time is None:
             self.time = self.coords['frames']
+        elif isinstance(time, np.ndarray):
+            self.time = time
         else:
             self.time = np.arange(len(self.coords['frames'])) * time
 
@@ -635,6 +688,89 @@ class ConditionArray():
         new_keys = itertools.product(chan, regn, metr)
         for nk in new_keys:
             self[nk] = data
+
+    def interpolate_nans(self, keys: Collection[tuple] = None) -> None:
+        """Linear interpolation of nans in each row
+
+        Args:
+
+        Returns:
+        """
+        if not keys:
+            keys = self.keys
+
+        for k in keys:
+            k = tuple(k)
+            self[k] = nan_helper_2d(self[k])
+
+    def predict_peaks(self,
+                      key: Tuple[int, str],
+                      model: UPeakModel = None,
+                      weight_path: str = 'cellst/config/upeak_example_weights.tf',
+                      propagate: bool = True,
+                      segment: bool = True,
+                      **kwargs
+                      ) -> None:
+        """"""
+        # Get the data that will be used for prediction
+        assert isinstance(key, tuple)
+        data = self[key]
+        assert data.ndim == 2
+
+        # Make the destination metric slots and keys
+        slots = ['slope_prob', 'plateau_prob']
+        if segment:
+            # Add the extra slot here
+            self.add_metric_slots(slots + ['peaks'])
+        else:
+            self.add_metric_slots(slots)
+
+        base = self._get_key_components(key, 'metrics')
+        dest_keys = [base + tuple([s]) for s in slots]
+
+        # Initialize the UPeak model if needed
+        if not model:
+            model = UPeakModel(weight_path)
+
+        # Get predictions of where peaks exist
+        predictions = model.predict(data, roi=(1, 2))  # slope, plateau
+        for i, d in enumerate(dest_keys):
+            self[d] = predictions[..., i]
+            if propagate: self.propagate_values(d, prop_to=propagate)
+
+        # Segment peaks if needed
+        if segment:
+            k = base + ('peaks',)
+            peaks = segment_peaks_agglomeration(data, predictions, **kwargs)
+            self[k] = peaks
+            if propagate: self.propagate_values(k, prop_to=propagate)
+
+    def mark_active_cells(self,
+                          key: Tuple[int, str],
+                          thres: float = 1,
+                          propagate: bool = True
+                          ) -> None:
+        """"""
+        # Get the data that will be used for prediction
+        assert isinstance(key, tuple)
+        data = self[key]
+        assert data.ndim == 2
+
+        # Make the destination slots and keys
+        slots = ['active', 'cumulative_active']
+        self.add_metric_slots(slots)
+        base = self._get_key_components(key, 'metrics')
+        dest_keys = [base + tuple([s]) for s in slots]
+
+        # Calculate the active cells
+        active = active_cells(data, thres)
+        cumul_active = cumulative_active(active)
+        self[dest_keys[0]] = active
+        self[dest_keys[1]] = cumul_active
+
+        if propagate:
+            [self.propagate_values(d, prop_to=propagate)
+             for d in dest_keys]
 
 
 class ExperimentArray():
@@ -692,7 +828,7 @@ class ExperimentArray():
         """
         try:
             # First try to return a site the user requested
-            if isinstance(key, tuple):
+            if isinstance(key, (tuple, list)):
                 return self._CondIndexer([self.sites[k] for k in key])
             else:
                 return self.sites[key]
@@ -723,7 +859,7 @@ class ExperimentArray():
         return [v.dtype for v in self.sites.values()]
 
     @property
-    def conditions(self):
+    def conditions(self) -> List:
         return [v.name for v in self.sites.values()]
 
     @property
@@ -798,21 +934,46 @@ class ExperimentArray():
         self.__setitem__(key, arr)
 
     def save(self, path: str) -> None:
-        """
-        Saves all the Conditions in Experiment
-        to an hdf5 file.
+        """Saves all the Conditions in Experiment to an hdf5 file.
 
+        Loads the hdf5 file for each condition and then saves them
+        in a single hdf5 file at path. Runs merge_conditions() first
+        to ensure data doesn't get overwritten.
+
+        Args:
+            path: Path to the location where file should be saved
+
+        Returns:
+            None
+
+        Raises:
+            ValueError: If any cell or frame is greater than 2 ** 16
+        """
+        '''
         TODO:
             - Add checking for path and overwrite options
-        """
+            - Add low memory option
+        '''
         f = h5py.File(path, 'w')
+        self.merge_conditions()
         for key, val in self.sites.items():
             # Array data stored as a dataset
             f.create_dataset(key, data=val._arr)
 
             # Axis names and coords stored as attributes
             for coord in val.coords:
-                f[key].attrs[coord] = val.coords[coord]
+                # Cells and frames have the potential to be large, so handle separately
+                if coord in ('frames', 'cells'):
+                    if isinstance(val.coords[coord], (int, float)):
+                        pass
+                    elif not len(val.coords[coord]):
+                        val.coords[coord] = np.array(val.coords[coord])
+                    elif np.array((val.coords[coord])).max() >= 2 ** 16:
+                        raise ValueError('Cannot save values larger than 16-bit.')
+
+                    f[key].attrs[coord] = np.array(val.coords[coord], dtype=np.uint16)
+                else:
+                    f[key].attrs[coord] = val.coords[coord]
 
         f.close()
 
@@ -827,6 +988,27 @@ class ExperimentArray():
         f = h5py.File(path, "r")
         return cls._build_from_file(f)
 
+    def remove_empty_sites(self) -> None:
+        """Removes all sites that have any empty dimension"""
+        self.sites = {k: v for k, v in self.sites.items()
+                      if not v._is_empty}
+
+    def remove_short_traces(self, min_trace_length: int = 0) -> None:
+        """Applies a filter to each condition to remove cells with
+        fewer good frames than min_trace_length
+
+        Args:
+            min_trace_length: Minimum number of frames allowed
+
+        Returns:
+            None
+        """
+        masks = [v.remove_short_traces(min_trace_length)
+                 for v in self.sites.values()]
+
+        for m, v in zip(masks, self.sites.values()):
+            v.filter_cells(m, delete=True)
+
     def generate_mask(self,
                       function: [Callable, str],
                       metric: str,
@@ -836,8 +1018,20 @@ class ExperimentArray():
                       key: str = None,
                       *args, **kwargs
                       ) -> np.ndarray:
-        """
-        Calls generate_mask for each Condition in self.sites
+        """Generates a boolean mask for each Condition
+
+        Args:
+            function:
+            metric:
+            region:
+            channel:
+            frame_rng:
+            key:
+            *args:
+            **kwargs:
+
+        Returns:
+            np.ndarray
         """
         # Build masks in each Condition with the function
         _masks = [v.generate_mask(function, metric, region,
@@ -890,7 +1084,7 @@ class ExperimentArray():
 
         return out
 
-    def merge_conditions(self, keys: List[str] = None) -> None:
+    def merge_conditions(self) -> None:
         """
         Concatenate Conditions with matching conditions
 
@@ -948,43 +1142,104 @@ class ExperimentArray():
                                                   time=cond_arrs[0].time)
                 self.sites[cond][:] = new_arr
 
+    def interpolate_nans(self, keys: Collection[tuple] = None) -> None:
+        """Linear interpolation of nans in each row
+
+        Args:
+
+        Returns:
+        """
+        for v in self.sites.values():
+            v.interpolate_nans(keys)
+
+    def predict_peaks(self,
+                      key: Tuple[int, str],
+                      weight_path: str = 'cellst/config/upeak_example_weights.tf',
+                      propagate: bool = True,
+                      segment: bool = True,
+                      **kwargs
+                      ) -> None:
+        """
+        kwargs are passed to the segmentation algorithm
+        TODO: Initialize the UPeak model here and pass to the sites
+        """
+        '''
+        NOTE: This will fail if any of the sites have different dimensions
+        This is important to remember if adding groups to Arrays.
+        Follows same assumption as made for keys - i.e. all are the same
+        '''
+        model = UPeakModel(weight_path)
+        for v in self.sites.values():
+            v.predict_peaks(key, model, propagate=propagate)
+
+    def mark_active_cells(self,
+                          key: Tuple[int, str],
+                          thres: float = 1,
+                          propagate: bool = True
+                          ) -> None:
+        """"""
+        for v in self.sites.values():
+            v.mark_active_cells(key, thres, propagate)
+
     def plot_by_condition(self,
-                          keys: Tuple[str],
+                          keys: List[Tuple[str]],
+                          conditions: Collection[str] = None,
+                          estimator: Union[Callable, str, functools.partial] = None,
+                          err_estimator: Union[Callable, str, functools.partial] = None,
+                          kind: str = 'line',
                           title: str = None,
                           x_label: str = None,
                           y_label: str = None,
                           x_range: Tuple[float] = None,
                           y_range: Tuple[float] = None,
                           layout_spec: dict = {},
+                          show: bool = False,
+                          save: str = None,
                           ) -> go.Figure:
         """
+        rename to be like time_plot or something
         keys must return a 2D arr for this to work.
         TODO: More generic way to group conditions
         TODO: Add option to save figures
         """
         # Get the data to plot
         keys = tuple(keys) if not isinstance(keys, tuple) else keys
-        arrs = self[keys]
-        conds = self.conditions
-        # Assume all conditions have the same time
+        conditions = conditions if conditions else self.conditions
+
+        # Get the data to plot
+        arrs = self[conditions][keys]
         time = self.time[0]
 
         # Make the base plot
-        fig = plot_groups(arrs, conds, time=time)
+        fig = plot_groups(arrs, conditions, estimator, err_estimator, kind=kind, time=time)
 
         # Update the figure layout
         fig.update_xaxes(title=x_label, range=x_range)
         fig.update_yaxes(title=y_label, range=y_range)
         fig.update_layout(title=title, **layout_spec)
 
-        fig.show()
+        if show:
+            fig.show()
+        if save:
+            # Determines fig type based on extension
+            html = save.split('.')[-1] == 'html'
+            if html:
+                config = {'toImageButtonOptions': {
+                            'format': 'svg',
+                            'filename': 'figure',
+                            'scale': 1
+                            }
+                         }
+                fig.write_html(save, config=config)
+            else:
+                fig.write_image(save)
 
         return fig
 
     @classmethod
     def _build_from_file(cls, f: h5py.File) -> 'ExperimentArray':
         """
-        Given an hdf5 file, returns a Experiment instance
+        Given an hdf5 file, returns a ExperimentArray instance
         """
         pos = ExperimentArray()
         for key in f:

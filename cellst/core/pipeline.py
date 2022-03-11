@@ -11,7 +11,8 @@ import tifffile as tiff
 import imageio as iio
 
 from cellst.core.operation import Operation
-from cellst.utils._types import Image, Mask, Track, Arr, ImageContainer
+from cellst.extract import Extractor
+from cellst.utils._types import Image, Mask, Track, Arr, ImageContainer, INPT_NAMES
 from cellst.utils.process_utils import condense_operations, extract_operations
 from cellst.utils.log_utils import get_logger, get_console_logger
 from cellst.utils.file_utils import (save_operation_yaml, save_pipeline_yaml,
@@ -22,7 +23,6 @@ class Pipeline():
     """
     TODO:
         - file_location should be dir that pipeline was called from
-        - Add calling from the command line
     """
     file_location = os.path.dirname(os.path.realpath(__file__))
     __name__ = 'Pipeline'
@@ -33,7 +33,7 @@ class Pipeline():
                  'operation_index', 'file_extension',
                  'logger', 'timer', 'overwrite',
                  'name', 'log_file', '_split_key',
-                 'completed_ops', '__dict__')
+                 'completed_ops', 'skip_frames', '__dict__')
 
     def __init__(self,
                  parent_folder: str = None,
@@ -44,6 +44,7 @@ class Pipeline():
                  array_folder: str = None,
                  name: str = None,
                  frame_rng: Tuple[int] = None,
+                 skip_frames: Tuple[int] = None,
                  file_extension: str = 'tif',
                  overwrite: bool = True,
                  log_file: bool = True,
@@ -70,6 +71,7 @@ class Pipeline():
         """
         # Save some values in case Pipeline is written as yaml
         self.frame_rng = frame_rng
+        self.skip_frames = skip_frames
         self.overwrite = overwrite
         self.log_file = log_file
         self._split_key = _split_key
@@ -89,12 +91,6 @@ class Pipeline():
         else:
             self.logger = get_console_logger()
 
-        # Copy yaml file to output
-        # if yaml_path:
-        #     targ = os.path.join(self.output_folder, yaml_path.split('/')[-1])
-        #     shutil.move(yaml_path, targ)
-        #     self.logger.info(f'Moved input yaml to: {targ}')
-
         # Prepare for getting operations and images
         self._image_container = ImageContainer()
         self.operations = []
@@ -108,6 +104,10 @@ class Pipeline():
         self.logger.info(f'Mask folder: {self.mask_folder}')
         self.logger.info(f'Track folder: {self.track_folder}')
         self.logger.info(f'Array folder: {self.array_folder}')
+        other_keys = ['name', 'frame_rng', 'skip_frames', 'overwrite', 'log_file',
+                      'file_extension']
+        self.logger.info('Other inputs: '
+                         f'{[(k, getattr(self, k)) for k in other_keys]}')
 
     def __enter__(self) -> None:
         """
@@ -165,7 +165,6 @@ class Pipeline():
 
     def add_operations(self,
                        operation: Collection[Operation],
-                       index: int = -1
                        ) -> None:
         """
         Adds Operations to the Pipeline and recalculates the index
@@ -174,36 +173,23 @@ class Pipeline():
 
         Returns:
 
-        TODO:
-            - Not sure the index results always make sense, best to add all
-              operations at once
         """
         # TODO: Dirty fix - Need to fix this in the master branch
         if isinstance(operation, Operation):
             operation = [operation]
 
-        # Adds operations to self.operations (Collection[Operation])
-        if isinstance(operation, Collection):
-            if all([isinstance(o, Operation) for o in operation]):
-                if index == -1:
-                    self.operations.extend(operation)
-                else:
-                    self.operations[index:index] = operation
-            else:
-                raise ValueError('Not all elements of operation are class Operation.')
-        elif isinstance(operation, Operation):
-            if index == -1:
-                self.operations.append(operation)
-            else:
-                self.operations.insert(index, operation)
-        else:
-            raise ValueError(f'Expected type Operation, got {type(operation)}.')
+        # Ensure we are only adding Operations
+        assert all([isinstance(o, Operation) for o in operation])
+        for o in operation:
+            # Copy skip_frames to Extractor if needed
+            if isinstance(o, Extractor) and self.skip_frames:
+                o._mark_skip_frames(self.skip_frames)
+
+            self.operations.append(o)
 
         # Log changes to the list of operations
-        self.logger.info(f'Added {len(operation)} operations at {index}. '
+        self.logger.info(f'Added {len(operation)} operations.'
                          f'\nCurrent operation list: {self.operations}.')
-
-        self.operation_index = {i: o for i, o in enumerate(self.operations)}
 
     def run(self) -> (Image, Mask, Track, Arr):
         """
@@ -223,6 +209,8 @@ class Pipeline():
         with self:
             # Determine needed inputs and outputs and load to container
             inputs, outputs = self._input_output_handler()
+            inputs = [self._add_subdirs_to_keys(i) for i in inputs]
+            outputs = [self._add_subdirs_to_keys(o) for o in outputs]
             self._load_images_to_container(self._image_container, inputs, outputs)
 
             for inpts, otpts, oper in zip(inputs, outputs, self.operations):
@@ -284,6 +272,22 @@ class Pipeline():
                 if arr.ndim != 3:
                     warnings.warn("Expected stack with 3 dimensions."
                                   f"Got {arr.ndim} for {name}", UserWarning)
+
+                if self.skip_frames:
+                    self.logger.info('Adding blank frames for skipped '
+                                     f'frames {self.skip_frames}')
+                    # Build new array with more frames
+                    new_arr_shape = arr.shape[0] + len(self.skip_frames)
+                    new_arr_shape = tuple([new_arr_shape, *arr.shape[1:]])
+                    new_arr = np.zeros(new_arr_shape, dtype=arr.dtype)
+
+                    # Make a mask so the bad frames are not updated
+                    bool_mask = np.ones(new_arr_shape[0], dtype=bool)
+                    bool_mask[np.array(self.skip_frames)] = False
+
+                    # Add the frames back and overwrite arr
+                    new_arr[bool_mask, ...] = arr
+                    arr = new_arr
 
                 # Set length of index based on total number of frames
                 zrs = len(str(arr.shape[0]))
@@ -430,9 +434,68 @@ class Pipeline():
                 warnings.warn(f'Did not understand range {self.frame_rng},'
                               f' got Exception {e}. \n', UserWarning)
             finally:
+                if self.skip_frames:
+                    self.logger.info(f'Not loading frames {self.skip_frames}.')
+                    im_names = [i for n, i in enumerate(im_names)
+                                if n not in self.skip_frames]
+
                 self.logger.info(f'Expecting to load {len(im_names)} images.')
 
         return im_names
+
+    def _add_subdirs_to_keys(self,
+                             keys: Collection[Tuple[str]]
+                             ) -> Collection[Tuple[str]]:
+        """"""
+        out = []
+        for kidx, key in enumerate(keys):
+            fol = [self.output_folder]
+            new_keys = []
+            stack_type = None
+            try:
+                # Try to get the folder to load
+                fol.append(getattr(self, f'{key[1]}_folder'))
+            except AttributeError:
+                # Otherwise just checks output folder
+                pass
+
+            # Look for directories that match the key
+            for f in fol:
+                for lvl, (pth, dirs, files) in enumerate(os.walk(f)):
+                    if pth.split('/')[-1] == key[0] and dirs:
+                        # Parent directory matches the key
+                        # Subdirectories indicate multiple outputs returned
+                        for d in dirs:
+                            # Infer type from file names
+                            f_names = [
+                                f.split('.')[0]
+                                for f in os.listdir(os.path.join(pth, d))
+                                if os.path.isfile(os.path.join(pth, d, f))
+                                and not f.startswith('.')
+                            ]
+                            for i in INPT_NAMES:
+                                if all([i in f for f in f_names]):
+                                    # This is the type then
+                                    stack_type = i
+                                    break
+
+                            # Check if type was found
+                            stack_type = stack_type if stack_type else key[1]
+                            new_keys.append(
+                                (f'{key[0]}{self._split_key}{d}', stack_type)
+                            )
+                        break
+
+                # If something was found, don't check remaining folders
+                if new_keys: break
+
+            # Add new_keys if found, otherwise old keys
+            if new_keys:
+                out.extend(new_keys)
+            else:
+                out.append(key)
+
+        return out
 
     def _load_images_to_container(self,
                                   container: ImageContainer,
@@ -464,11 +527,12 @@ class Pipeline():
 
         for key in to_load:
             try:
+                # Try to get the folder to load
                 fol = getattr(self, f'{key[1]}_folder')
+                pths = self._get_image_paths(fol, key)
             except AttributeError:
-                continue
-
-            pths = self._get_image_paths(fol, key)
+                fol = ''
+                pths = []
 
             if not pths:
                 # If no images are found in the path, check output_folder
@@ -513,14 +577,14 @@ class Pipeline():
                 container[key] = img_stack
 
                 self.logger.info(f'Images loaded. shape: {img_stack.shape}, '
-                                 f'type: {img_stack.dtype}.')
+                                 f'type: {img_stack.dtype}, key: {key}.')
 
         self.logger.info(f'Images loaed: {[list(container.keys())]}.')
 
         return container
 
     def _get_images_from_container(self,
-                                   input_keys: Collection[Collection],
+                                   input_keys: Collection[Tuple[str]],
                                    ) -> ImageContainer:
         """
         Checks for key in the image container and returns the corresponding stacks
@@ -609,7 +673,7 @@ class Pipeline():
         init_params = ('parent_folder', 'output_folder', 'image_folder',
                        'mask_folder', 'track_folder', 'array_folder',
                        'overwrite', 'file_extension', 'log_file', 'name',
-                       'frame_rng', '_split_key')
+                       'frame_rng', 'skip_frames', '_split_key')
         pipe_dict = {att: getattr(self, att) for att in init_params}
 
         # Add Operations to dict
