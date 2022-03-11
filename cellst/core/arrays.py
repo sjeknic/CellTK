@@ -878,6 +878,10 @@ class ExperimentArray():
     def time(self):
         return [v.time for v in self.sites.values()]
 
+    @property
+    def coordinates(self):
+        return tuple(next(iter(self.values())).coords.keys())
+
     def items(self):
         return self.sites.items()
 
@@ -1083,6 +1087,11 @@ class ExperimentArray():
                for msk, arr in zip(mask, self.sites.values())]
 
         return out
+
+    def add_metric_slots(self, name: List[str]) -> None:
+        """"""
+        for v in self.sites.values():
+            v.add_metric_slots(name)
 
     def merge_conditions(self) -> None:
         """
