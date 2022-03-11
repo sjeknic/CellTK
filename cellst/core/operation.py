@@ -545,6 +545,28 @@ class Operation():
         """"""
         return mask_to_seeds(mask)
 
+    @ImageHelper(by_frame=True)
+    def binary_threshold(self,
+                         image: Image,
+                         lower: float = None,
+                         upper: float = None,
+                         inside: float = None,
+                         outside: float = None
+                         ) -> Image:
+        """"""
+        out = np.where(image>0, 0, 1)
+        return out.astype(np.uint8)
+
+        # Set up the filter
+        fil = sitk.BinaryThresholdImageFilter()
+        if lower is not None: fil.SetLowerThreshold(lower)
+        if upper is not None: fil.SetUpperThreshold(upper)
+        if inside is not None: fil.SetInsideValue(inside)
+        if outside is not None: fil.SetOutsideValue(outside)
+
+        img = sitk.GetImageFromArray(image)
+        return sitk.GetArrayFromImage(fil.Execute(img))
+
 
 class BaseProcessor(Operation):
     __name__ = 'Processor'
@@ -986,10 +1008,14 @@ class BaseExtractor(Operation):
         """
         # Check the inputs now before calculation
         # Assert that keys include channel, region, and metric
+        peak_metrics = ('predict_peaks', 'active_cells',
+                        'cumulative_active', 'active')
         for key in keys:
             assert len(key) == 3
         if not hasattr(np, func) and not hasattr(metric_utils, func):
-            raise ValueError('Metric must be numpy func or in metric_utils.')
+            if metric_name not in peak_metrics:
+                raise ValueError('Metric must be numpy func '
+                                 'or in metric_utils.')
 
         # Save to calculated metrics to get added after extract is done
         # TODO: Make a dictionary
@@ -997,8 +1023,6 @@ class BaseExtractor(Operation):
                                                     frame_rng, args, kwargs])
 
         # Fill in the metric with just nan for now
-        peak_metrics = ('predict_peaks', 'active_cells',
-                        'cumulative_active', 'active')
         if metric_name in peak_metrics:
             if metric_name == 'predict_peaks':
                 self._props_to_add['slope_prob'] = RandomNameProperty()
