@@ -189,6 +189,47 @@ class Segmenter(BaseSegmenter):
         labels = meas.label(labels, connectivity=connectivity)
         return util.img_as_uint(labels)
 
+    @ImageHelper(by_frame=True)
+    def regional_extrema(self,
+                         image: Image,
+                         find: str = 'minima',
+                         fully_connected: bool = True,
+                         thres: float = None,
+                         min_size: int = 12
+                         ) -> Mask:
+        """Finds regional minima/maxima within flat areas.
+
+        TODO:
+            - Is it possible to remove large objects here.
+        """
+        if thres:
+            assert 0 <= thres and thres <= 1
+            # Seems less variable than using max
+            thres *= np.nanpercentile(image, 97)
+
+        # Get the appropriate filter
+        if find == 'maxima':
+            if thres:
+                fil = sitk.HConvexImageFilter()
+                fil.SetHeight(thres)
+            else: fil = sitk.RegionalMaximaImageFilter()
+        else:
+            if thres:
+                fil = sitk.HConcaveImageFilter()
+                fil.SetHeight(thres)
+            else: fil = sitk.RegionalMinimaImageFilter()
+        fil.SetFullyConnected(fully_connected)
+
+        extrema = fil.Execute(sitk.GetImageFromArray(image))
+
+        extrema = cast_sitk(extrema, 'sitkUInt16')
+        conn = sitk.ConnectedComponentImageFilter()
+        relab = sitk.RelabelComponentImageFilter()
+        relab.SetMinimumObjectSize(min_size)
+        labels = relab.Execute(conn.Execute(extrema))
+
+        return sitk.GetArrayFromImage(labels)
+
     @ImageHelper(by_frame=False)
     def sitk_filter_pipeline(self,
                              mask: Mask,
