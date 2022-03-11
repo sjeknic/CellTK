@@ -5,3 +5,4 @@ test_*
 *.pyc
 *slurm*out
 *slurm*err
+analysis/*
