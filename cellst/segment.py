@@ -640,3 +640,29 @@ class Segmenter(BaseSegmenter):
 
         # TODO: dtype can probably be downsampled from float32 before returning
         return output
+
+    @ImageHelper(by_frame=False)
+    def misic_predict(self,
+                      image: Image,
+                      model_path: str = 'cellst/external/MiSiCv2.h5',
+                      weight_path: str = None,
+                      batch: int = None,
+                      ) -> Mask:
+        """Wrapper for implementation of Misic paper.
+
+        TODO:
+            - Make custom structure to speed up calculations
+        """
+        # Only import tensorflow if needed
+        from cellst.utils.unet_model import MisicModel
+        self.model = MisicModel(model_path)
+
+        # Use model for predictions
+        if batch is None:
+            output = self.model.predict(image[:, :, :], )
+        else:
+            arrs = np.array_split(image, image.shape[0] // batch, axis=0)
+            output = np.concatenate([self.model.predict(a) for a in arrs],
+                                    axis=0)
+
+        return output
