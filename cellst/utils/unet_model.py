@@ -5,6 +5,10 @@ from typing import Tuple, List, Collection
 import numpy as np
 import scipy.stats as stats
 import scipy.signal as signal
+import skimage.filters as filt
+import skimage.feature as feat
+import skimage.transform as trans
+import skimage.util as util
 import sklearn.preprocessing as preproc
 from sklearn.preprocessing import MinMaxScaler, MaxAbsScaler
 from tensorflow.keras.layers import (Conv1D, MaxPooling1D, UpSampling1D,
@@ -14,6 +18,9 @@ from tensorflow.keras.layers import (Conv1D, MaxPooling1D, UpSampling1D,
 from tensorflow.keras import backend as K
 from keras.layers.advanced_activations import LeakyReLU
 import tensorflow.keras.models
+import misic.misic as misic
+import misic.extras as miext
+import misic.utils as miutil
 
 from cellst.utils._types import Image
 from cellst.utils.info_utils import nan_helper_2d, get_split_idxs
@@ -601,3 +608,128 @@ class UPeakModel(_UNetStructure):
             out[idx, :first_nan, : ] = cwt
 
         return out
+
+
+class MisicModel(FluorUNetModel):
+    # TODO: Add logging of citation information
+    # TODO: Add custom build of structure
+    '''
+    NOTE: I tried building out a model with a separate input layer that
+    would allow for calculations on the whole frame at once. Unfortunately,
+    I couldn't get this to work. Possibly completely unrelated to the model
+    structure though, so if I have time, then maybe something to try. I'm leaving
+    the reconfigure function I wrote in here.
+    '''
+    _model_kws = {'steps': 4, 'channels': 3}
+
+    def __init__(self,
+                 model_path: str,
+                 dimensions: Tuple[int]
+                 ) -> None:
+        self.model = tensorflow.keras.models.load_model(model_path)
+
+    def misic_preprocess(self, image: np.ndarray) -> np.ndarray:
+        """Uses recommended preprocessing from MiSiC model
+
+        Returns
+            np.ndarray: (fr, h, w)
+        """
+        out = np.zeros_like(image).astype(np.float64)
+        # Image is #D here (frames, h, w)
+        for fr, im in enumerate(image):
+            im = miext.adjust_gamma(im, 0.25)
+            im = filt.unsharp_mask(im, 2.2, 0.6)
+            # NOTE: nvert is false for dark backgrounds?
+            im = miext.add_noise(im, sensitivity=0.13, invert=True)
+            out[fr, ...] = im
+
+        return out
+
+    def misic_postprocess(self,
+                          original: np.ndarray,
+                          tiles: np.ndarray,
+                          params: List[dict],
+                          n_tiles: int
+                          ) -> np.ndarray:
+        """"""
+        # Reconstruct the prediictions from the tiles
+        preds = np.split(tiles, tiles.shape[0] // n_tiles, axis=0)
+        preds = [miutil.stitch_tiles(i, params) for i in preds]
+        predictions = np.squeeze(np.stack(preds, axis=0))
+
+        # Apply the predictions with watershed to original image
+        out = np.zeros_like(original)
+        for fr, (im, pred) in enumerate(zip(original, predictions)):
+            out[fr, ...] = miext.postprocessing(im, pred)
+
+        return out
+
+    def normalize_inputs(self, tiles: List[np.ndarray]):
+        """Normalizes intensity and adjusts dimensions of channel axis"""
+        return np.array([self.shapeindex_preprocess(
+                                miutil.normalize2max(np.squeeze(t))
+                         )
+                         for ti in tiles for t in ti])
+
+    def predict(self, image: np.ndarray) ->  np.ndarray:
+        """"""
+        # TODO: Add rescaling for different size bacteria?
+        pre_image = self.misic_preprocess(image)
+
+        # Split the image up into tiles as MiSiC expects
+        all_tiles = []
+        for im in pre_image:
+            tiles, params = miutil.extract_tiles(im, size=256, exclude=16)
+            # Because all images are same size, n_tiles and params should be same
+            n_tiles = tiles.shape[0]
+            all_tiles.append(tiles)
+
+        # Multiply by -1 because using light background
+        tiles = -1 * self.normalize_inputs(all_tiles)
+        tiles = np.stack(tiles, axis=0)
+
+        # Predict the results
+        out = self.model.predict(tiles)
+        out = self.misic_postprocess(image, out, params, n_tiles)
+
+        return util.img_as_uint(out)
+
+    def _reconfigure_input_layer(self,
+                                 model: tensorflow.keras.models.Model,
+                                 dimensions: Tuple[int]
+                                 ) -> tensorflow.keras.models.Model:
+        """MiSiC loads directly from the file. Need to change input shape."""
+        # Get the initial configuration
+        old_model = model
+        model_config = model.get_config()
+
+        # Reconfigure input dimensions
+        model_config['layers'][0]['name'] = 'new_input'
+        if len(dimensions) == 3: dimensions = (None, *dimensions)
+        model_config['layers'][0]['config']['batch_input_shape'] = dimensions
+        model_config['layers'][0]['config']['name'] = 'new_input'
+
+        # Reconfigure first convolutional layer
+        model_config['layers'][1]['inbound_nodes'] = [[['new_input', 0, 0, {}]]]
+        model_config['input_layers'] = [['new_input', 0, 0]]
+
+        # Rebuild model
+        new_model = tensorflow.keras.models.Model.from_config(model_config)
+
+        # Re-apply weights - skip input
+        for new, old in zip(new_model.layers[1:], old_model.layers[1:]):
+            new.set_weights(old.get_weights())
+
+        return new_model
+
+    def shapeindex_preprocess(self, im):
+        """Copied directly from MiSiC (sjeknic)"""
+        ''' apply shap index map at three scales'''
+        sh = np.zeros((im.shape[0],im.shape[1],3))
+        if np.max(im) ==0:
+            return sh
+        # pad to minimize edge artifacts
+        sh[:,:,0] = feat.shape_index(im,1, mode='reflect')
+        sh[:,:,1] = feat.shape_index(im,1.5, mode='reflect')
+        sh[:,:,2] = feat.shape_index(im,2, mode='reflect')
+        return sh
