@@ -127,9 +127,9 @@ class Segmenter(BaseSegmenter):
         Applies Gaussian blur to the image and selects pixels that
         are relative_thres brighter than the blurred image.
         """
-        filt = ndi.gaussian_filter(image, sigma)
-        filt = image > filt * (1 + relative_thres)
-        return meas.label(filt, connectivity=connectivity)
+        fil = ndi.gaussian_filter(image, sigma)
+        fil = image > fil * (1 + relative_thres)
+        return meas.label(fil, connectivity=connectivity)
 
     @ImageHelper(by_frame=True)
     def otsu_thres(self,
@@ -195,28 +195,9 @@ class Segmenter(BaseSegmenter):
         fil.SetInsideValue(0)
         fil.SetOutsideValue(1)
         out = fil.Execute(sitk.GetImageFromArray(image))
-        # out = cast_sitk(out, 'sitkUInt16')
-        # out = sitk.ConnectedComponent(out)
-        # out = sitk.BinaryThresholdImageFilter().Execute(out)
 
-        # binary = sitk.BinaryThresholdImageFilter()
-        # binary.SetLowerThreshold(0)
-        # binary.SetUpperThreshold(0.9)
-        # binary.SetInsideValue(1)
-        # binary.SetOutsideValue(0)
-        # out = binary.Execute(out)
-
-        # out = cast_sitk(out, 'sitkFloat32', cast_up=True)
+        out = cast_sitk(out, 'sitkUInt16')
         return sitk.GetArrayFromImage(out)
-
-        thres = filt.threshold_li(image, tolerance=tol,
-                                  initial_guess=init_guess)
-        labels = (image > thres).astype(np.uint8)
-        if fill_holes:
-            labels = sitk_binary_fill_holes(labels)
-
-        labels = meas.label(labels, connectivity=connectivity)
-        return util.img_as_uint(labels)
 
     @ImageHelper(by_frame=True)
     def regional_extrema(self,
