@@ -624,7 +624,6 @@ class MisicModel(FluorUNetModel):
 
     def __init__(self,
                  model_path: str,
-                 dimensions: Tuple[int]
                  ) -> None:
         self.model = tensorflow.keras.models.load_model(model_path)
 

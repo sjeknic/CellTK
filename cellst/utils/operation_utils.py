@@ -41,33 +41,6 @@ def dilate_sitk(labels: np.ndarray, radius: int) -> np.ndarray:
     return sitk.GetArrayFromImage(gd.Execute(slabels))
 
 
-def _close_border_holes(array: np.ndarray,
-                        max_length: int = 45,
-                        in_place: bool = True
-                        ) -> np.ndarray:
-    """"""
-    if not in_place: array = array.copy()
-
-    axes = (array[0, :], array[-1, :],  # top, bottom
-            array[:, 0], array[:, -1])  # left, right
-    for ax in axes:
-        # Find holes by comparing to all indices
-        nonzero = np.where(ax)[0]
-        holes = np.setdiff1d(np.arange(len(ax)), nonzero)
-
-        if len(holes):
-            # Find holes split them up to be unique
-            diffs = np.ediff1d(holes, to_begin=1)
-            hole_idxs = np.split(holes, np.where(diffs > 1)[0])
-
-            # Fill them in
-            for h in hole_idxs:
-                if len(h) <= max_length:
-                    ax[h] = 1
-
-    return array
-
-
 def _np_types() -> dict:
     _np_dtypes = {'integer': (np.uint, np.uint8, np.uint16,
                               np.uint32, np.uint64),
@@ -201,9 +174,41 @@ def cast_sitk(image: sitk.Image,
     return image
 
 
+def _close_border_holes(array: np.ndarray,
+                        max_length: int = 45,
+                        in_place: bool = True
+                        ) -> np.ndarray:
+    """"""
+    if not in_place: array = array.copy()
+
+    axes = (array[0, :], array[-1, :],  # top, bottom
+            array[:, 0], array[:, -1])  # left, right
+    for ax in axes:
+        # Find holes by comparing to all indices
+        nonzero = np.where(ax)[0]
+        holes = np.setdiff1d(np.arange(len(ax)), nonzero)
+
+        if len(holes):
+            # Find holes split them up to be unique
+            diffs = np.ediff1d(holes, to_begin=1)
+            nonzero_diffs = np.ediff1d(holes, to_begin=1)
+
+
+            hole_idxs = np.split(holes, np.where(diffs > 1)[0])
+
+            # Fill them in
+            for h in hole_idxs:
+                #TODO: Add minlength of filled in criteria
+                if len(h) <= max_length:
+                    ax[h] = 1
+
+    return array
+
+
 def sitk_binary_fill_holes(labels: np.ndarray,
                            fill_border: bool = True,
                            iterations: Union[int, bool] = False,
+                           kernel_radius: int = 4,
                            max_length: int = 45,
                            in_place: bool = True,
                            **kwargs
@@ -219,6 +224,7 @@ def sitk_binary_fill_holes(labels: np.ndarray,
     if iterations:
         fil = sitk.VotingBinaryIterativeHoleFillingImageFilter()
         fil.SetMaximumNumberOfIterations(iterations)
+        fil.SetRadius(kernel_radius)
     else:
         fil = sitk.BinaryFillholeImageFilter()
 
@@ -227,7 +233,11 @@ def sitk_binary_fill_holes(labels: np.ndarray,
         getattr(fil, k)(v)
 
     # Fill the holes first
-    _labels = sitk.GetImageFromArray(labels)
+    if isinstance(labels, np.ndarray):
+        _labels = sitk.GetImageFromArray(labels)
+    elif isinstance(labels, sitk.Image):
+        _labels = labels
+
     labels = fil.Execute(_labels)
 
     if fill_border:
@@ -235,13 +245,68 @@ def sitk_binary_fill_holes(labels: np.ndarray,
         labels = sitk.GetArrayFromImage(labels)
         labels = _close_border_holes(labels, max_length, in_place)
 
+        labels = np.pad(labels, ((1, 1), (1, 1)), mode='constant', constant_values=0)
+
         # Re-fill so that those border holes are filled
-        # TODO: Should this use VoteIterative too?
-        fil = sitk.BinaryFillholeImageFilter()
+        fil = sitk.VotingBinaryHoleFillingImageFilter()
+        fil.SetRadius(kernel_radius)
         _labels = sitk.GetImageFromArray(labels)
         labels = fil.Execute(_labels)
 
+        labels = labels[1:-1, 1:-1]
+
     return sitk.GetArrayFromImage(labels)
+
+
+def ndi_binary_fill_holes(labels: np.ndarray,
+                          fill_border: bool = True,
+                          kernel_radius: int = 2,
+                          max_length: int = 45,
+                          in_place: bool = False,
+                          ) -> np.ndarray:
+    """"""
+    labels = ndi.binary_fill_holes(labels, get_binary_footprint(kernel_radius))
+
+    if fill_border:
+        labels = _close_border_holes(labels, max_length, in_place)
+        labels = np.pad(labels, ((1, 1), (1, 1)),
+                        mode='constant', constant_values=0)
+        labels = ndi.binary_fill_holes(labels,
+                                       get_binary_footprint(kernel_radius)
+                                       )
+        labels = morph.binary_opening(labels)
+        labels = labels[1:-1, 1:-1]
+
+    return labels
+
+
+def mask_to_seeds(mask: np.ndarray,
+                  method: str = 'sitk',
+                  output: str = 'mask',
+                  binary: bool = True) -> Union[np.ndarray, list]:
+    """Find centroid of all objects and return, either as list of points or labeled mask
+    If binary, all seeds are 1, otherwise, preserve labels
+
+    Currently, none of the options d anything
+    """
+    if method == 'sitk':
+        img = sitk.GetImageFromArray(mask)
+        img = cast_sitk(img, 'sitkUInt16')
+        stats = sitk.LabelShapeStatisticsImageFilter()
+        stats.Execute(img)
+        centroids = [stats.GetCentroid(i) for i in stats.GetLabels()]
+        pixels = [stats.GetNumberOfPixels(i) for i in stats.GetLabels()]
+        perim = [stats.GetPerimeter(i) for i in stats.GetLabels()]
+
+    if output == 'mask':
+        out = np.zeros_like(mask)
+        pt0, pt1 = zip(*centroids)
+        pt0 = np.array([int(round(p)) for p in pt0])
+        pt1 = np.array([int(round(p)) for p in pt1])
+
+        out[pt1, pt0] = 1
+
+    return out
 
 
 def track_to_mask(track: Track, idx: np.ndarray = None) -> Mask:
