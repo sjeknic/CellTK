@@ -1,6 +1,6 @@
 import warnings
 from itertools import groupby
-from typing import Union, Collection
+from typing import Union, Collection, Tuple
 
 import numpy as np
 import SimpleITK as sitk
@@ -85,6 +85,27 @@ class Processor(BaseProcessor):
             flat_outputs = [crop_array(fo, crop_vals) for fo in flat_outputs]
 
         return flat_outputs
+
+    @ImageHelper(by_frame=True, as_tuple=True)
+    def tile_images(self,
+                    image: Image = tuple([]),
+                    mask: Mask = tuple([]),
+                    track: Track = tuple([]),
+                    layout: Tuple[int] = None,
+                    border_value: Union[int, float] = 0.,
+                    scaling: float = 1.
+                    ) -> Image:
+        """"""
+        # TODO: Add scaling
+        fil = sitk.TileImageFilter()
+        fil.SetLayout(layout)
+        fil.SetDefaultPixelValue(border_value)
+        stacks = image + mask + track
+        images = [cast_sitk(sitk.GetImageFromArray(s), 'sitkUInt16', True)
+                  for s in stacks]
+        out = fil.Execute(images)
+
+        return sitk.GetArrayFromImage(out)
 
     @ImageHelper(by_frame=True)
     def gaussian_filter(self,
