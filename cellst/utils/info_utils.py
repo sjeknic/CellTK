@@ -378,11 +378,11 @@ def get_split_idxs(arrays: Collection[np.ndarray], axis: int = 0) -> List[int]:
     return split_idxs
 
 
-def split_array(array: np.ndarray, split_idxs: List[int]) -> List[np.ndarray]:
+def split_array(array: np.ndarray, split_idxs: List[int], axis: int = 0) -> List[np.ndarray]:
     """
     """
-    return [n for n in np.split(array, split_idxs, axis=0)
-            if n.shape[0] > 0]
+    return [n for n in np.split(array, split_idxs, axis=axis)
+            if n.shape[axis] > 0]
 
 
 ### Functions for more complicated calculations ###
