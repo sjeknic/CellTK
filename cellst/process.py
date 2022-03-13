@@ -93,16 +93,22 @@ class Processor(BaseProcessor):
                     track: Track = tuple([]),
                     layout: Tuple[int] = None,
                     border_value: Union[int, float] = 0.,
-                    scaling: float = 1.
                     ) -> Image:
         """"""
-        # TODO: Add scaling
+        # TODO: Add scaling of intensity and dimension
+        # TODO: Add crop
         fil = sitk.TileImageFilter()
         fil.SetLayout(layout)
         fil.SetDefaultPixelValue(border_value)
+
+        #
         stacks = image + mask + track
         images = [cast_sitk(sitk.GetImageFromArray(s), 'sitkUInt16', True)
                   for s in stacks]
+
+        # Rescale intensity
+        rescale = sitk.RescaleIntensityImageFilter()
+        images = [rescale.Execute(i) for i in images]
         out = fil.Execute(images)
 
         return sitk.GetArrayFromImage(out)
