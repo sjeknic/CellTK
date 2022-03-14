@@ -1037,11 +1037,29 @@ class ExperimentArray():
         Returns:
             np.ndarray
         """
-        # Build masks in each Condition with the function
-        _masks = [v.generate_mask(function, metric, region,
-                                  channel, frame_rng, key,
-                                  *args, **kwargs)
-                  for v in self.sites.values()]
+        # Format inputs to the correct type
+        if isinstance(region, int):
+            region = self.regions[0][region]
+        if isinstance(channel, int):
+            channel = self.channels[0][channel]
+
+        if individual:
+            # Build masks in each Condition with the function
+            _masks = [v.generate_mask(function, metric, region,
+                                      channel, frame_rng, key,
+                                      *args, **kwargs)
+                      for v in self.sites.values()]
+        else:
+            # Build data for all of the sites together
+            # Vals should be 2D for all inputs
+            vals = self[region, channel, metric, :, :]
+            splits = get_split_idxs(vals, axis=0)
+
+            # Get mask and split them up
+            # TODO: Only works for strings
+            function = getattr(filtu, function)
+            masks = function(np.vstack(vals), *args, **kwargs)
+            _masks = split_array(masks, splits, axis=0)
 
         # Save if needed
         if key is not None:
@@ -1199,11 +1217,12 @@ class ExperimentArray():
                           title: str = None,
                           x_label: str = None,
                           y_label: str = None,
-                          x_range: Tuple[float] = None,
-                          y_range: Tuple[float] = None,
+                          x_limit: Tuple[float] = None,
+                          y_limit: Tuple[float] = None,
                           layout_spec: dict = {},
                           show: bool = False,
                           save: str = None,
+                          _format: str = 'svg'
                           ) -> go.Figure:
         """
         rename to be like time_plot or something
@@ -1223,8 +1242,8 @@ class ExperimentArray():
         fig = plot_groups(arrs, conditions, estimator, err_estimator, kind=kind, time=time)
 
         # Update the figure layout
-        fig.update_xaxes(title=x_label, range=x_range)
-        fig.update_yaxes(title=y_label, range=y_range)
+        fig.update_xaxes(title=x_label, range=x_limit)
+        fig.update_yaxes(title=y_label, range=y_limit)
         fig.update_layout(title=title, **layout_spec)
 
         if show:
@@ -1234,7 +1253,7 @@ class ExperimentArray():
             html = save.split('.')[-1] == 'html'
             if html:
                 config = {'toImageButtonOptions': {
-                            'format': 'svg',
+                            'format': _format,
                             'filename': 'figure',
                             'scale': 1
                             }
