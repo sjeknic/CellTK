@@ -15,6 +15,11 @@ from cellst.utils._fastkde import FastLaplacianKDE
 SEED = 69420
 _RNG = np.random.default_rng(SEED)
 
+"""
+TODO:
+    - Function for down-sampling traces
+"""
+
 
 ### Functions for calculating information metrics ###
 def shannon_entropy(vec: np.ndarray) -> float:
@@ -167,15 +172,15 @@ def make_contingency_array(arrays: Collection[np.ndarray],
     else:
         raise ValueError(f'Method {cluster_method} not understood.')
 
-    labels = np.array(clusterer.labels_)
-    labels = split_array(labels, split_idxs)
+    _labels = np.array(clusterer.labels_)
+    labels = split_array(_labels, split_idxs)
 
     # Make output array and sort cells - labels are 0-indexed
-    contingency = np.zeros((len(arrays), np.max(labels) + 1))
+    contingency = np.zeros((len(arrays), np.max(_labels) + 1))
     for row, label in enumerate(labels):
         # Get the number of cells in each label
         # HDBSCAN can return negative labels for noise points
-        idx, num = np.unique(label[label > 0], return_counts=True)
+        idx, num = np.unique(label[label >= 0], return_counts=True)
         for idx, num in zip(idx, num):
             contingency[row, idx] = num
 
@@ -199,8 +204,7 @@ def preprocess_array(array: Collection[np.ndarray],
     return array
 
 
-def pca_reduction(self,
-                  arr: np.ndarray,
+def pca_reduction(arr: np.ndarray,
                   n_components: int = 2,
                   copy: bool = True,
                   svd_solver: str = 'auto',
@@ -213,8 +217,7 @@ def pca_reduction(self,
     return fitter.fit_transform(arr)
 
 
-def umap_reduction(self,
-                   arr: np.ndarray,
+def umap_reduction(arr: np.ndarray,
                    n_neighbors: int = 15,
                    min_dist: float = 0,
                    n_components: int = 2,
@@ -242,7 +245,7 @@ def normalize_arrays(arrays: Collection[np.ndarray],
     """
     Proposed normalization methods
     1) indiv - each feature is normalized independently in all the arrays
-    2) combined - all features in the array are normalized to the same scale
+    2) combined - all features in all thes array are normalized to the same scale
     3) separate - all features are normalized independently in each array
     3.5) separate-combined - all features in each array is normalized to the same scale
     """
@@ -462,10 +465,9 @@ def calculate_differential_channel_capacity(arrays: Collection[np.ndarray],
     stimulus. Sum those KDEs, weighted by both the number of traces and number of stimuli.
 
     TODO: This function should be agnostic to the method of calculating the probability density
-          estimate, that should be passed to this model separately.
+          estimate, that should be passed to this model separately.,
+    TODO: Was this implemented correct? Gives very high answers.
     """
-
-    # NOT AT ALL FUCKING SURE THAT THIS WORKS EVEN SLIGHTLY
     # Warn about nans which will likely mess up calculations
     if any([np.isnan(a).sum() for a in arrays]):
         warnings.warn('Arrays contain nans.', UserWarning)
