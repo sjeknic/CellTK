@@ -11,6 +11,7 @@ import plotly.graph_objects as go
 import cellst.utils.filter_utils as filt
 from cellst.utils.plot_utils import plot_groups
 from cellst.utils.info_utils import nan_helper_2d
+import cellst.utils.filter_utils as filtu
 from cellst.utils.unet_model import UPeakModel
 from cellst.utils.upeak.peak_utils import segment_peaks_agglomeration
 from cellst.utils.metric_utils import active_cells, cumulative_active
@@ -624,8 +625,8 @@ class ConditionArray():
                 if idx:
                     user_mask[:, idx] = True
 
-                mask = getattr(filt, function)(vals, mask=user_mask,
-                                               *args, **kwargs)
+                mask = getattr(filtu, function)(vals, mask=user_mask,
+                                                *args, **kwargs)
             except AttributeError:
                 raise AttributeError('Did not understand filtering '
                                      f'function {function}.')
@@ -878,6 +879,10 @@ class ExperimentArray():
     def time(self):
         return [v.time for v in self.sites.values()]
 
+    @property
+    def coordinates(self):
+        return tuple(next(iter(self.values())).coords.keys())
+
     def items(self):
         return self.sites.items()
 
@@ -1016,6 +1021,7 @@ class ExperimentArray():
                       channel: [str, int] = 0,
                       frame_rng: (Tuple[int], int) = None,
                       key: str = None,
+                      individual: bool = True,
                       *args, **kwargs
                       ) -> np.ndarray:
         """Generates a boolean mask for each Condition
@@ -1033,11 +1039,29 @@ class ExperimentArray():
         Returns:
             np.ndarray
         """
-        # Build masks in each Condition with the function
-        _masks = [v.generate_mask(function, metric, region,
-                                  channel, frame_rng, key,
-                                  *args, **kwargs)
-                  for v in self.sites.values()]
+        # Format inputs to the correct type
+        if isinstance(region, int):
+            region = self.regions[0][region]
+        if isinstance(channel, int):
+            channel = self.channels[0][channel]
+
+        if individual:
+            # Build masks in each Condition with the function
+            _masks = [v.generate_mask(function, metric, region,
+                                      channel, frame_rng, key,
+                                      *args, **kwargs)
+                      for v in self.sites.values()]
+        else:
+            # Build data for all of the sites together
+            # Vals should be 2D for all inputs
+            vals = self[region, channel, metric, :, :]
+            splits = get_split_idxs(vals, axis=0)
+
+            # Get mask and split them up
+            # TODO: Only works for strings
+            function = getattr(filtu, function)
+            masks = function(np.vstack(vals), *args, **kwargs)
+            _masks = split_array(masks, splits, axis=0)
 
         # Save if needed
         if key is not None:
@@ -1084,6 +1108,11 @@ class ExperimentArray():
 
         return out
 
+    def add_metric_slots(self, name: List[str]) -> None:
+        """"""
+        for v in self.sites.values():
+            v.add_metric_slots(name)
+
     def merge_conditions(self) -> None:
         """
         Concatenate Conditions with matching conditions
@@ -1108,6 +1137,7 @@ class ExperimentArray():
                     # Skip merging for these conditions
                     continue
 
+                # Need to add position ID to keep unique identification
                 if len(set([c.pos_id for c in cond_arrs])) < len(cond_arrs):
                     for n, c in enumerate(cond_arrs):
                         # Try to guess pos_id, or just count
@@ -1125,15 +1155,16 @@ class ExperimentArray():
                     [c.set_position_id() for c in cond_arrs]
 
                 # cells are always indexed by integer, so make new list
-                coords['cells'] = range(sum((len(c.coords['cells'])
-                                             for c in cond_arrs)))
+                coords['cells'] = np.arange(sum((len(c.coords['cells'])
+                                            for c in cond_arrs)))
 
                 # Concatenate the arrays along cell axis
                 ax = cond_arrs[0]._dim_idxs['cells']
                 new_arr = np.concatenate([c._arr for c in cond_arrs], axis=ax)
 
                 # Delete old arrays
-                keys_to_delete = [k for k in self.keys() if cond in k]
+                keys_to_delete = [k for k, v in self.items()
+                                  if cond == v.name]
                 for k in keys_to_delete:
                     self.sites.pop(k, None)
 
@@ -1190,11 +1221,12 @@ class ExperimentArray():
                           title: str = None,
                           x_label: str = None,
                           y_label: str = None,
-                          x_range: Tuple[float] = None,
-                          y_range: Tuple[float] = None,
+                          x_limit: Tuple[float] = None,
+                          y_limit: Tuple[float] = None,
                           layout_spec: dict = {},
                           show: bool = False,
                           save: str = None,
+                          _format: str = 'svg'
                           ) -> go.Figure:
         """
         rename to be like time_plot or something
@@ -1214,8 +1246,8 @@ class ExperimentArray():
         fig = plot_groups(arrs, conditions, estimator, err_estimator, kind=kind, time=time)
 
         # Update the figure layout
-        fig.update_xaxes(title=x_label, range=x_range)
-        fig.update_yaxes(title=y_label, range=y_range)
+        fig.update_xaxes(title=x_label, range=x_limit)
+        fig.update_yaxes(title=y_label, range=y_limit)
         fig.update_layout(title=title, **layout_spec)
 
         if show:
@@ -1225,7 +1257,7 @@ class ExperimentArray():
             html = save.split('.')[-1] == 'html'
             if html:
                 config = {'toImageButtonOptions': {
-                            'format': 'svg',
+                            'format': _format,
                             'filename': 'figure',
                             'scale': 1
                             }

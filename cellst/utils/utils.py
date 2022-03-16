@@ -1,6 +1,7 @@
 import sys
 import os
 import functools
+import itertools
 import contextlib
 import warnings
 import logging
@@ -311,18 +312,21 @@ class ImageHelper():
             out_shape = next(iter(pass_to_func.values()))[0].shape
             windows = {p: self._multiple_sliding_windows(v)
                        for p, v in pass_to_func.items()}
+            _fv = tuple([])
         else:
             out_shape = next(iter(pass_to_func.values())).shape
             windows = {p: sliding_window_generator(v)
                        for p, v in pass_to_func.items()}
+            _fv = None
 
         # zip_longest in case some stacks aren't found
         # wrapped function should raise an error if this is a problem
-        for fr, win in enumerate(zip_longest(*windows.values())):
+        for fr, win in enumerate(itertools.zip_longest(*windows.values(), fillvalue=_fv)):
             new_win = dict(zip(pass_to_func.keys(), win))
             res = self.func(*calling_cls, **new_win, **kwargs)
             if not fr:
                 # If first frame, make the output array
+                out_shape = (out_shape[0], *res.shape)
                 out = np.empty(out_shape, dtype=res.dtype)
             out[fr, ...] = res
 

@@ -29,8 +29,6 @@ class Segmenter(BaseSegmenter):
         - Add levelset segmentation
         - Add mahotas/watershed_distance
         - Add _threshold_dispatcher_function
-        - Add LabelVotingImageFilter
-        - Add TileImageFilter (to Process??)
         - Can Sitk be used instead of regionprops?
             (https://simpleitk.org/SPIE2019_COURSE/06_segmentation_and_shape_analysis.html)
     """
@@ -589,13 +587,7 @@ class Segmenter(BaseSegmenter):
                              erosion: bool = False
                              ) -> Mask:
         """
-        Taken from CellTK. Removes nuclei mask from cytoplasmic mask
-
-        TODO:
-            - This has probaby been coming for a while, but there should
-              be a way to directly specify an image as an input, w/o having
-              to make a new Operation class, as it is currently required. There
-              is no other way to pass channel or name specs to the function
+        Removes nuclei from a cytoplasmic mask
         """
         if val_match:
             new_cyto_mask = np.where(cyto_mask == nuc_mask, 0, cyto_mask)
@@ -664,11 +656,12 @@ class Segmenter(BaseSegmenter):
                                   iterations: int = 1000,
                                   ) -> Mask:
         """"""
+        # Set up filter
         fil = sitk.GeodesicActiveContourLevelSetImageFilter()
         fil.SetCurvatureScaling(curvature)
         fil.SetPropagationScaling(propagation)
         fil.SetNumberOfIterations(iterations)
-
+        # Check edge potential format
         if edge_potential.max() > 1 or edge_potential.min() < 0:
             warnings.warn('Edge potential image seems poorly formatted. '
                           'Should be 0 at edges and 1 elsewhere.', UserWarning)
@@ -762,7 +755,8 @@ class Segmenter(BaseSegmenter):
     def watershed_from_markers(self,
                                image: Image,
                                mask: Mask,
-                               watershed_line: bool = True
+                               watershed_line: bool = True,
+                               remove_large: bool = True
                                ) -> Mask:
         """"""
         fil = sitk.MorphologicalWatershedFromMarkersImageFilter()
@@ -774,8 +768,19 @@ class Segmenter(BaseSegmenter):
         img = cast_sitk(img, 'sitkUInt16', cast_up=True)
         msk = cast_sitk(msk, 'sitkUInt16', cast_up=True)
 
-        out = fil.Execute(img, msk)
-        return sitk.GetArrayFromImage(out)
+        out = sitk.GetArrayFromImage(fil.Execute(img, msk)).astype(np.uint16)
+
+        if remove_large:
+            # The background sometimes gets segmented, so remove it
+            objects, counts = np.unique(out, return_counts=True)
+            # Anything larger than 1/5 the image is masked
+            count_mask = counts >= 0.2 * np.prod(image.shape)
+            to_remove = objects[count_mask]
+            if to_remove.any():
+                for t in to_remove:
+                    out[out == t] = 0
+
+        return out
 
     @ImageHelper(by_frame=False, as_tuple=True)
     def label_by_voting(self,
