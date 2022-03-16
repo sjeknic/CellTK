@@ -1155,15 +1155,16 @@ class ExperimentArray():
                     [c.set_position_id() for c in cond_arrs]
 
                 # cells are always indexed by integer, so make new list
-                coords['cells'] = range(sum((len(c.coords['cells'])
-                                             for c in cond_arrs)))
+                coords['cells'] = np.arange(sum((len(c.coords['cells'])
+                                            for c in cond_arrs)))
 
                 # Concatenate the arrays along cell axis
                 ax = cond_arrs[0]._dim_idxs['cells']
                 new_arr = np.concatenate([c._arr for c in cond_arrs], axis=ax)
 
                 # Delete old arrays
-                keys_to_delete = [k for k in self.keys() if cond in k]
+                keys_to_delete = [k for k, v in self.items()
+                                  if cond == v.name]
                 for k in keys_to_delete:
                     self.sites.pop(k, None)
 
