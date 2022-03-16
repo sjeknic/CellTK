@@ -339,13 +339,25 @@ def subset_array(arr: np.ndarray,
     return subset_arr
 
 
-def randomize_array(arr: np.ndarray) -> np.ndarray:
+def randomize_array(arr: Union[Collection[np.ndarray], np.ndarray]
+                    ) -> np.ndarray:
     """"""
+    # If multiple arrays, stack, randomize, unstack
+    _splits = False
+    if isinstance(arr, (list, tuple)):
+        _splits = get_split_idxs(arr)
+        arr = np.vstack(arr)
+
+    # Randomly pull rows from the array
     samples = arr.sum()
     flat_len = len(arr.flatten())
     rand_samples = _RNG.multinomial(samples, np.ones(flat_len) / flat_len)
+    rand_samples = rand_samples.reshape(arr.shape)
 
-    return rand_samples.reshape(arr.shape)
+    if _splits:
+        rand_samples = split_array(rand_samples, _splits)
+
+    return rand_samples
 
 
 def nan_helper(y: np.ndarray) -> np.ndarray:
