@@ -11,6 +11,7 @@ import plotly.graph_objects as go
 import cellst.utils.filter_utils as filt
 from cellst.utils.plot_utils import plot_groups
 from cellst.utils.info_utils import nan_helper_2d
+import cellst.utils.filter_utils as filtu
 from cellst.utils.unet_model import UPeakModel
 from cellst.utils.upeak.peak_utils import segment_peaks_agglomeration
 from cellst.utils.metric_utils import active_cells, cumulative_active
@@ -624,8 +625,8 @@ class ConditionArray():
                 if idx:
                     user_mask[:, idx] = True
 
-                mask = getattr(filt, function)(vals, mask=user_mask,
-                                               *args, **kwargs)
+                mask = getattr(filtu, function)(vals, mask=user_mask,
+                                                *args, **kwargs)
             except AttributeError:
                 raise AttributeError('Did not understand filtering '
                                      f'function {function}.')
@@ -1020,6 +1021,7 @@ class ExperimentArray():
                       channel: [str, int] = 0,
                       frame_rng: (Tuple[int], int) = None,
                       key: str = None,
+                      individual: bool = True,
                       *args, **kwargs
                       ) -> np.ndarray:
         """Generates a boolean mask for each Condition
@@ -1135,6 +1137,7 @@ class ExperimentArray():
                     # Skip merging for these conditions
                     continue
 
+                # Need to add position ID to keep unique identification
                 if len(set([c.pos_id for c in cond_arrs])) < len(cond_arrs):
                     for n, c in enumerate(cond_arrs):
                         # Try to guess pos_id, or just count
