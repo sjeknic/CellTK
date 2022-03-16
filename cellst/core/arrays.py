@@ -496,7 +496,7 @@ class ConditionArray():
 
             return self._arr
 
-        return self._arr[mask]
+        return self._arr[indices]
 
     def reshape_mask(self,
                      mask: np.ndarray
