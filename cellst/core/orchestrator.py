@@ -126,6 +126,8 @@ class Orchestrator():
                 self.controller.run(self.pipelines)
                 results = []
         elif n_cores > 1:
+            raise NotImplementedError('This feature still requires '
+                                      'some machine-specific debugging')
             results = self.run_multiple_pipelines(self.pipelines,
                                                   n_cores=n_cores)
         else:
@@ -149,6 +151,7 @@ class Orchestrator():
             - key is subfolder, val is to be passed to Pipeline.__init__
 
         Assumes that operations are already added to the Pipelines
+        TODO: Fix
         """
         # Run asynchronously
         with Pool(n_cores) as pool:
