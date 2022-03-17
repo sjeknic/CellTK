@@ -7,6 +7,7 @@ from typing import List, Tuple, Dict, Callable, Collection, Union
 import h5py
 import numpy as np
 import plotly.graph_objects as go
+import matplotlib.pyplot as plt
 
 import cellst.utils.filter_utils as filt
 from cellst.utils.plot_utils import plot_groups
@@ -1217,6 +1218,7 @@ class ExperimentArray():
                           conditions: Collection[str] = None,
                           estimator: Union[Callable, str, functools.partial] = None,
                           err_estimator: Union[Callable, str, functools.partial] = None,
+                          colors: Union[Callable, Collection] = None,
                           kind: str = 'line',
                           title: str = None,
                           x_label: str = None,
@@ -1237,13 +1239,12 @@ class ExperimentArray():
         # Get the data to plot
         keys = tuple(keys) if not isinstance(keys, tuple) else keys
         conditions = conditions if conditions else self.conditions
-
-        # Get the data to plot
         arrs = self[conditions][keys]
         time = self.time[0]
 
         # Make the base plot
-        fig = plot_groups(arrs, conditions, estimator, err_estimator, kind=kind, time=time)
+        fig = plot_groups(arrs, conditions, estimator, err_estimator,
+                          kind=kind, time=time, colors=colors)
 
         # Update the figure layout
         fig.update_xaxes(title=x_label, range=x_limit)

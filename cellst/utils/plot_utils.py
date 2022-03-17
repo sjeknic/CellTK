@@ -5,6 +5,7 @@ from typing import Collection, Union, Callable, Generator, Tuple
 
 import numpy as np
 import matplotlib.pyplot as plt
+import seaborn as sns
 import matplotlib.collections as pltcol
 import plotly.graph_objects as go
 import plotly.colors as pcol
@@ -32,8 +33,6 @@ Need easier way to specify:
     - conditions (maybe in array can have conditions_2_keys or something??)
 
 """
-
-
 def plot_groups(arrs: Collection[np.ndarray],
                 keys: Collection[str] = [],
                 estimator: Union[Callable, str, functools.partial] = None,
@@ -62,14 +61,15 @@ def plot_groups(arrs: Collection[np.ndarray],
 
     # Get the color scale to use
     # colorscale = getattr(pcol.qualitative, DEF_COLORS)
-    colorscale = list(cc.glasbey_dark)
+    colorscale = itertools.cycle((cc.glasbey_dark))
     if colors:
         if isinstance(colors, str):
-            colorscale = pcol.get_colorscale(colors)
+            # TODO: This won't work well for discrete colorscales
+            colorscale = itertools.cycle(pcol.get_colorscale(colors))
+            #colorscale = itertools.cycle(sns.color_palette(colors, len(arrs)))
         elif isinstance(colors, (list, tuple)):
-            # Make sure enough colors were passed
-            if len(colors) >= len(arrs):
-                colorscale = colors
+            colorscale  = itertools.cycle(colors)
+
 
     # Make the plot and add the data
     fig = go.Figure()
@@ -90,7 +90,7 @@ def plot_groups(arrs: Collection[np.ndarray],
         arr = _apply_estimator(arr, estimator)
 
         # Add information to figure
-        kwargs.update({'color': colorscale[idx]})
+        kwargs.update({'color': _format_colors(next(colorscale))})
         fig = plot_func(fig, arr, err_arr, key, time, *args, **kwargs)
 
     # Update figure after it is made
@@ -141,7 +141,6 @@ def plot_trace_predictions(traces: np.ndarray,
                            cmap: str = 'plasma',
                            color_limit: Tuple[int] = (0, 1),
                            y_limit: Tuple[int] = (0, 6),
-                           save_path: str = 'output'
                            ) -> plt.Figure:
     """"""
     rows, cols = (8, 4)
@@ -178,8 +177,7 @@ def plot_trace_predictions(traces: np.ndarray,
         plt.setp(ax, xlim=(0, traces.shape[1]), ylim=y_limit)
         fig.colorbar(line, ax=ax)
 
-        plt.show()
-        plt.close()
+        yield fig
 
 
 def _apply_estimator(arr: np.ndarray,
@@ -212,7 +210,7 @@ def _line_plot(fig: go.Figure,
     https://plotly.com/python/continuous-error-bars/
     """
     kwargs, line_kwargs = _parse_kwargs_for_plot_type('line', kwargs)
-
+    # line_kwargs['color'] = _fmt_
     # TODO: Not sure how to handle this yet...
     x = time if time is not None else np.arange(arr.shape[0])
     # plots one at a time, so arr must be 2D
@@ -246,7 +244,7 @@ def _line_plot(fig: go.Figure,
             lines.append(
                 go.Scatter(x=np.hstack([x, x[::-1]]),
                            y=np.hstack([hi, lo[::-1]]), fill='tozerox',
-                           fillcolor=_hex_to_rgba(line_kwargs['color'], 0.25),
+                           fillcolor=_format_colors(line_kwargs['color'], 0.25),
                            showlegend=False, legendgroup=label,
                            name=label, line=dict(color='rgba(255,255,255,0)'),
                            hoverinfo='skip')
@@ -283,7 +281,7 @@ def _overlay_line_plot(fig: go.Figure,
         lines.append(
             go.Scatter(x=x, y=y, legendgroup=label,
                        showlegend=False, mode='lines',
-                       line=dict(color=_hex_to_rgba(line_kwargs['color'], alpha)),
+                       line=dict(color=_format_colors(line_kwargs['color'], alpha)),
                        name=label, *args, **kwargs)
         )
 
@@ -299,23 +297,86 @@ def _overlay_line_plot(fig: go.Figure,
 
     return fig
 
+
+def _histogram_plot(fig: go.Figure,
+                    arr: np.ndarray,
+                    err_arr: np.ndarray,
+                    label: str = None,
+                    time: np.ndarray = None,
+                    *args, **kwargs
+                    ) -> go.Figure:
+    """"""
+    kwargs, hist_kwargs = _parse_kwargs_for_plot_type('hist', kwargs)
+    data = go.Histogram(x=np.ravel(arr), legendgroup=label, name=label, showlegend=True,
+                   marker=dict(color=_format_colors(hist_kwargs['color'], 0.8)),
+                   nbinsx=100, *args, **kwargs, histnorm='percent')
+    fig.add_traces(data)
+
+    fig.update_layout(barmode='group')
+    fig.update_traces(xbins=dict(start=err_arr.min(), end=err_arr.max()))
+
+    return fig
+
+
+def _peak_prediction_plot(fig: go.Figure,
+                          arr: np.ndarray,
+                          err_arr: np.ndarray = None,
+                          label: str = None,
+                          time: np.ndarray = None,
+                          *args, **kwargs
+                          ) -> go.Figure:
+    """"""
+
+
 def _color_generator(colors) -> Generator:
     """"""
     pass
 
 
-def _hex_to_rgba(color, alpha=1.0) -> Tuple:
+def _format_colors(color: str, alpha: float = None) -> str:
     """Converst hexcode colors to RGBA to allow transparency"""
-    color = color.lstrip('#')
-    col_rgba = list(int(color[i:i+2], 16) for i in (0, 2, 4))
-    col_rgba.extend([alpha])
-    return 'rgba' + str(tuple(col_rgba))
+    if isinstance(color, (list, tuple)):
+        if all([isinstance(f, (float, int)) for f in color]):
+            # Assume rgb
+            if alpha: color += (alpha, )
+            else: color += (1.,)
+            color_str = str(tuple([c for c in color]))
+        else:
+            # Assume first value is alpha
+            alpha = alpha if alpha else color[0]
+            if alpha < 0.125: alpha = 0.125
+            values = pcol.unlabel_rgb(color[1]) + (alpha,)
+            color_str = str(tuple([c for c in values]))
+
+        return f'rgba{color_str}'
+    elif isinstance(color, str):
+        # Convert hex to rgba
+        if color[0] == '#':
+            color = pcol.hex_to_rgb(color)
+            if alpha:
+                color += (alpha,)
+            color_str = str(tuple([c for c in color]))
+            if len(color) == 4:
+                return f'rgba{color_str}'
+            else:
+                return f'rgb{color_str}'
+
+        else:
+            assert color[:3] in ('rgb')  # only rgb for now I think
+            if alpha:
+                # extract the rgb values
+                vals = pcol.unlabel_rgb(color)
+                vals += (alpha, )
+                color_str = str(tuple([v for v in vals]))
+                color = f'rgba{color_str}'
+
+            return color
 
 
 def _parse_kwargs_for_plot_type(func: str, kwargs: dict) -> dict:
     """Parses kwargs to include the ones that are specific to
     a particular type of plot."""
-    plotly_funcs = dict(line=go.Scatter)
+    plotly_funcs = dict(line=go.Scatter, hist=go.Histogram)
     argnames = inspect.getargspec(plotly_funcs[func]).args
 
     kept = {}
@@ -353,6 +414,6 @@ def _make_single_line_collection(trace: np.ndarray,
     return line
 
 
-PLT_FUNCS = dict(line=_line_plot, overlay=_overlay_line_plot)
+PLT_FUNCS = dict(line=_line_plot, overlay=_overlay_line_plot, hist=_histogram_plot, peaks=_peak_prediction_plot)
 DEF_COLORS = 'Safe'
 DEF_TEMPLATE = 'simple_white'
