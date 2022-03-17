@@ -6,3 +6,4 @@ test_*
 *slurm*out
 *slurm*err
 analysis/*
+miscellaneous/

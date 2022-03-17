@@ -11,17 +11,16 @@ cwd = os.path.dirname(os.path.realpath(__file__))
 par = os.path.dirname(cwd)
 sys.path.insert(0, par)
 
-import cellst
-import cellst.utils.unet_model
+import celltk
+import celltk.utils.unet_model
 
 class TestUNet():
-    weight_path = os.path.join(par, 'cellst/config/unet_example_cell_weights.hdf5')
+    weight_path = os.path.join(par, 'celltk/config/unet_example_cell_weights.hdf5')
     # TODO: Change later
     data_path = os.path.join(par, 'examples/D4-Site_2')
 
     def _unet_model_creation(self, dims):
-        unet = cellst.utils.unet_model.FluorUNetModel(dims, self.weight_path)
-        print(unet.summary())
+        unet = celltk.utils.unet_model.FluorUNetModel(dims, self.weight_path)
         return unet
 
     def test_unet_model_creation(self):
@@ -40,7 +39,6 @@ class TestUNet():
         arrs = np.array_split(img, img.shape[0] // batch, axis=0)
         output = np.concatenate([unet.predict(a, roi=2)
                                  for a in arrs], axis=0)
-        print(output.shape)
 
 if __name__ == '__main__':
     TestUNet().test_unet_model_creation()
