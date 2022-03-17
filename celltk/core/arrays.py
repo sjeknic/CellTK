@@ -693,9 +693,9 @@ class ConditionArray():
     def interpolate_nans(self, keys: Collection[tuple] = None) -> None:
         """Linear interpolation of nans in each row
 
-        Args:
+        :param keys: keys that will have nans removed.
+            Each key should be a tuple of strings with length=3
 
-        Returns:
         """
         if not keys:
             keys = self.keys

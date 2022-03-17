@@ -13,6 +13,8 @@ CellTK is collection of tools to simplify working with live-cell and fixed-cell 
    :caption: Contents:
 
    quick
+   opers
+   arrays
 
 Installation
 ------------
@@ -24,6 +26,7 @@ install and run CellTK.
 | ``pip install -r nodep_requirements.txt --no-deps``
 
 That's it! You should be good to go. If you run into any problems, please open an issue on github.
+
 
 Indices and tables
 ==================
