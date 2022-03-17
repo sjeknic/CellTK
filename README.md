@@ -1,5 +1,5 @@
 [![Documentation Status](https://readthedocs.org/projects/celltk/badge/?version=docs2)](https://celltk.readthedocs.io/en/docs2/?badge=docs2)
-![Action branch status](https://github.com/github/docs/actions/workflows/pytest.yml/badge.svg?branch=main)
+![Action branch status](https://github.com/github/docs/actions/workflows/main.yml/badge.svg?branch=main)
 
 
 # CellST
