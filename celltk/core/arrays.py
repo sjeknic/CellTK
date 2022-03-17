@@ -19,11 +19,11 @@ from celltk.utils.metric_utils import active_cells, cumulative_active
 
 class ConditionArray():
     """
-    ax 0 - cell locations (nuc, cyto, population, etc.)
-    ax 1 - channels (TRITC, FITC, etc.)
-    ax 2 - metrics (median_int, etc.)
-    ax 3 - cells
-    ax 4 - frames
+    For now, this class is only built by Extractor. It's not meant to be
+    built by the user yet.
+    Stores the results from a single condition in an experiment.
+
+    :param regions: Names of the regions
     """
     __slots__ = ('_arr', 'name', 'time', 'coords', '_arr_dim', '_dim_idxs',
                  '_key_dim_pairs', '_key_coord_pairs', 'masks', 'pos_id',
@@ -39,11 +39,11 @@ class ConditionArray():
                  time: Union[float, np.ndarray] = None,
                  pos_id: int = 0
                  ) -> None:
-        """
+        '''
         TODO:
             - Reorder if-statements for speed in key_coord functions.
             - Should save path to file in hdf5 as well for re-saving Conditions
-        """
+        '''
         # Convert inputs to tuple
         regions = tuple(regions)
         channels = tuple(channels)
@@ -460,6 +460,14 @@ class ConditionArray():
         filter the data. If delete, the underlying structure
         is changed, otherwise, the data are only returned.
 
+        :param mask: A boolean mask to filter cells with. Can be 1D, 2D or 5D.
+        :param key: Name of a saved mask to use for filtering cells. Overwrites
+            msak if provided.
+        :param delete: If True, cells are removed in the base array
+
+        :return: array with cells designated by maks or key removed.
+        :rtype: np.ndarray
+
         TODO:
             - Add option to return a new Condition instead of
               an np.ndarray
@@ -693,9 +701,9 @@ class ConditionArray():
     def interpolate_nans(self, keys: Collection[tuple] = None) -> None:
         """Linear interpolation of nans in each row
 
-        Args:
+        :param keys: keys that will have nans removed.
+            Each key should be a tuple of strings with length=3
 
-        Returns:
         """
         if not keys:
             keys = self.keys

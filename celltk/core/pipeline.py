@@ -21,8 +21,41 @@ from celltk.utils.file_utils import (save_operation_yaml, save_pipeline_yaml,
 
 class Pipeline():
     """
+    Pipeline organizes running Operations on saved images.
+
+    :param parent_folder: Location of the raw images
+    :param output_folder: Location to store outputs.
+        Defaults to 'parent_folder/outputs'
+    :param image_folder: Location of images
+        if different from parent_folder or output_folder
+    :param mask_folder: Location of masks
+        if different from parent_folder or output_folder
+    :param track_folder: Location of tracks
+        if different from parent_folder or output_folder
+    :param array_folder: Location of arrays
+        if different from parent_folder or output_folder
+    :param name: Used to identify output array.
+        Defaults to name parent_folder.
+    :param frame_rng: Specify the frames to be loaded and used.
+        If a single int, will load that many images. Otherwise
+        designates the bounds of the range.
+    :param skip_frames: Use to specify frames to be skipped.
+        For example, frames that are out of focus.
+    :param file_extension: File extension of image files to be loaded
+    :param ovewrite: If True, outputs in output_folder are overwritten
+    :param log_file: If True, save log outputs to a
+        text file in output folder
+    :param yaml_path: Path to yaml file defining the Pipeline to be run
+    :param verbose: If True, increases logging verbosity
+    :param _split_key: Used to specify outputs from functions that
+        return multiple outputs. For example, if you align two channels
+        the outputs will be saved as 'align&channel000' and
+        'align&channel001'.
+
+    :return: None
+
     TODO:
-        - file_location should be dir that pipeline was called from
+        - File location should be where this is called from
     """
     file_location = os.path.dirname(os.path.realpath(__file__))
     __name__ = 'Pipeline'
@@ -53,21 +86,8 @@ class Pipeline():
                  _split_key: str = '&'
                  ) -> None:
         """
-        Pipeline will only handle a folder that has images in it.
-        This could be changed based on the regex (like if each folder has a different channel)
-        But otherwise, multiple folders need to be handled by the Orchestrator
-
-        Args:
-            image_folder (str) = relative path to the folder containing the images
-            channels (List[str]) = List of identifiers for each channel
-
-        Returns:
-            None
-
-
         TODO:
             - Add atomic option (in Orch too). Should delete output folder before starting.
-
         """
         # Save some values in case Pipeline is written as yaml
         self.frame_rng = frame_rng
@@ -167,12 +187,12 @@ class Pipeline():
                        operation: Collection[Operation],
                        ) -> None:
         """
-        Adds Operations to the Pipeline and recalculates the index
+        Adds Operations to the Pipeline.
 
-        Args:
+        :param operation: A single operation or collection of operations
+            to be run in the order passed
 
-        Returns:
-
+        :return: None
         """
         # TODO: Dirty fix - Need to fix this in the master branch
         if isinstance(operation, Operation):
@@ -193,11 +213,10 @@ class Pipeline():
 
     def run(self) -> (Image, Mask, Track, Arr):
         """
-        Runs all of the operations in self.operations on the images
+        Load images and run the operations
 
-        Args:
-
-        Returns:
+        :retrun: Generator returning outputs of the last operation
+        :rtype: Generator
         """
         # Can skip doing anything if no operations have been added
         if len(self.operations) == 0:
@@ -231,18 +250,80 @@ class Pipeline():
                     oper_result = oper.run_operation(imgs_for_operation)
                     self._image_container.update(dict(oper_result))
                     # Write to disk if needed
-                    self.save_images(oper.save_arrays,
+                    self._save_images(oper.save_arrays,
                                      oper._output_type.__name__)
 
                 self.completed_ops += 1
 
         return oper_result
 
-    def save_images(self,
-                    save_arrays: Dict[str, Tuple],
-                    oper_output: str = None,
-                    img_dtype: type = None
-                    ) -> None:
+    def save_as_yaml(self,
+                     path: str = None,
+                     fname: str = None
+                     ) -> None:
+        """
+        Saves Pipeline configuration as a YAML file
+
+        :param path: Path to save yaml file in. Defaults to output_folder
+        :param fname: Name of the YAML file. Defaults to parent_folder
+
+        :return: None
+        """
+        # Set path for saving files - saves in output by default
+        path = self.output_folder if path is None else path
+        if fname is None:
+            fname = f'{folder_name(self.parent_folder)}.yaml'
+        if not os.path.exists(path):
+            os.makedirs(path)
+        path = os.path.join(path, fname)
+
+        # Create specification as dictionary
+        pipe_dict = self._pipeline_to_dict()
+
+        self.logger.info(f'Saving Pipeline {repr(self)} in {path}.')
+        save_pipeline_yaml(path, pipe_dict)
+
+    def save_operations_as_yaml(self,
+                                path: str = None,
+                                fname: str = 'operations.yaml'
+                                ) -> None:
+        """
+        Save configuration of Operations in Pipeline as a YAML file
+
+        :param path: Path to save yaml file in. Defaults to output_folder
+        :param fname: Name of the YAML file. Defaults to operations.yaml
+
+        :return: None
+        """
+        # Get the path
+        path = self.output_folder if path is None else path
+        if not os.path.exists(path):
+            os.makedirs(path)
+        path = os.path.join(path, fname)
+
+        # Save using file_utils
+        self.logger.info(f"Saving Operations at {path}")
+        save_operation_yaml(path, self.operations)
+
+    @classmethod
+    def load_from_yaml(cls, path: str) -> 'Pipeline':
+        """Builds Pipeline class from specifications in YAML file
+
+        :param path: Path to yaml file
+
+        :return: Pipeline with specified configuration
+        :rtype: Pipeline class
+        """
+        with open(path, 'r') as yf:
+            pipe_dict = yaml.load(yf, Loader=yaml.Loader)
+
+        return cls._build_from_dict(pipe_dict, path)
+
+    def _save_images(self,
+                     save_arrays: Dict[str, Tuple],
+                     oper_output: str = None,
+                     img_dtype: type = None
+                     ) -> None:
         """
         New save function to handle multiple saves per operation
 
@@ -298,52 +379,6 @@ class Pipeline():
                     tiff.imsave(name, arr[idx, ...].astype(save_dtype))
 
                 self.logger.info(f'Saved {arr.shape[0]} images in {save_folder}.')
-
-    def save_as_yaml(self,
-                     path: str = None,
-                     fname: str = None
-                     ) -> None:
-        """
-        Should write Pipeline as a yaml file to output dir
-        """
-        # Set path for saving files - saves in output by default
-        path = self.output_folder if path is None else path
-        if fname is None:
-            fname = f'{folder_name(self.parent_folder)}.yaml'
-        if not os.path.exists(path):
-            os.makedirs(path)
-        path = os.path.join(path, fname)
-
-        # Create specification as dictionary
-        pipe_dict = self._pipeline_to_dict()
-
-        self.logger.info(f'Saving Pipeline {repr(self)} in {path}.')
-        save_pipeline_yaml(path, pipe_dict)
-
-    def save_operations_as_yaml(self,
-                                path: str = None,
-                                fname: str = 'operations.yaml'
-                                ) -> None:
-        """
-        Save operations as a stand-alone yaml file.
-        """
-        # Get the path
-        path = self.output_folder if path is None else path
-        if not os.path.exists(path):
-            os.makedirs(path)
-        path = os.path.join(path, fname)
-
-        # Save using file_utils
-        self.logger.info(f"Saving Operations at {path}")
-        save_operation_yaml(path, self.operations)
-
-    @classmethod
-    def load_from_yaml(cls, path: str) -> 'Pipeline':
-        """Builds Pipeline class from specifications in yaml file"""
-        with open(path, 'r') as yf:
-            pipe_dict = yaml.load(yf, Loader=yaml.Loader)
-
-        return cls._build_from_dict(pipe_dict, path)
 
     def _input_output_handler(self) -> List[List[Tuple[str]]]:
         """

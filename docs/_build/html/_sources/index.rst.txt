@@ -8,11 +8,6 @@ Welcome to CellTK!
 
 CellTK is collection of tools to simplify working with live-cell and fixed-cell microscopy data. It contains tools for segmenting, tracking, and analyzing images of both mammalian cells and bacterial microcolonies. Once the data are extracted, CellTK further includes, among others, tools for filtering data, building plots, finding peaks, and calculating mutual information. These tools can be used as stand-alone functions or as part of a larger analysis pipeline. More tools are on the way, and if there is anything you would like to see added, please create an issue on github.
 
-.. toctree::
-   :maxdepth: 2
-   :caption: Contents:
-
-   quick
 
 Installation
 ------------
@@ -24,6 +19,17 @@ install and run CellTK.
 | ``pip install -r nodep_requirements.txt --no-deps``
 
 That's it! You should be good to go. If you run into any problems, please open an issue on github.
+
+
+.. toctree::
+   :maxdepth: 2
+   :caption: Contents:
+
+   quick
+   pipes
+   opers
+   arrays
+
 
 Indices and tables
 ==================
