@@ -23,4 +23,3 @@ umap==0.1.1
 hdbscan==0.8.28
 seaborn==0.11.2
 pytest==7.0.1
-sphinx_autodoc_typehints
