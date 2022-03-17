@@ -5,6 +5,8 @@ Cells are to be removed are marked with False.
 
 For all, if values is 2D, assume cells x frames
 and apply the mask only in first axis.
+
+TODO: Add 1D filters to this file as well
 """
 
 
@@ -117,6 +119,7 @@ def inside_percentile(values: np.ndarray,
     ma = inside(values, lo, hi, propagate=False)
 
     return _clean_mask(values, ma, ignore_nans, propagate, mask)
+
 
 def any_nan(values: np.ndarray,
             propagate: bool = True,

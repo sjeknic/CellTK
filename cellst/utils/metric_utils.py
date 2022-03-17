@@ -42,5 +42,5 @@ def predict_peaks(array: np.ndarray,
                   weight_path: str = 'cellst/config/example_peak_weights.tf',
                   segment: bool = True,
                   ) -> None:
-    """Placeholder function for now"""
+    """Placeholder function for now, but can change to include peaak prediction"""
     pass

@@ -27,6 +27,7 @@ class Processor(BaseProcessor):
         - Add optical-flow registration
         - Add N4 bias correction https://simpleitk.readthedocs.io/en/master/link_N4BiasFieldCorrection_docs.html
         - Add flat fielding from reference
+        - Add rescaling intensity stand alone
     """
     @ImageHelper(by_frame=False, as_tuple=True)
     def align_by_cross_correlation(self,
@@ -101,14 +102,17 @@ class Processor(BaseProcessor):
         fil.SetLayout(layout)
         fil.SetDefaultPixelValue(border_value)
 
-        #
+        # Combine the stacks
         stacks = image + mask + track
         images = [cast_sitk(sitk.GetImageFromArray(s), 'sitkUInt16', True)
                   for s in stacks]
 
-        # Rescale intensity
+        # Rescale intensity - all calculations done in float, then cast to int
         rescale = sitk.RescaleIntensityImageFilter()
+        # rescale.SetOutputMaximum(int(2 ** 16))
+        # rescale.SetOutputMinimum(int(0))
         images = [rescale.Execute(i) for i in images]
+        # out = cast_sitk(fil.Execute(images), 'sitkUInt16')
         out = fil.Execute(images)
 
         return sitk.GetArrayFromImage(out)
