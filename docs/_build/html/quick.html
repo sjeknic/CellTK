@@ -18,7 +18,7 @@
     <script src="_static/js/theme.js"></script>
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
-    <link rel="next" title="Operations" href="opers.html" />
+    <link rel="next" title="Pipelines" href="pipes.html" />
     <link rel="prev" title="Welcome to CellTK!" href="index.html" /> 
 </head>
 
@@ -42,8 +42,10 @@
 <li class="toctree-l1 current"><a class="current reference internal" href="#">Quickstart Guide</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="#important-classes">Important classes</a></li>
 <li class="toctree-l2"><a class="reference internal" href="#setting-up-a-pipeline">Setting up a Pipeline</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#setting-up-an-orchestrator">Setting up an Orchestrator</a></li>
 </ul>
 </li>
+<li class="toctree-l1"><a class="reference internal" href="pipes.html">Pipelines</a></li>
 <li class="toctree-l1"><a class="reference internal" href="opers.html">Operations</a></li>
 <li class="toctree-l1"><a class="reference internal" href="arrays.html">Arrays</a></li>
 </ul>
@@ -84,7 +86,7 @@
 </section>
 <section id="setting-up-a-pipeline">
 <h2>Setting up a Pipeline<a class="headerlink" href="#setting-up-a-pipeline" title="Permalink to this headline"></a></h2>
-<p>First, initialize a <code class="docutils literal notranslate"><span class="pre">Pipeline</span></code> and pass it the folder to your images. For this example, we will use the images in the example folder. Optionally, you can also pass a path to <code class="docutils literal notranslate"><span class="pre">output_folder</span></code>. By default, outputs will be stored in a new directory called <code class="docutils literal notranslate"><span class="pre">outputs</span></code>.</p>
+<p>To use, save all of the following in a python script and run it. First, initialize a <code class="docutils literal notranslate"><span class="pre">Pipeline</span></code> and pass it the folder to your images. For this example, we will use the images in the example folder. Optionally, you can also pass a path to <code class="docutils literal notranslate"><span class="pre">output_folder</span></code>. By default, outputs will be stored in a new directory called <code class="docutils literal notranslate"><span class="pre">outputs</span></code>.</p>
 <div class="line-block">
 <div class="line"><code class="docutils literal notranslate"><span class="pre">import</span> <span class="pre">celltk</span></code></div>
 <div class="line"><code class="docutils literal notranslate"><span class="pre">pipe</span> <span class="pre">=</span> <span class="pre">celltk.Pipeline(parent_folder='/your/path/to/CellTK/examples/D4-Site_2')</span></code></div>
@@ -117,6 +119,10 @@
 </div>
 <p>This will create the output folder, run all the operations, and save a file called <code class="docutils literal notranslate"><span class="pre">data_frame.hdf5</span></code> with all of the data saved as a <code class="docutils literal notranslate"><span class="pre">ConditionArray</span></code>.</p>
 </section>
+<section id="setting-up-an-orchestrator">
+<h2>Setting up an Orchestrator<a class="headerlink" href="#setting-up-an-orchestrator" title="Permalink to this headline"></a></h2>
+<p>Uses a very similar API as <code class="docutils literal notranslate"><span class="pre">Pipeline</span></code>. <code class="docutils literal notranslate"><span class="pre">parent_folder</span></code> should point to a directory that contains sub-directories of images.</p>
+</section>
 </section>
 
 
@@ -124,7 +130,7 @@
           </div>
           <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
         <a href="index.html" class="btn btn-neutral float-left" title="Welcome to CellTK!" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
-        <a href="opers.html" class="btn btn-neutral float-right" title="Operations" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+        <a href="pipes.html" class="btn btn-neutral float-right" title="Pipelines" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
     </div>
 
   <hr/>

@@ -12,7 +12,7 @@ Important classes
 Setting up a Pipeline
 ---------------------
 
-First, initialize a ``Pipeline`` and pass it the folder to your images. For this example, we will use the images in the example folder. Optionally, you can also pass a path to ``output_folder``. By default, outputs will be stored in a new directory called ``outputs``.
+To use, save all of the following in a python script and run it. First, initialize a ``Pipeline`` and pass it the folder to your images. For this example, we will use the images in the example folder. Optionally, you can also pass a path to ``output_folder``. By default, outputs will be stored in a new directory called ``outputs``.
 
 | ``import celltk``
 | ``pipe = celltk.Pipeline(parent_folder='/your/path/to/CellTK/examples/D4-Site_2')``
@@ -44,6 +44,11 @@ Now we are ready to run everything! For this, we simply add the operations to th
 | ``pipe.run()``
 
 This will create the output folder, run all the operations, and save a file called ``data_frame.hdf5`` with all of the data saved as a ``ConditionArray``.
+
+Setting up an Orchestrator
+--------------------------
+
+Uses a very similar API as ``Pipeline``. ``parent_folder`` should point to a directory that contains sub-directories of images.
 
 
 
