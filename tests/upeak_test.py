@@ -42,7 +42,7 @@ class TestPeakSegmentation():
     arr_path = os.path.join(par, 'examples/example_traces.npy')
     pred_path = os.path.join(par, 'examples/example_predictions.npy')
 
-    def __init__(self) -> None:
+    def _run(self) -> None:
         self.test_load_traces()
         self.test_peak_segmentation()
 

@@ -66,7 +66,7 @@ def plot_groups(arrs: Collection[np.ndarray],
         if isinstance(colors, str):
             # TODO: This won't work well for discrete colorscales
             colorscale = itertools.cycle(pcol.get_colorscale(colors))
-            #colorscale = itertools.cycle(sns.color_palette(colors, len(arrs)))
+            colorscale = itertools.cycle(sns.color_palette(colors, len(arrs)))
         elif isinstance(colors, (list, tuple)):
             colorscale  = itertools.cycle(colors)
 
