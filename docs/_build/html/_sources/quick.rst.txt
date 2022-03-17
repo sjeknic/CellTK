@@ -1,0 +1,9 @@
+Quickstart Guide
+================
+
+Important classes
+------------------
+
+#. ``Pipeline`` - runs CellTK on a single folder of images.
+#. ``Orchestrator`` - runs CellTK on multiple folders of images.
+#. ``Operation`` - includes ``Segmenter``, ``Processor``, ``Tracker`` and ``Extractor``. Each of these holds the functions for analyzing images and can be found in ``CellTK/celltk``.
