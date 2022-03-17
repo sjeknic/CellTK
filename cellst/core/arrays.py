@@ -9,10 +9,9 @@ import numpy as np
 import plotly.graph_objects as go
 import matplotlib.pyplot as plt
 
-import cellst.utils.filter_utils as filt
-from cellst.utils.plot_utils import plot_groups
-from cellst.utils.info_utils import nan_helper_2d
 import cellst.utils.filter_utils as filtu
+from cellst.utils.plot_utils import plot_groups, plot_trace_predictions
+from cellst.utils.info_utils import nan_helper_2d, get_split_idxs, split_array
 from cellst.utils.unet_model import UPeakModel
 from cellst.utils.upeak.peak_utils import segment_peaks_agglomeration
 from cellst.utils.metric_utils import active_cells, cumulative_active
@@ -1268,6 +1267,38 @@ class ExperimentArray():
                 fig.write_image(save)
 
         return fig
+
+    def plot_peak_predictions(self,
+                              keys: Tuple[str],
+                              conditions: Collection[str] = None,
+                              estimator: Union[Callable, str, functools.partial] = None,
+                              title: str = None,
+                              x_label: str = None,
+                              y_label: str = None,
+                              x_limit: Tuple[float] = None,
+                              y_limit: Tuple[float] = None,
+                              layout_spec: dict = {},
+                              show: bool = False,
+                              save: str = None
+                              ) -> plt.Figure:
+        """"""
+        # Get the data to plot
+        keys = tuple(keys) if not isinstance(keys, tuple) else keys
+        conditions = conditions if conditions else self.conditions
+        arrs = self[conditions][keys]
+        # TODO: This needs to use get key components
+        slope = self[conditions]['slope_prob', 'fitc']
+        plate = self[conditions]['plateau_prob', 'fitc']
+        preds = [s + p for s, p in zip(slope, plate)]
+        time = self.time[0]
+
+        for cidx, (arr, pred) in enumerate(zip(arrs, preds)):
+            condition = conditions[cidx]
+            for nidx, fig in enumerate(plot_trace_predictions(arr, pred, y_limit=(1000, 5000))):
+                name = f'{condition}_{nidx}_{save}'
+                plt.savefig(name)
+                plt.close()
+
 
     @classmethod
     def _build_from_file(cls, f: h5py.File) -> 'ExperimentArray':
