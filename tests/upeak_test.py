@@ -5,9 +5,9 @@ import numpy as np
 import pytest
 
 # Correct import paths
-cwd = os.path.dirname(os.path.realpath(__file__))
-par = os.path.dirname(cwd)
-sys.path.insert(0, par)
+# cwd = os.path.dirname(os.path.realpath(__file__))
+# par = os.path.dirname(cwd)
+# sys.path.insert(0, par)
 
 import celltk
 import celltk.utils.unet_model
@@ -16,7 +16,7 @@ from celltk.utils.plot_utils import plot_trace_predictions
 
 class TestUPeak():
     weight_path = "celltk/config/upeak_example_weights.tf"
-    data_path = os.path.join(par, 'examples/example_traces.npy')
+    data_path = "examples/example_traces.npy"
 
     def _upeak_model_creation(self):
         upeak = celltk.utils.unet_model.UPeakModel(self.weight_path)
@@ -38,8 +38,8 @@ class TestUPeak():
 
 
 class TestPeakSegmentation():
-    arr_path = os.path.join(par, 'examples/example_traces.npy')
-    pred_path = os.path.join(par, 'examples/example_predictions.npy')
+    arr_path = "examples/example_traces.npy"
+    pred_path = "examples/example_predictions.npy"
 
     def _run(self) -> None:
         self.test_peak_segmentation()
