@@ -6,7 +6,7 @@ Toolkit for analysis of live-cell microscopy data
 
 The standard `pip install -r requirements.txt` will install most, but not all of the required packages. This is due to supposed conflicts in dependency versions, that don't affect function of this repo. A separate file contains packages to install without dependencies.
 
-Proper installation:
+Proper installation:  
 `pip install -r requirements.txt`  
 `pip install -r nodep_requirements.txt --no-deps`  
 
