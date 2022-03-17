@@ -26,6 +26,7 @@ That's it! You should be good to go. If you run into any problems, please open a
    :caption: Contents:
 
    quick
+   pipes
    opers
    arrays
 

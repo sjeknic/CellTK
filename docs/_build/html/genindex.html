@@ -37,6 +37,7 @@
               <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
 <ul>
 <li class="toctree-l1"><a class="reference internal" href="quick.html">Quickstart Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="pipes.html">Pipelines</a></li>
 <li class="toctree-l1"><a class="reference internal" href="opers.html">Operations</a></li>
 <li class="toctree-l1"><a class="reference internal" href="arrays.html">Arrays</a></li>
 </ul>
@@ -94,6 +95,12 @@
 </li>
       <li><a href="arrays.html#celltk.core.arrays.ConditionArray.add_metric_slots">add_metric_slots() (celltk.core.arrays.ConditionArray method)</a>
 </li>
+      <li><a href="pipes.html#celltk.core.orchestrator.Orchestrator.add_operations">add_operations() (celltk.core.orchestrator.Orchestrator method)</a>
+
+      <ul>
+        <li><a href="pipes.html#celltk.core.pipeline.Pipeline.add_operations">(celltk.core.pipeline.Pipeline method)</a>
+</li>
+      </ul></li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="seg.html#celltk.segment.Segmenter.agglomeration_segmentation">agglomeration_segmentation() (celltk.segment.Segmenter method)</a>
@@ -109,6 +116,10 @@
       <li><a href="seg.html#celltk.segment.Segmenter.binary_fill_holes">binary_fill_holes() (celltk.segment.Segmenter method)</a>
 </li>
   </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="pipes.html#celltk.core.orchestrator.Orchestrator.build_experiment_file">build_experiment_file() (celltk.core.orchestrator.Orchestrator method)</a>
+</li>
+  </ul></td>
 </tr></table>
 
 <h2 id="C">C</h2>
@@ -122,12 +133,28 @@
 </li>
       </ul></li>
       <li>
+    celltk.core.orchestrator
+
+      <ul>
+        <li><a href="pipes.html#module-celltk.core.orchestrator">module</a>
+</li>
+      </ul></li>
+      <li>
+    celltk.core.pipeline
+
+      <ul>
+        <li><a href="pipes.html#module-celltk.core.pipeline">module</a>
+</li>
+      </ul></li>
+      <li>
     celltk.extract
 
       <ul>
         <li><a href="ext.html#module-celltk.extract">module</a>
 </li>
       </ul></li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li>
     celltk.process
 
@@ -135,8 +162,6 @@
         <li><a href="pro.html#module-celltk.process">module</a>
 </li>
       </ul></li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li>
     celltk.segment
 
@@ -257,6 +282,10 @@
   <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="arrays.html#celltk.core.arrays.ExperimentArray.load_condition">load_condition() (celltk.core.arrays.ExperimentArray method)</a>
 </li>
+      <li><a href="pipes.html#celltk.core.pipeline.Pipeline.load_from_yaml">load_from_yaml() (celltk.core.pipeline.Pipeline class method)</a>
+</li>
+      <li><a href="pipes.html#celltk.core.orchestrator.Orchestrator.load_operations_from_yaml">load_operations_from_yaml() (celltk.core.orchestrator.Orchestrator method)</a>
+</li>
   </ul></td>
 </tr></table>
 
@@ -274,6 +303,10 @@
 
       <ul>
         <li><a href="arrays.html#module-celltk.core.arrays">celltk.core.arrays</a>
+</li>
+        <li><a href="pipes.html#module-celltk.core.orchestrator">celltk.core.orchestrator</a>
+</li>
+        <li><a href="pipes.html#module-celltk.core.pipeline">celltk.core.pipeline</a>
 </li>
         <li><a href="ext.html#module-celltk.extract">celltk.extract</a>
 </li>
@@ -296,6 +329,10 @@
 <h2 id="O">O</h2>
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="pipes.html#celltk.core.orchestrator.Orchestrator">Orchestrator (class in celltk.core.orchestrator)</a>
+</li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="seg.html#celltk.segment.Segmenter.otsu_thres">otsu_thres() (celltk.segment.Segmenter method)</a>
 </li>
   </ul></td>
@@ -304,12 +341,14 @@
 <h2 id="P">P</h2>
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="arrays.html#celltk.core.arrays.ExperimentArray.plot_by_condition">plot_by_condition() (celltk.core.arrays.ExperimentArray method)</a>
+      <li><a href="pipes.html#celltk.core.pipeline.Pipeline">Pipeline (class in celltk.core.pipeline)</a>
 </li>
-      <li><a href="arrays.html#celltk.core.arrays.ExperimentArray.predict_peaks">predict_peaks() (celltk.core.arrays.ExperimentArray method)</a>
+      <li><a href="arrays.html#celltk.core.arrays.ExperimentArray.plot_by_condition">plot_by_condition() (celltk.core.arrays.ExperimentArray method)</a>
 </li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="arrays.html#celltk.core.arrays.ExperimentArray.predict_peaks">predict_peaks() (celltk.core.arrays.ExperimentArray method)</a>
+</li>
       <li><a href="pro.html#celltk.process.Processor">Processor (class in celltk.process)</a>
 </li>
       <li><a href="arrays.html#celltk.core.arrays.ConditionArray.propagate_values">propagate_values() (celltk.core.arrays.ConditionArray method)</a>
@@ -328,10 +367,10 @@
 </li>
       <li><a href="seg.html#celltk.segment.Segmenter.remove_nuc_from_cyto">remove_nuc_from_cyto() (celltk.segment.Segmenter method)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="arrays.html#celltk.core.arrays.ConditionArray.remove_parents">remove_parents() (celltk.core.arrays.ConditionArray method)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="arrays.html#celltk.core.arrays.ConditionArray.remove_short_traces">remove_short_traces() (celltk.core.arrays.ConditionArray method)</a>
 
       <ul>
@@ -342,6 +381,12 @@
 </li>
       <li><a href="pro.html#celltk.process.Processor.rolling_ball_background_subtract">rolling_ball_background_subtract() (celltk.process.Processor method)</a>
 </li>
+      <li><a href="pipes.html#celltk.core.orchestrator.Orchestrator.run">run() (celltk.core.orchestrator.Orchestrator method)</a>
+
+      <ul>
+        <li><a href="pipes.html#celltk.core.pipeline.Pipeline.run">(celltk.core.pipeline.Pipeline method)</a>
+</li>
+      </ul></li>
   </ul></td>
 </tr></table>
 
@@ -354,12 +399,24 @@
         <li><a href="arrays.html#celltk.core.arrays.ExperimentArray.save">(celltk.core.arrays.ExperimentArray method)</a>
 </li>
       </ul></li>
+      <li><a href="pipes.html#celltk.core.pipeline.Pipeline.save_as_yaml">save_as_yaml() (celltk.core.pipeline.Pipeline method)</a>
+</li>
+      <li><a href="pipes.html#celltk.core.orchestrator.Orchestrator.save_condition_map_as_yaml">save_condition_map_as_yaml() (celltk.core.orchestrator.Orchestrator method)</a>
+</li>
+      <li><a href="pipes.html#celltk.core.orchestrator.Orchestrator.save_operations_as_yaml">save_operations_as_yaml() (celltk.core.orchestrator.Orchestrator method)</a>
+
+      <ul>
+        <li><a href="pipes.html#celltk.core.pipeline.Pipeline.save_operations_as_yaml">(celltk.core.pipeline.Pipeline method)</a>
+</li>
+      </ul></li>
+      <li><a href="pipes.html#celltk.core.orchestrator.Orchestrator.save_pipelines_as_yamls">save_pipelines_as_yamls() (celltk.core.orchestrator.Orchestrator method)</a>
+</li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="seg.html#celltk.segment.Segmenter">Segmenter (class in celltk.segment)</a>
 </li>
       <li><a href="arrays.html#celltk.core.arrays.ConditionArray.set_condition">set_condition() (celltk.core.arrays.ConditionArray method)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="arrays.html#celltk.core.arrays.ExperimentArray.set_conditions">set_conditions() (celltk.core.arrays.ExperimentArray method)</a>
 </li>
       <li><a href="arrays.html#celltk.core.arrays.ConditionArray.set_position_id">set_position_id() (celltk.core.arrays.ConditionArray method)</a>
@@ -384,6 +441,10 @@
         <li><a href="seg.html#celltk.segment.Segmenter.unet_predict">(celltk.segment.Segmenter method)</a>
 </li>
       </ul></li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="pipes.html#celltk.core.orchestrator.Orchestrator.update_condition_map">update_condition_map() (celltk.core.orchestrator.Orchestrator method)</a>
+</li>
   </ul></td>
 </tr></table>
 

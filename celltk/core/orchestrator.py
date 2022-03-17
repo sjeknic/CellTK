@@ -5,7 +5,7 @@ import yaml
 import itertools
 import warnings
 from multiprocessing import Pool
-from typing import Dict, Collection, Tuple, Callable
+from typing import Dict, Collection, Tuple, Callable, Union
 from glob import glob
 
 from celltk.core.operation import Operation
@@ -22,6 +22,46 @@ from celltk.utils.cli_utils import CLIParser
 
 class Orchestrator():
     """
+    Orchestrator organizes running multiple Pipelines on a set of folders
+
+    :param yaml_folder: Path to location of Pipeline yamls
+    :param parent_folder: Location of the folders with raw images
+    :param output_folder: Location to store outputs.
+        Defaults to 'parent_folder/outputs'
+    :param match_str: If provided, folders that do not contain
+        match_str are excluded from analysis
+    :param image_folder: Location of images
+        if different from parent_folder or output_folder
+    :param mask_folder: Location of masks
+        if different from parent_folder or output_folder
+    :param track_folder: Location of tracks
+        if different from parent_folder or output_folder
+    :param array_folder: Location of arrays
+        if different from parent_folder or output_folder
+    :param condition_map: Dictionoary that maps folder names too
+        the condition in the experiment. i.e {A1-Site_0: control}
+    :param position_map: If multiple positions have the same condition
+        position map is used to uniquely identify them
+    :param cond_map_only: If True, folders not in cond_map are not run.
+        Only used if condition_map is provided.
+    :param name: Used to identify output array.
+        Defaults to name parent_folder.
+    :param frame_rng: Specify the frames to be loaded and used.
+        If a single int, will load that many images. Otherwise
+        designates the bounds of the range.
+    :param skip_frames: Use to specify frames to be skipped.
+        For example, frames that are out of focus.
+    :param file_extension: File extension of image files to be loaded
+    :param ovewrite: If True, outputs in output_folder are overwritten
+    :param log_file: If True, save log outputs to a
+        text file in output folder
+    :param save_master_df: If True, saves a single hdf5 file containing
+        the data from all of the pipelines
+    :param job_controller: If given, controls how pipelines are run
+    :param verbose: If True, increases logging verbosity
+
+    :return: None
+
     TODO:
         - Add __str__ method
     """
@@ -45,7 +85,7 @@ class Orchestrator():
                  track_folder: str = None,
                  array_folder: str = None,
                  condition_map: dict = {},
-                 position_map: dict = None,
+                 position_map: Union[dict, Callable] = None,
                  cond_map_only: bool = False,
                  name: str = 'experiment',
                  frame_rng: Tuple[int] = None,
@@ -104,10 +144,12 @@ class Orchestrator():
 
     def run(self, n_cores: int = 1) -> None:
         """
-        Run all the Pipelines with all of the operations.
+        Load images and run all of the pipelines
 
-        TODO:
-            - Should results really be saved?
+        :param n_cores: Not currently implemented
+
+        :retrun: None
+        :rtype: None
         """
         # Can skip doing anything if no operations have been added
         if len(self.operations) == 0 or len(self.pipelines) == 0:
@@ -116,7 +158,7 @@ class Orchestrator():
             return
 
         # Add operations to the pipelines
-        self.add_operations_to_pipelines(self.operations)
+        self._add_operations_to_pipelines(self.operations)
 
         # Run with multiple cores or just a single core
         if self.controller is not None:
@@ -128,8 +170,8 @@ class Orchestrator():
         elif n_cores > 1:
             raise NotImplementedError('This feature still requires '
                                       'some machine-specific debugging')
-            results = self.run_multiple_pipelines(self.pipelines,
-                                                  n_cores=n_cores)
+            results = self._run_multiple_pipelines(self.pipelines,
+                                                   n_cores=n_cores)
         else:
             results = []
             for fol, kwargs in self.pipelines.items():
@@ -142,36 +184,18 @@ class Orchestrator():
 
         return results
 
-    def run_multiple_pipelines(self,
-                               pipeline_dict: Dict,
-                               n_cores: int = 1
-                               ) -> Collection[Arr]:
-        """
-        pipeline_dict holds path information for building ALL of the pipelines
-            - key is subfolder, val is to be passed to Pipeline.__init__
-
-        Assumes that operations are already added to the Pipelines
-        TODO: Fix
-        """
-        # Run asynchronously
-        with Pool(n_cores) as pool:
-            # Set up pool of workers
-            multi = [pool.apply_async(Pipeline._run_single_pipe, args=(kwargs))
-                     for kwargs in pipeline_dict.values()]
-
-            # Run pool and return results
-            return [m.get() for m in multi]
-
     def add_operations(self,
                        operation: Collection[Operation],
                        index: int = -1
                        ) -> None:
         """
-        Adds Operations to the Orchestrator and recalculates the index
+        Adds Operations to the Orchestrator and all pipelines.
 
-        Args:
+        :param operation: A single operation or collection of operations
+            to be run in the order passed
+        :param index: If given, dictates where to insert the new operations
 
-        Returns:
+        :return: None
         """
         if isinstance(operation, Collection):
             if all([isinstance(o, Operation) for o in operation]):
@@ -192,6 +216,13 @@ class Orchestrator():
         self.operation_index = {i: o for i, o in enumerate(self.operations)}
 
     def load_operations_from_yaml(self, path: str) -> None:
+        """
+        Loads Operations from a YAML file
+
+        :param path: path to YAML file
+
+        :return: None
+        """
         with open(path, 'r') as yf:
             op_dict = yaml.load(yf, Loader=yaml.Loader)
 
@@ -206,7 +237,11 @@ class Orchestrator():
                               match_str: str = None,
                               ) -> None:
         """
-        Search folders in self.pipelines for hdf5 data frames
+        Builds a single ExperimentArray from all of the ConditionArrays
+        found in the Pipeline folders.
+
+        :param match_str: If given, only files containing match_str
+            are included
 
         TODO:
             - Increase efficiency by grouping sites by condition before loading
@@ -239,9 +274,97 @@ class Orchestrator():
         out.save(save_path)
         self.logger.info(f'Saved ExperimentArray at {save_path}')
 
-    def add_operations_to_pipelines(self,
-                                    operations: Collection[Operation] = []
-                                    ) -> None:
+    def update_condition_map(self,
+                             condition_map: dict = {},
+                             path: str = None,
+                             ) -> None:
+        """
+        Adds conditions to each of the Pipelines in Orchestrator
+
+        :param condition_map: Dictionoary that maps folder names too
+            the condition in the experiment. i.e {A1-Site_0: control}
+        :param path: If given, loads a condition map from the file
+            found at path. Overwrites condition_map.
+
+        :return:  None
+        """
+        # Load condition map YAML if available
+        if path:
+            _cond_map = self._load_cond_map_from_yaml(path)
+            condition_map.update(_cond_map)
+
+        for fol, cond in condition_map.items():
+            self.pipelines[fol]['name'] = cond
+
+        self.condition_map = condition_map
+
+    def save_pipelines_as_yamls(self, path: str = None) -> None:
+        """
+        Saves Orchestrator configuration as a YAML file
+
+        :param path: Path to save yaml file in. Defaults to output_folder
+
+        :return: None
+        """
+        # Set path for saving files - saves in yaml folder
+        if path is None:
+            path = os.path.join(self.output_folder, 'pipeline_yamls')
+        if not os.path.exists(path):
+            os.makedirs(path)
+
+        # Make sure operations are added to pipelines
+        self._add_operations_to_pipelines(self.operations)
+
+        # Save each pipeline
+        self.logger.info(f"Saving {len(self.pipelines)} yamls in {path}")
+        for pipe, kwargs in self.pipelines.items():
+            # Save the Pipeline
+            fname = os.path.join(path,
+                                 f"{folder_name(kwargs['parent_folder'])}.yaml")
+            save_pipeline_yaml(fname, kwargs)
+
+    def save_operations_as_yaml(self,
+                                path: str = None,
+                                fname: str = 'operations.yaml'
+                                ) -> None:
+        """
+        Save configuration of Operations in Pipeline as a YAML file
+
+        :param path: Path to save yaml file in. Defaults to output_folder
+        :param fname: Name of the YAML file. Defaults to operations.yaml
+
+        :return: None
+        """
+        # Get the path
+        path = self.output_folder if path is None else path
+        if not os.path.exists(path):
+            os.makedirs(path)
+        path = os.path.join(path, fname)
+
+        # Save using file_utils
+        self.logger.info(f"Saving Operations at {path}")
+        save_operation_yaml(path, self.operations)
+
+    def save_condition_map_as_yaml(self, path: str = None) -> None:
+        """
+        Saves the conditions in Orchestrator as a YAML file
+
+        :param path: Path to save the file at
+
+        :return:  None
+        """
+        # Get the path
+        path = self.output_folder if path is None else path
+        if not os.path.exists(path):
+            os.makedirs(path)
+
+        # Save using file_utils
+        self.logger.info(f"Saving condition_map at {path}")
+        save_yaml_file(self.condition_map, path, warning=False)
+
+    def _add_operations_to_pipelines(self,
+                                     operations: Collection[Operation] = []
+                                     ) -> None:
         """
         Adds Operations to each Pipeline in Orchestrator
         """
@@ -287,72 +410,25 @@ class Orchestrator():
             except KeyError:
                 kwargs.update({'_operations': op})
 
-    def update_condition_map(self,
-                             condition_map: dict = {},
-                             path: str = None,
-                             ) -> None:
+    def _run_multiple_pipelines(self,
+                                pipeline_dict: Dict,
+                                n_cores: int = 1
+                                ) -> Collection[Arr]:
         """
-        Adds conditions to each of the Pipelines in Orchestrator
+        pipeline_dict holds path information for building ALL of the pipelines
+            - key is subfolder, val is to be passed to Pipeline.__init__
 
-        NOTE: path will overwrite anything in condition_map
+        Assumes that operations are already added to the Pipelines
+        TODO: Fix
         """
-        # Load condition map YAML if available
-        if path:
-            _cond_map = self._load_cond_map_from_yaml(path)
-            condition_map.update(_cond_map)
+        # Run asynchronously
+        with Pool(n_cores) as pool:
+            # Set up pool of workers
+            multi = [pool.apply_async(Pipeline._run_single_pipe, args=(kwargs))
+                     for kwargs in pipeline_dict.values()]
 
-        for fol, cond in condition_map.items():
-            self.pipelines[fol]['name'] = cond
-
-        self.condition_map = condition_map
-
-    def save_pipelines_as_yamls(self, path: str = None) -> None:
-        """
-        Save yaml file that can be loaded as Pipeline
-        """
-        # Set path for saving files - saves in yaml folder
-        if path is None:
-            path = os.path.join(self.output_folder, 'pipeline_yamls')
-        if not os.path.exists(path):
-            os.makedirs(path)
-
-        # Make sure operations are added to pipelines
-        self.add_operations_to_pipelines(self.operations)
-
-        # Save each pipeline
-        self.logger.info(f"Saving {len(self.pipelines)} yamls in {path}")
-        for pipe, kwargs in self.pipelines.items():
-            # Save the Pipeline
-            fname = os.path.join(path,
-                                 f"{folder_name(kwargs['parent_folder'])}.yaml")
-            save_pipeline_yaml(fname, kwargs)
-
-    def save_operations_as_yaml(self,
-                                path: str = None,
-                                fname: str = 'operations.yaml'
-                                ) -> None:
-        """
-        Save self.operations as a yaml file.
-        """
-        # Get the path
-        path = self.output_folder if path is None else path
-        if not os.path.exists(path):
-            os.makedirs(path)
-        path = os.path.join(path, fname)
-
-        # Save using file_utils
-        self.logger.info(f"Saving Operations at {path}")
-        save_operation_yaml(path, self.operations)
-
-    def save_condition_map_as_yaml(self, path: str = None) -> None:
-        # Get the path
-        path = self.output_folder if path is None else path
-        if not os.path.exists(path):
-            os.makedirs(path)
-
-        # Save using file_utils
-        self.logger.info(f"Saving condition_map at {path}")
-        save_yaml_file(self.condition_map, path, warning=False)
+            # Run pool and return results
+            return [m.get() for m in multi]
 
     def _set_position_map(self, position_map: (dict, Callable)) -> dict:
         """
