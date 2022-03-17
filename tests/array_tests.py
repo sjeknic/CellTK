@@ -19,10 +19,10 @@ class ArrayTester():
     _cond_temp_path = os.path.join(par, 'examples', '_df.hdf5')
     _exp_temp_path = os.path.join(par, 'examples', '_exp.hdf5')
 
-    def __init__(self):
-        self.test_load_array()
-        self.test_saving_loading_arrays()
-        self.test_filter_condition()
+    # def __init__(self):
+    #     self.test_load_array()
+    #     self.test_saving_loading_arrays()
+    #     self.test_filter_condition()
 
     def test_load_array(self):
         # ConditionArray should fail to load ExperimentArray
