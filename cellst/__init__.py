@@ -1,5 +1,5 @@
 __all__ = ['core.orchestrator', 'core.pipeline', 'process', 'segment',
-           'track', 'extract', 'evaluate']
+           'track', 'extract']
 
 # Import user-facing classes
 from .core.orchestrator import Orchestrator
@@ -9,7 +9,6 @@ from .process import Processor
 from .segment import Segmenter
 from .track import Tracker
 from .extract import Extractor
-from .evaluate import Evaluator
 
 # Import important types
 from .utils.utils import ImageHelper
