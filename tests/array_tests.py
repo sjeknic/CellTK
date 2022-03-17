@@ -9,7 +9,7 @@ sys.path.insert(0, par)
 import numpy as np
 import pytest
 
-from cellst.core.arrays import ConditionArray, ExperimentArray
+from celltk.core.arrays import ConditionArray, ExperimentArray
 
 
 class ArrayTester():

@@ -9,19 +9,19 @@ import btrack.constants as bconstants
 import skimage.measure as meas
 import skimage.segmentation as segm
 
-from cellst.core.operation import BaseTracker
-from cellst.utils._types import Image, Mask, Track
-from cellst.utils.utils import ImageHelper, stdout_redirected
-from cellst.utils.operation_utils import (lineage_to_track,
+from celltk.core.operation import BaseTracker
+from celltk.utils._types import Image, Mask, Track
+from celltk.utils.utils import ImageHelper, stdout_redirected
+from celltk.utils.operation_utils import (lineage_to_track,
                                           match_labels_linear,
                                           voronoi_boundaries,
                                           get_binary_footprint)
 
 # Tracking algorithm specific imports
 from kit_sch_ge.tracker.extract_data import get_indices_pandas
-from cellst.utils.kit_sch_ge_utils import (TrackingConfig, MultiCellTracker,
+from celltk.utils.kit_sch_ge_utils import (TrackingConfig, MultiCellTracker,
                                            ExportResults)
-from cellst.utils.bayes_utils import (bayes_extract_tracker_data,
+from celltk.utils.bayes_utils import (bayes_extract_tracker_data,
                                       bayes_update_mask)
 
 
@@ -163,7 +163,7 @@ class Tracker(BaseTracker):
     @ImageHelper(by_frame=False)
     def bayesian_tracker(self,
                          mask: Mask,
-                         config_path: str = 'cellst/config/bayes_config.json',
+                         config_path: str = 'celltk/config/bayes_config.json',
                          update_method: str = 'exact',
                          ) -> Track:
         """

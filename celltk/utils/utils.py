@@ -13,11 +13,11 @@ from collections import Counter
 
 import numpy as np
 
-from cellst.utils._types import (Image, Mask, Track,
+from celltk.utils._types import (Image, Mask, Track,
                                  ImageContainer, INPT_NAMES)
-from cellst.core.arrays import ConditionArray, ExperimentArray
-from cellst.utils.operation_utils import sliding_window_generator
-from cellst.utils.log_utils import get_null_logger
+from celltk.core.arrays import ConditionArray, ExperimentArray
+from celltk.utils.operation_utils import sliding_window_generator
+from celltk.utils.log_utils import get_null_logger
 
 
 # Functions to block output to Terminal

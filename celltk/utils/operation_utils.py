@@ -11,7 +11,7 @@ import scipy.optimize as opti
 import mahotas.segmentation as mahotas_seg
 import SimpleITK as sitk
 
-from cellst.utils._types import Mask, Track
+from celltk.utils._types import Mask, Track
 
 # TODO: Add label by parent function
 

@@ -11,10 +11,10 @@ import skimage.feature as feat
 import scipy.ndimage as ndi
 import SimpleITK as sitk
 
-from cellst.core.operation import BaseSegmenter
-from cellst.utils._types import Image, Mask
-from cellst.utils.utils import ImageHelper
-from cellst.utils.operation_utils import (dilate_sitk, voronoi_boundaries,
+from celltk.core.operation import BaseSegmenter
+from celltk.utils._types import Image, Mask
+from celltk.utils.utils import ImageHelper
+from celltk.utils.operation_utils import (dilate_sitk, voronoi_boundaries,
                                           skimage_level_set, gray_fill_holes,
                                           match_labels_linear, cast_sitk,
                                           sitk_binary_fill_holes,
@@ -822,7 +822,7 @@ class Segmenter(BaseSegmenter):
                 raise ValueError(f'Did not understand region of interest {roi}.')
 
         # Only import tensorflow and Keras if needed
-        from cellst.utils.unet_model import FluorUNetModel
+        from celltk.utils.unet_model import FluorUNetModel
 
         if not hasattr(self, 'model'):
             '''NOTE: If we had mulitple colors, then image would be 4D here.
@@ -849,7 +849,7 @@ class Segmenter(BaseSegmenter):
     @ImageHelper(by_frame=False)
     def misic_predict(self,
                       image: Image,
-                      model_path: str = 'cellst/external/MiSiCv2.h5',
+                      model_path: str = 'celltk/external/MiSiCv2.h5',
                       weight_path: str = None,
                       batch: int = None,
                       ) -> Mask:
@@ -859,7 +859,7 @@ class Segmenter(BaseSegmenter):
             - Make custom structure to speed up calculations
         """
         # Only import tensorflow if needed
-        from cellst.utils.unet_model import MisicModel
+        from celltk.utils.unet_model import MisicModel
         self.model = MisicModel(model_path)
 
         # Use model for predictions

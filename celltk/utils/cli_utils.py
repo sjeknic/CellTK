@@ -170,7 +170,7 @@ class CLIParser():
         )
         slurm_parser.add_argument(
             '--job-name', '-n',
-            default='cellst',
+            default='celltk',
             type=str,
             help='Name of the job submission.'
         )

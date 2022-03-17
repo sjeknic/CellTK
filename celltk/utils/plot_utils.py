@@ -11,7 +11,7 @@ import plotly.graph_objects as go
 import plotly.colors as pcol
 import colorcet as cc
 
-import cellst.utils.estimator_utils
+import celltk.utils.estimator_utils
 
 """
 Need some notes for myself, because this is still very hackish, but I
@@ -120,7 +120,7 @@ def get_timeseries_estimator(func: Union[Callable, str],
 
     if isinstance(func, str):
         try:
-            func = getattr(cellst.utils.estimator_utils, func)
+            func = getattr(celltk.utils.estimator_utils, func)
             return functools.partial(func, *args, **kwargs)
         except AttributeError:
             try:

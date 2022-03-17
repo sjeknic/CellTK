@@ -12,9 +12,9 @@ from pprint import pprint
 from glob import glob
 from typing import Collection, Generator, List, Callable
 
-from cellst.utils.log_utils import get_console_logger, get_null_logger
-from cellst.utils.file_utils import save_job_history_yaml, get_file_line, load_yaml
-from cellst.core.pipeline import Pipeline
+from celltk.utils.log_utils import get_console_logger, get_null_logger
+from celltk.utils.file_utils import save_job_history_yaml, get_file_line, load_yaml
+from celltk.core.pipeline import Pipeline
 
 
 class JobController():
@@ -99,7 +99,7 @@ class SlurmController(JobController):
                  modules: str = None,
                  maxjobs: (list, int) = 1,
                  clean: bool = True,
-                 working_dir: str = '.cellst_temp',
+                 working_dir: str = '.celltk_temp',
                  output_dir: str = 'slurm_logs'
                  ) -> None:
         # Save inputs
@@ -691,7 +691,7 @@ class SlurmController(JobController):
             mods = f'module restore {self.modules}'
             string = _add_line(string, mods, '', '')
 
-        command = f'python3 -m cellst.core.pipeline -y {yaml_path}'
+        command = f'python3 -m celltk.core.pipeline -y {yaml_path}'
         string = _add_line(string, command, '', '')
 
         # Make the file

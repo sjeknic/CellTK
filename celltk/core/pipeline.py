@@ -10,12 +10,12 @@ import numpy as np
 import tifffile as tiff
 import imageio as iio
 
-from cellst.core.operation import Operation
-from cellst.extract import Extractor
-from cellst.utils._types import Image, Mask, Track, Arr, ImageContainer, INPT_NAMES
-from cellst.utils.process_utils import condense_operations, extract_operations
-from cellst.utils.log_utils import get_logger, get_console_logger
-from cellst.utils.file_utils import (save_operation_yaml, save_pipeline_yaml,
+from celltk.core.operation import Operation
+from celltk.extract import Extractor
+from celltk.utils._types import Image, Mask, Track, Arr, ImageContainer, INPT_NAMES
+from celltk.utils.process_utils import condense_operations, extract_operations
+from celltk.utils.log_utils import get_logger, get_console_logger
+from celltk.utils.file_utils import (save_operation_yaml, save_pipeline_yaml,
                                      folder_name)
 
 

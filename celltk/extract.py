@@ -4,11 +4,11 @@ from typing import Collection, Tuple, Union
 
 import numpy as np
 
-from cellst.core.operation import BaseExtractor
-from cellst.utils.utils import ImageHelper
-from cellst.utils._types import Image, Mask, Track, Arr
-from cellst.core.arrays import ConditionArray
-from cellst.utils.operation_utils import lineage_to_track, parents_from_track
+from celltk.core.operation import BaseExtractor
+from celltk.utils.utils import ImageHelper
+from celltk.utils._types import Image, Mask, Track, Arr
+from celltk.core.arrays import ConditionArray
+from celltk.utils.operation_utils import lineage_to_track, parents_from_track
 
 
 class Extractor(BaseExtractor):

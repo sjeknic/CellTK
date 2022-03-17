@@ -9,7 +9,7 @@ import sklearn.cluster as clust
 import hdbscan
 import umap
 
-from cellst.utils._fastkde import FastLaplacianKDE
+from celltk.utils._fastkde import FastLaplacianKDE
 
 
 SEED = 69420

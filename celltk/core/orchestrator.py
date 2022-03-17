@@ -8,16 +8,16 @@ from multiprocessing import Pool
 from typing import Dict, Collection, Tuple, Callable
 from glob import glob
 
-from cellst.core.operation import Operation
-from cellst.core.pipeline import Pipeline
-from cellst.core.arrays import ExperimentArray
-from cellst.utils._types import Arr
-from cellst.utils.process_utils import condense_operations, extract_operations
-from cellst.utils.log_utils import get_logger, get_console_logger
-from cellst.utils.file_utils import (save_operation_yaml, save_pipeline_yaml,
+from celltk.core.operation import Operation
+from celltk.core.pipeline import Pipeline
+from celltk.core.arrays import ExperimentArray
+from celltk.utils._types import Arr
+from celltk.utils.process_utils import condense_operations, extract_operations
+from celltk.utils.log_utils import get_logger, get_console_logger
+from celltk.utils.file_utils import (save_operation_yaml, save_pipeline_yaml,
                                      save_yaml_file, folder_name)
-from cellst.utils.slurm_utils import JobController, SlurmController
-from cellst.utils.cli_utils import CLIParser
+from celltk.utils.slurm_utils import JobController, SlurmController
+from celltk.utils.cli_utils import CLIParser
 
 
 class Orchestrator():

@@ -3,7 +3,7 @@ from typing import Tuple
 import numpy as np
 import scipy.stats as stats
 
-from cellst.utils.info_utils import get_bootstrap_population
+from celltk.utils.info_utils import get_bootstrap_population
 
 """None of these estimators need to be wrapped in partial or anything"""
 def bootstrap_estimator(arr: np.ndarray,

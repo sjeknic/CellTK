@@ -3,8 +3,8 @@ import yaml
 import linecache
 from typing import Collection, Dict
 
-from cellst.core.operation import Operation
-from cellst.utils.process_utils import condense_operations
+from celltk.core.operation import Operation
+from celltk.utils.process_utils import condense_operations
 
 
 def load_yaml(path: str, loader: str = 'Loader') -> dict:
@@ -25,7 +25,7 @@ def save_yaml_file(data: dict, path: str, warning: bool = True) -> None:
                     'To generate a new file use the methods of Pipeline '
                     'or Orchestrator.',
                     'Or use the save_operation_yaml and save_pipeline_yaml '
-                    'functions in cellst.utils.file_utils.')
+                    'functions in celltk.utils.file_utils.')
     with open(path, 'w') as yf:
         if warning:
             for warn in warning_text:

@@ -1,7 +1,7 @@
 import numpy as np
 import btrack
 
-from cellst.utils._types import Mask
+from celltk.utils._types import Mask
 
 
 def bayes_update_mask(mask: Mask, objects: list) -> np.ndarray:

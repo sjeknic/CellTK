@@ -1,8 +1,8 @@
 import sys
 from typing import Dict, Collection
 
-from cellst.core.operation import Operation
-from cellst.utils._types import TYPE_LOOKUP
+from celltk.core.operation import Operation
+from celltk.utils._types import TYPE_LOOKUP
 
 
 def condense_operations(operations: Collection[Operation]) -> Dict[str, dict]:

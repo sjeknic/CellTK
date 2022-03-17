@@ -11,10 +11,10 @@ import skimage.segmentation as segm
 import skimage.util as util
 import scipy.ndimage as ndi
 
-from cellst.core.operation import BaseProcessor
-from cellst.utils._types import Image, Mask, Track, Same
-from cellst.utils.utils import ImageHelper
-from cellst.utils.operation_utils import (sliding_window_generator,
+from celltk.core.operation import BaseProcessor
+from celltk.utils._types import Image, Mask, Track, Same
+from celltk.utils.utils import ImageHelper
+from celltk.utils.operation_utils import (sliding_window_generator,
                                           shift_array, crop_array, PadHelper,
                                           wavelet_background_estimate,
                                           wavelet_noise_estimate, cast_sitk)
@@ -489,7 +489,7 @@ class Processor(BaseProcessor):
                 raise ValueError(f'Did not understand region of interest {roi}.')
 
         # Only import tensorflow and Keras if needed
-        from cellst.utils.unet_model import FluorUNetModel
+        from celltk.utils.unet_model import FluorUNetModel
 
         if not hasattr(self, 'model'):
             '''NOTE: If we had mulitple colors, then image would be 4D here.

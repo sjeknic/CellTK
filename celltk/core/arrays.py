@@ -9,12 +9,12 @@ import numpy as np
 import plotly.graph_objects as go
 import matplotlib.pyplot as plt
 
-import cellst.utils.filter_utils as filtu
-from cellst.utils.plot_utils import plot_groups, plot_trace_predictions
-from cellst.utils.info_utils import nan_helper_2d, get_split_idxs, split_array
-from cellst.utils.unet_model import UPeakModel
-from cellst.utils.upeak.peak_utils import segment_peaks_agglomeration
-from cellst.utils.metric_utils import active_cells, cumulative_active
+import celltk.utils.filter_utils as filtu
+from celltk.utils.plot_utils import plot_groups, plot_trace_predictions
+from celltk.utils.info_utils import nan_helper_2d, get_split_idxs, split_array
+from celltk.utils.unet_model import UPeakModel
+from celltk.utils.upeak.peak_utils import segment_peaks_agglomeration
+from celltk.utils.metric_utils import active_cells, cumulative_active
 
 
 class ConditionArray():
@@ -707,7 +707,7 @@ class ConditionArray():
     def predict_peaks(self,
                       key: Tuple[int, str],
                       model: UPeakModel = None,
-                      weight_path: str = 'cellst/config/upeak_example_weights.tf',
+                      weight_path: str = 'celltk/config/upeak_example_weights.tf',
                       propagate: bool = True,
                       segment: bool = True,
                       **kwargs
@@ -1185,7 +1185,7 @@ class ExperimentArray():
 
     def predict_peaks(self,
                       key: Tuple[int, str],
-                      weight_path: str = 'cellst/config/upeak_example_weights.tf',
+                      weight_path: str = 'celltk/config/upeak_example_weights.tf',
                       propagate: bool = True,
                       segment: bool = True,
                       **kwargs
