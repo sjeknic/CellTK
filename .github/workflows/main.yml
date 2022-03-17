@@ -1,0 +1,31 @@
+# Modified from Github actions template
+name: pytest
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+
+jobs:
+  test-portal:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: [3.8.6]
+
+    steps:
+      - uses: actions/checkout@v2
+      - name: Setup Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v2
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r nodep_requirements.txt --no-deps
+      - name: Run tests
+        run: |
+          pytest --ignore kit_sch_ge --ignore miscellaneous
