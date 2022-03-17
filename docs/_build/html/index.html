@@ -70,6 +70,16 @@
   <section id="welcome-to-celltk">
 <h1>Welcome to CellTK!<a class="headerlink" href="#welcome-to-celltk" title="Permalink to this headline"></a></h1>
 <p>CellTK is collection of tools to simplify working with live-cell and fixed-cell microscopy data. It contains tools for segmenting, tracking, and analyzing images of both mammalian cells and bacterial microcolonies. Once the data are extracted, CellTK further includes, among others, tools for filtering data, building plots, finding peaks, and calculating mutual information. These tools can be used as stand-alone functions or as part of a larger analysis pipeline. More tools are on the way, and if there is anything you would like to see added, please create an issue on github.</p>
+<section id="installation">
+<h2>Installation<a class="headerlink" href="#installation" title="Permalink to this headline"></a></h2>
+<p>There are a couple dependency conflicts that I am still resolving. Until those are resolved, the package will not be published to Pypi. Please use the following steps to
+install and run CellTK.</p>
+<div class="line-block">
+<div class="line"><code class="docutils literal notranslate"><span class="pre">git</span> <span class="pre">clone</span> <span class="pre">https://github.com/sjeknic/CellTK/</span></code></div>
+<div class="line"><code class="docutils literal notranslate"><span class="pre">pip</span> <span class="pre">install</span> <span class="pre">-r</span> <span class="pre">requirements.txt</span></code></div>
+<div class="line"><code class="docutils literal notranslate"><span class="pre">pip</span> <span class="pre">install</span> <span class="pre">-r</span> <span class="pre">nodep_requirements.txt</span> <span class="pre">--no-deps</span></code></div>
+</div>
+<p>That’s it! You should be good to go. If you run into any problems, please open an issue on github.</p>
 <div class="toctree-wrapper compound">
 <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
 <ul>
@@ -88,16 +98,6 @@
 <li class="toctree-l1"><a class="reference internal" href="arrays.html">Arrays</a></li>
 </ul>
 </div>
-<section id="installation">
-<h2>Installation<a class="headerlink" href="#installation" title="Permalink to this headline"></a></h2>
-<p>There are a couple dependency conflicts that I am still resolving. Until those are resolved, the package will not be published to Pypi. Please use the following steps to
-install and run CellTK.</p>
-<div class="line-block">
-<div class="line"><code class="docutils literal notranslate"><span class="pre">git</span> <span class="pre">clone</span> <span class="pre">https://github.com/sjeknic/CellTK/</span></code></div>
-<div class="line"><code class="docutils literal notranslate"><span class="pre">pip</span> <span class="pre">install</span> <span class="pre">-r</span> <span class="pre">requirements.txt</span></code></div>
-<div class="line"><code class="docutils literal notranslate"><span class="pre">pip</span> <span class="pre">install</span> <span class="pre">-r</span> <span class="pre">nodep_requirements.txt</span> <span class="pre">--no-deps</span></code></div>
-</div>
-<p>That’s it! You should be good to go. If you run into any problems, please open an issue on github.</p>
 </section>
 </section>
 <section id="indices-and-tables">

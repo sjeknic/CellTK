@@ -84,7 +84,7 @@
 </section>
 <section id="setting-up-a-pipeline">
 <h2>Setting up a Pipeline<a class="headerlink" href="#setting-up-a-pipeline" title="Permalink to this headline"></a></h2>
-<p>First, initialize a <code class="docutils literal notranslate"><span class="pre">Pipeline</span></code> and pass it the folder to your images. For this example, we will use the images in the example folder.</p>
+<p>First, initialize a <code class="docutils literal notranslate"><span class="pre">Pipeline</span></code> and pass it the folder to your images. For this example, we will use the images in the example folder. Optionally, you can also pass a path to <code class="docutils literal notranslate"><span class="pre">output_folder</span></code>. By default, outputs will be stored in a new directory called <code class="docutils literal notranslate"><span class="pre">outputs</span></code>.</p>
 <div class="line-block">
 <div class="line"><code class="docutils literal notranslate"><span class="pre">import</span> <span class="pre">celltk</span></code></div>
 <div class="line"><code class="docutils literal notranslate"><span class="pre">pipe</span> <span class="pre">=</span> <span class="pre">celltk.Pipeline(parent_folder='/your/path/to/CellTK/examples/D4-Site_2')</span></code></div>
@@ -115,6 +115,7 @@
 <div class="line"><code class="docutils literal notranslate"><span class="pre">pipe.add_operations([seg,</span> <span class="pre">tra,</span> <span class="pre">ext])</span></code></div>
 <div class="line"><code class="docutils literal notranslate"><span class="pre">pipe.run()</span></code></div>
 </div>
+<p>This will create the output folder, run all the operations, and save a file called <code class="docutils literal notranslate"><span class="pre">data_frame.hdf5</span></code> with all of the data saved as a <code class="docutils literal notranslate"><span class="pre">ConditionArray</span></code>.</p>
 </section>
 </section>
 

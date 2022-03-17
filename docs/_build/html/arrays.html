@@ -72,11 +72,14 @@
 <dl class="py class">
 <dt class="sig sig-object py" id="celltk.core.arrays.ConditionArray">
 <em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">celltk.core.arrays.</span></span><span class="sig-name descname"><span class="pre">ConditionArray</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">regions</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">['nuc']</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">channels</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">['TRITC']</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">metrics</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">['label']</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cells</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">[0]</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">frames</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">[0]</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'default'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">time</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">pos_id</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#celltk.core.arrays.ConditionArray" title="Permalink to this definition"></a></dt>
-<dd><p>ax 0 - cell locations (nuc, cyto, population, etc.)
-ax 1 - channels (TRITC, FITC, etc.)
-ax 2 - metrics (median_int, etc.)
-ax 3 - cells
-ax 4 - frames</p>
+<dd><p>For now, this class is only built by Extractor. It’s not meant to be
+built by the user yet.
+Stores the results from a single condition in an experiment.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>regions</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">List</span></code>[<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>]) – Names of the regions</p>
+</dd>
+</dl>
 <dl class="py method">
 <dt class="sig sig-object py" id="celltk.core.arrays.ConditionArray.add_metric_slots">
 <span class="sig-name descname"><span class="pre">add_metric_slots</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#celltk.core.arrays.ConditionArray.add_metric_slots" title="Permalink to this definition"></a></dt>
@@ -96,8 +99,19 @@ to make room for an additional metric</p>
 filter the data. If delete, the underlying structure
 is changed, otherwise, the data are only returned.</p>
 <dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>mask</strong> (<code class="xref py py-data docutils literal notranslate"><span class="pre">Optional</span></code>[<code class="xref py py-class docutils literal notranslate"><span class="pre">ndarray</span></code>]) – A boolean mask to filter cells with. Can be 1D, 2D or 5D.</p></li>
+<li><p><strong>key</strong> (<code class="xref py py-data docutils literal notranslate"><span class="pre">Optional</span></code>[<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>]) – Name of a saved mask to use for filtering cells. Overwrites
+msak if provided.</p></li>
+<li><p><strong>delete</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code>) – If True, cells are removed in the base array</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>array with cells designated by maks or key removed.</p>
+</dd>
 <dt class="field-odd">Return type</dt>
-<dd class="field-odd"><p><code class="xref py py-class docutils literal notranslate"><span class="pre">ndarray</span></code></p>
+<dd class="field-odd"><p>np.ndarray</p>
 </dd>
 </dl>
 </dd></dl>
