@@ -115,7 +115,8 @@ class Operation():
                  images: Collection[Image] = [],
                  masks: Collection[Mask] = [],
                  tracks: Collection[Track] = [],
-                 arrays: Collection[Arr] = []
+                 arrays: Collection[Arr] = [],
+                 _return_keys: bool = False
                  ) -> Union[Image, Mask, Track, Arr]:
         """
         __call__ runs operation independently of Pipeline class
@@ -125,8 +126,30 @@ class Operation():
               it will have to take the inputs and build the ImageContainer. Only
               question will be the keys, they have to match the inputs.
         """
-        raise NotImplementedError('Will be implemented in a future version.')
-        return self.run_operation(images, masks, tracks, arrays)
+        # Cast all to lists if they are not
+        if not isinstance(images, (tuple, list)): images = [images]
+        if not isinstance(masks, (tuple, list)): masks = [masks]
+        if not isinstance(tracks, (tuple, list)): tracks = [tracks]
+        if not isinstance(arrays, (tuple, list)): arrays = [arrays]
+
+        # Generate keys based on enumeration
+        container = ImageContainer()
+        inputs = [Image, Mask, Track, Arr]
+        for nm, stack in zip(inputs, [images, masks, tracks, arrays]):
+            if stack:
+                nm = nm.__name__
+                for i, st in enumerate(stack):
+                    key = (f'{nm}_{i}', nm)
+                    container[key] = st
+
+        # TODO: How to format the output?
+        # Output is a generator
+        out = self.run_operation(container)
+
+        if _return_keys:
+            return tuple(dict(out).items())
+        else:
+            return list(dict(out).values())
 
     def __enter__(self) -> None:
         """
@@ -190,6 +213,10 @@ class Operation():
         return_container = ImageContainer()
         return_container.update({k: v for k, v in inputs.items()
                                  if k[1] == self._output_type.__name__})
+
+        if not self.functions:
+            warnings.warn(f'No functions found in {self}.', UserWarning)
+            yield from return_container.items()
 
         # fidx is function index
         for fidx, (func, save_as, user_type, kwargs) in enumerate(self.functions):
@@ -600,15 +627,15 @@ class BaseSegmenter(Operation):
                  ) -> None:
         super().__init__(output=output, **kwargs)
 
-    def __call__(self,
-                 images: Collection[Image] = [],
-                 masks: Collection[Mask] = []
-                 ) -> Mask:
-        """
-        Calls run_operation. This is intended to be
-        used independently of Pipeline.
-        """
-        return self.run_operation(images, masks, [], [])
+    # def __call__(self,
+    #              images: Collection[Image] = [],
+    #              masks: Collection[Mask] = []
+    #              ) -> Mask:
+    #     """
+    #     Calls run_operation. This is intended to be
+    #     used independently of Pipeline.
+    #     """
+    #     return self.run_operation(images, masks, [], [])
 
 
 class BaseTracker(Operation):
