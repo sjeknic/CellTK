@@ -251,3 +251,25 @@ class Extractor(BaseExtractor):
         self._filters.append(dict(filter_name=filter_name, metric=metric, region=region,
                                   channel=channel, frame_rng=frame_rng,
                                   args=args, kwargs=kwargs))
+
+    def set_metric_list(self, metrics: Collection[str]) -> None:
+        """Sets the list of metrics to get. For a possible list, see
+        skimage.regionprops or Extractor._possible_metrics.
+
+        :param metrics: List of metrics to measure from images
+
+        :return: None
+
+        NOTE:
+            - CellTK can only use the scalar metrics in regionprops.
+        """
+        # Check that skimage can handle the given metrics
+        allowed = [m for m in metrics if m in self._possible_metrics]
+        not_allowed = [m for m in metrics if m not in self._possible_metrics]
+
+        self._metrics = allowed
+
+        # Raise warning for the rest
+        if not_allowed:
+            warnings.warn(f'Metrics {[not_allowed]} are not supported. Use '
+                          'CellArray.add_extra_metric to add custom metrics.')

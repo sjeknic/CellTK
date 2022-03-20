@@ -994,22 +994,6 @@ class BaseExtractor(Operation):
             new_func[-1] = new_kwargs
             self.functions = [tuple(new_func)]
 
-    def set_metric_list(self, metrics: Collection[str]) -> None:
-        """
-        Adds metrics the user wants to pass to regionprops. Label will be made the
-        first argument by default.
-        """
-        # Check that skimage can handle the given metrics
-        allowed = [m for m in metrics if m in self._possible_metrics]
-        not_allowed = [m for m in metrics if m not in self._possible_metrics]
-
-        self._metrics = allowed
-
-        # Raise warning for the rest
-        if not_allowed:
-            warnings.warn(f'Metrics {[not_allowed]} are not supported. Use '
-                          'CellArray.add_extra_metric to add custom metrics.')
-
     def add_function_to_operation(self,
                                   func: str, *,
                                   output_type: str = None,
