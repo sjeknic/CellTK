@@ -14,6 +14,7 @@ import SimpleITK as sitk
 from celltk.utils._types import Mask, Track
 
 # TODO: Add label by parent function
+# TODO: Add create lineage tree graph (maybe in plot_utils)
 
 def gray_fill_holes(labels: np.ndarray) -> np.ndarray:
     """
@@ -316,8 +317,6 @@ def track_to_mask(track: Track, idx: np.ndarray = None) -> Mask:
     Args:
         - track
         - idx: locations of parent values to fill in
-
-    See https://stackoverflow.com/questions/3662361/
     """
     if idx is None: idx = track < 0
     ind = ndi.distance_transform_edt(idx,
@@ -358,8 +357,11 @@ def track_to_lineage(track: Track) -> np.ndarray:
     # lineage[:, 1] = (label, first frame, last frame, parent)
     lineage = np.empty((len(cells), 4)).astype(np.uint16)
     for row, cell in enumerate(cells):
-        frames = np.where(track == cell)[0]
-        first, last = frames[0], frames[-1]
+        # Mark if cell is in each frame
+        cell_mask = np.array([cell in t for t in track])
+        first = np.argmax(cell_mask)
+        # -1 is needed because reversed array is still 0-indexed
+        last = len(cell_mask) - 1 - np.argmax(cell_mask[::-1])
 
         lineage[row] = [cell, first, last, parent_lookup[cell]]
 
