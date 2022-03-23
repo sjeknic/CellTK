@@ -37,13 +37,19 @@ class Tracker(BaseTracker):
                               mask: Mask,
                               voronoi_split: bool = True
                               ) -> Track:
-        """
-        Tracker based on frame-to-frame linear assignment
+        """Tracks objects by optimizing the area overlap
+        from frame to frame.
 
-        voronoi_split keeps objects from merging, but slows
-        down computation
+        :param mask: Mask with the objects to be tracked uniquely labeled.
+        :param voronoi_split: If True, creates a voronoi
+            map from the objects in mask. Uses that map
+            to keep objects separated in each frame. Slows
+            down computation.
 
-        TODO: Multiple ways to improve this function
+        :return: Track with objects linked
+
+        TODO:
+            - Multiple ways to improve this function
             - Add custom cost function
             - Add ability to use intensity information
         """
@@ -72,15 +78,22 @@ class Tracker(BaseTracker):
                                  watershed_line: bool = True,
                                  keep_seeds: bool = False,
                                  ) -> Track:
-        """
-        Use segm.watershed serially
+        """Uses watershed to track from objects in one frame to objects
+        in the next. Useful for objects that grow in size, but don't move
+        much, such as bacterial colonies.
 
-        keep_seeds: if True, seeds from previous frame will be
-        kept in the current segmentation. This is more robust
-        if the segmentation is incomplete, missing, or fragmented in some
-        frames. However, it also means the mask will be monotonically
-        increasing in size. It is not appropriate for images with a lot
-        of drift or for moving objects.
+        :param mask: Mask with the objects to be tracked uniquely labeled.
+        :param connectivity: Determines the local neighborhood around a pixel.
+            Defined as the number of orthogonal steps needed to reach a pixel.
+        :param watershed_line: If True, a one-pixel wide line separates the
+            regions obtained by the watershed algorithm. The line is labeled 0.
+        :param keep_seeds: If True, seeds from previous frame are always
+            kept. This is more robust for segmentation that is incomplete
+            or fragmented in some frames. However, the mask will be
+            monotonically increasing in size. Not appropriate for images
+            with drift or for moving objects.
+
+        :return: Track with objects linked
         """
         # Iterate over all frames
         for idx, fr in enumerate(mask):
@@ -164,6 +177,7 @@ class Tracker(BaseTracker):
             found, they are assigned based on intensity information
             and angle information.
 
+        :return: Track with objects linked and cell division marked
 
         TODO:
             - Could add more properties to use
@@ -303,11 +317,39 @@ class Tracker(BaseTracker):
                            allow_cell_division: bool = True,
                            postprocessing_key: str = None,
                            ) -> Track:
-        """
-        See kit_sch_ge/run_tracking.py for reference
+        """Tree-based tracking algorithm. First creates small
+        tracklets within delta_t frames, then finds a globally optimal
+        solution for linking the tracklets to form full tracks. Has
+        built-in cell detection and can also combine objects.
+
+        NOTE:
+            - Objects can change in this algorithm, so the output is
+            not guaranteed to have the exact same objects as the input
+            mask.
+
+        NOTE:
+            - A current Gurobi license is required to use this algorithm.
+            Personal licenses are free for academics. Please see _________
+            if you need help installing or using a license. If you run into
+            issues, please open an issue on Github. ______________
+
+        NOTE:
+            - This tracking algorithm was developed by ____________
+            and can be found at _______________.
+
+        :param image: Image with intensity information
+        :param mask: Mask with objects to be tracked
+        :param default_roi_size: Size of the region to look for connecting
+            objects. Set relative to the mean size of the objects. i.e. 2
+            means a search area twice as large as the mean object.
+        :param delta_t: Number of frames in each window for forming tracklets.
+        :param cut_off_distance: Maximum distance between linked objects
+        :param allow_cell_division: If True, attempt to locate and mark
+            dividing cells.
+        :param postprocessing_key: TODO. See KIT-Sch-GE documentation
 
         TODO:
-            - Use non-consecutive timesteps (mainly for naming of files)
+            - Add citation for kit sch ge
             - Add saving of lineage file (probably in a separate run_operation function)
         """
         # If nothing is in mask, return an empty stack
@@ -358,10 +400,18 @@ class Tracker(BaseTracker):
                          config_path: str = 'celltk/config/bayes_config.json',
                          update_method: str = 'exact',
                          ) -> Track:
-        """
-        Wraps BayesianTracker: https://github.com/quantumjot/BayesianTracker
+        """Wrapper for btrack, a Bayesian-based tracking algorithm.
+        Please see: https://github.com/quantumjot/BayesianTracker
 
+        :param mask: Mask with objects to be segmented
+        :param config_path: Path to configuration file. Must be JSON.
+        :param update_method: Method to use when optimizing the solution.
+            Options are 'exact' and 'approximate'. Use approximate if
+            exact is taking too long or utilizing excessive resources.
+
+        :return: Track with objects linked
         TODO:
+            - Add citation.and expand documentation
             - Set values in config_file
             - Speed up bayes_extract_tracker_data
             - Add display with navari
