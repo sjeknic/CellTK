@@ -420,7 +420,86 @@ def sliding_window_generator(arr: np.ndarray, overlap: int = 0) -> Generator:
         yield from arr
 
 
-# TODO: Test including @numba.njit here
+def data_from_regionprops_table(regionprops: List[dict],
+                                metric: str,
+                                labels: List[int],
+                                frames: List[int],
+                                ) -> Union[np.ndarray, float]:
+    """Given a list of regionprops data, yield data for specified metrics
+    at certain label, frame indices"""
+
+    assert len(labels) == len(frames)
+    out = []
+    for lab, fr, in zip(labels, frames):
+        # Each regionprop comes from regionprops_table (i.e. is Dict)
+        data = regionprops[fr]
+        # Assume labels in regionprops are unique
+        idx = np.argmax(data['label'] == lab)
+        out.append(np.array([data[k][idx] for k in data if metric in k]))
+
+    return out
+
+
+def paired_dot_distance(par_xy: np.ndarray,
+                        dau_xy: np.ndarray
+                        ) -> Tuple[np.ndarray]:
+    """Calculates error for normalized dot distance and error along line
+
+
+    NOTE:
+        - x, y are switched in this function relative to the image.
+    TODO:
+        - Better docstring
+    """
+    # Get the vector from the candidate parent to each daughter
+    vectors = []
+    for (x, y) in dau_xy:
+        vectors.append([par_xy[0] - x, par_xy[1] - y])
+
+    # Slow, but only a few samples so does it really matter?
+    dot = np.ones((len(vectors), len(vectors)))
+    dist = np.ones_like(dot)
+    for i, (v0, d0) in enumerate(zip(vectors, dau_xy)):
+        for j, (v1, d1) in enumerate(zip(vectors, dau_xy)):
+            if j > i:
+                dot[i, j] = (
+                    np.dot(v0, v1) / (np.linalg.norm(v0) * np.linalg.norm(v1))
+                )
+                dist[i, j] = _get_intersect_to_midpt_error(d0, d1, par_xy)
+
+    return dot, dist
+
+
+def _get_intersect_to_midpt_error(lp0: np.ndarray,
+                                  lp1: np.ndarray,
+                                  tp: np.ndarray
+                                  ) -> float:
+    """From: http://paulbourke.net/geometry/pointlineplane/
+
+    :param lp0: line point 0
+    :param lp1: line point 1
+    :param tp: test point
+
+    """
+    # Line pts must be array for norm calculation
+    lp0 = np.asarray(lp0)
+    lp1 = np.asarray(lp1)
+
+    u = ((tp[0] - lp0[0]) * (lp1[0] - lp0[0]) +
+         (tp[1] - lp0[1]) * (lp1[1] - lp0[1]))
+    u /= np.linalg.norm(lp0 - lp1) ** 2
+
+    x = lp0[0] + u * (lp1[0] - lp0[0])
+    y = lp0[1] + u * (lp1[1] - lp0[1])
+
+    total = distance.pdist(np.vstack([lp0, lp1]))
+    parent = distance.pdist(np.vstack([lp0, [x, y]]))
+
+    # This is error from mid point. If parent is exactly
+    # in the middle, this will return 0
+    return np.abs(0.5 - parent / total)
+
+
 def shift_array(array: np.ndarray,
                 shift: tuple,
                 fill: float = np.nan,
