@@ -8,6 +8,7 @@ import btrack.utils as butils
 import btrack.constants as bconstants
 import skimage.measure as meas
 import skimage.segmentation as segm
+import scipy.spatial.distance as distance
 
 from celltk.core.operation import BaseTracker
 from celltk.utils._types import Image, Mask, Track
@@ -15,7 +16,12 @@ from celltk.utils.utils import ImageHelper, stdout_redirected
 from celltk.utils.operation_utils import (lineage_to_track,
                                           match_labels_linear,
                                           voronoi_boundaries,
-                                          get_binary_footprint)
+                                          get_binary_footprint,
+                                          track_to_mask, track_to_lineage,
+                                          label_by_parent,
+                                          data_from_regionprops_table,
+                                          paired_dot_distance)
+from celltk.utils.metric_utils import total_intensity
 
 # Tracking algorithm specific imports
 from kit_sch_ge.tracker.extract_data import get_indices_pandas
@@ -102,11 +108,197 @@ class Tracker(BaseTracker):
         return out
 
     @ImageHelper(by_frame=False)
+    def linear_tracking_w_properties(self,
+                                     mask: Mask,
+                                     ) -> Track:
+        """Like simple_linear_tracker, but with the ability
+        to specify specific properties to use in the cost
+        function
+        """
+        pass
+
+    @ImageHelper(by_frame=False)
+    def detect_cell_division(self,
+                             image: Image,
+                             track: Track,
+                             mask: Mask = None,
+                             displacement_thres: float = 50,
+                             frame_thres: int = 3,
+                             mass_thres: float = 0.15,
+                             dist_thres: float = 0.35,
+                             dot_thres: float = -0.7,
+                             angle_weight: float = 0.5
+                             ) -> Track:
+        """Detects cells that have divided based on location, size,
+        and intensity information. Daughter cells are expected to
+        be approximately half the total intensity of the mother cell,
+        and to have the mother cell roughly in line and between them.
+
+        NOTE:
+            - Any Track passed to this function will have all other
+              division events removed.
+
+        :param image: Image with intensity information.
+        :param track: Track of objects to detect division on.
+        :param mask: Mask of objects to detect division on. Note
+            that the objects must already be linked from frame
+            to frame for the algorithm to work.
+        :param displacement_thres: Maximum distance allowed from
+            the centroid of a parent cell to the centroid of a
+            daughter cell.
+        :param frame_thres: Maximum number of frames from the division
+            event to a daughter cell.
+        :param mass_thres: Maximum error for total intensity of a
+            daughter cell relataive to half of the mother cell's
+            intensity.
+        :param dist_thres: Maximum error allowed for location of
+            mother cell relative to location of the daughter cells.
+            Mother cell is expected to be equidistant from the
+            daughter cells.
+        :param dot_thres: Maximum value of the normalized dot
+            product between the two vectors from each daughter
+            cell to the mother cell. Essentially a measure
+            of the angle between the daughter cells.
+        :param angle_weight: Weight given to angle and distance information
+            when assigning daughter cells. If multiple candidate daughters are
+            found, they are assigned based on intensity information
+            and angle information.
+
+
+        TODO:
+            - Could add more properties to use
+        """
+        # First, convert track to mask if needed
+        if track is not None:
+            mask = track_to_mask(track)
+        else:
+            assert mask is not None
+            track = mask.copy()
+
+        # Find start and end of each trace
+        # app_diapp = label, first_frame, last_frame, parent_label
+        app_disapp = track_to_lineage(track)
+        fr_min, fr_max = (0, mask.shape[1])
+
+        # Remove cells that appeared in first frame or disappered in last
+        after_first = app_disapp[:, 1] > fr_min
+        before_last = app_disapp[:, 2] < fr_max
+        app = app_disapp[after_first]  # possible daughters
+        dis = app_disapp[before_last]  # possible parents
+
+        # Now we need the intensities and locations for the app and dis frames
+        app_fr = app[:, 1]  # second col is first frame of trace
+        dis_fr = dis[:, 2]  # third col is last frame of trace
+        rel_frames = np.unique(np.hstack([app_fr, dis_fr]))
+        image_data = [meas.regionprops_table(mask[fr], image[fr],
+                                             ['label', 'centroid'],
+                                             extra_properties=[total_intensity]
+                                             )
+                      for fr in rel_frames]
+
+        # Extract data from the regionprops
+        app_xy = np.vstack(
+            data_from_regionprops_table(image_data, 'centroid',
+                                        app[:, 0], app[:, 1])
+        )
+        app_mass = np.vstack(
+            data_from_regionprops_table(image_data, 'total_intensity',
+                                        app[:, 0], app[:, 1])
+        )
+        dis_xy = np.vstack(
+            data_from_regionprops_table(image_data, 'centroid',
+                                        dis[:, 0], dis[:, 1])
+        )
+        dis_mass = np.vstack(
+            data_from_regionprops_table(image_data, 'total_intensity',
+                                        dis[:, 0], dis[:, 1])
+        )
+
+        # Calculate frame distance and mask
+        app_fr, dis_fr = np.meshgrid(app_fr, dis_fr)
+        fr_dist = np.abs((app_fr - dis_fr)).T
+        fr_mask = fr_dist <= frame_thres
+
+        # Calculate Euclidean distance between centroids and mask
+        euclid_dist = distance.cdist(app_xy, dis_xy)
+        euclid_mask = euclid_dist <= displacement_thres
+
+        # Calculate mass (intensity) distance and mask
+        # (parent - daughter) + 0.5 = 1 is the assumption
+        app_mass, dis_mass = np.meshgrid(app_mass, dis_mass)
+        mass_dist = ((app_mass - dis_mass).astype(np.int16) / dis_mass).T + 0.5
+        mass_mask = np.abs(mass_dist) <= mass_thres
+
+        # Now start finding distances between cells
+        # Transposing matrix to be parent x daughter
+        binary_cost = (fr_mask * euclid_mask * mass_mask).T
+        nonzero_idx = np.nonzero(binary_cost.any(1))[0]
+
+        # For each possible parent cell
+        for par in nonzero_idx:
+            # Save indices associated with possible daughters
+            binrow = binary_cost[par]
+            cand_dau_idx = np.nonzero(binrow)[0]
+
+            cand_par_xy = dis_xy[par]
+            cand_dau_xy = app_xy[binrow]
+
+            # To start, assume that none of the daughters are matches
+            binary_cost[par, :] = False
+            # Don't match a single daughter to a parent
+            if len(cand_dau_xy) > 1:
+                # Get angle and distance eror
+                dot, dist = paired_dot_distance(cand_par_xy, cand_dau_xy)
+                candidates = (dot <= dot_thres) * (dist <= dist_thres)
+                candidate_pairs = np.transpose(np.nonzero(candidates))
+
+                # Each row is a possible pair of daughters
+                if candidate_pairs.shape[0] == 1:
+                    # Two matching cells have been found
+                    binary_idx = cand_dau_idx[candidate_pairs.ravel()]
+                    binary_cost[par, binary_idx] = True
+                elif candidate_pairs.shape[0] > 1:
+                    # For multiple possible pairs, calculate assoc. costs
+                    costs = []
+                    for cd in candidate_pairs:
+                        d0 = cand_dau_idx[cd[0]]
+                        d1 = cand_dau_idx[cd[1]]
+                        # Error based on sum of intensities
+                        mass_error = np.abs(
+                            np.sum([mass_dist[par, d0],
+                                   mass_dist[par, d1]])
+                        )
+                        # Error based on location of daughters and parent
+                        angle_error = ((1 - np.abs(dot[cd[0], cd[1]])) +
+                                       dist[cd[0], cd[1]])
+
+                        costs.append((1 - angle_weight) * mass_error +
+                                     angle_weight * angle_error)
+
+                    # Select the minimum cost
+                    best = np.argmin(np.abs(costs))
+                    binary_idx = cand_dau_idx[candidate_pairs[best].ravel()]
+                    binary_cost[par, binary_idx] = True
+
+        # Remove daughters that have been assigned more than once
+        binary_cost[:, binary_cost.sum(0) > 1] = False
+        binary_cost[binary_cost.sum(1) == 1, :] = False
+
+        # Construct a lineage to assign the daughters found
+        dau_idx = np.nonzero(binary_cost.any(0))[0]
+        new_lineage = np.zeros((len(dau_idx), 4), dtype=np.uint16)
+        for n, dau in enumerate(dau_idx):
+            new_lineage[n, :] = app[dau]
+            new_lineage[n, -1] = np.argmax(binary_cost[:, dau])
+
+        return lineage_to_track(mask, new_lineage)
+
+    @ImageHelper(by_frame=False)
     def kit_sch_ge_tracker(self,
                            image: Image,
                            mask: Mask,
                            default_roi_size: int = 2,
-                           delta_t: int = 2,
+                           delta_t: int = 3,
                            cut_off_distance: Tuple = None,
                            allow_cell_division: bool = True,
                            postprocessing_key: str = None,
