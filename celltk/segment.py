@@ -1,5 +1,6 @@
 import warnings
-from typing import Tuple, Union, Collection, Callable
+import functools
+from typing import Tuple, Union, Collection, Callable, List
 
 import numpy as np
 import skimage.measure as meas
@@ -93,9 +94,51 @@ class Segmenter(BaseSegmenter):
         return util.img_as_uint(labels)
 
     @ImageHelper(by_frame=True)
+    def filter_objects_by_props(self,
+                                mask: Mask,
+                                properties: List[str],
+                                limits: Collection[Tuple[float]],
+                                ) -> Mask:
+        """
+        Image has to already be labeled
+
+        :param mask:
+        :param properties:
+
+        TODO:
+            - Add option to utilize an intensity image
+        """
+        # User must provide both low and high bound
+        assert all([len(l) == 2 for l in limits])
+
+        # Extract metrics from each region
+        if 'label' not in properties:
+            properties.append('label')
+
+        rp = meas.regionprops_table(mask, properties=properties)
+
+        # True in these masks are the indices for the cells to remove
+        failed = [~np.logical_and(rp[prop] > lim[0], rp[prop] <= lim[1])
+                  for (lim, prop) in zip(limits, properties)]
+        to_remove = np.sum(failed).astype(bool)
+        to_remove = rp['label'][to_remove]
+
+        # Get the values and again mark indices as True
+        remove_idx = functools.reduce(
+            np.add,
+            [np.where(mask == r, 1, 0) for r in to_remove],
+        ).astype(bool)
+
+        # Set those indices to 0 and return
+        out = mask.copy()
+        out[remove_idx] = 0
+
+        return out
+
+    @ImageHelper(by_frame=True)
     def constant_thres(self,
                        image: Image,
-                       thres: float = 1000,
+                       thres: Union[int, float] = 1000,
                        negative: bool = False,
                        connectivity: int = 2,
                        relative: bool = False
@@ -403,7 +446,7 @@ class Segmenter(BaseSegmenter):
     def morphological_acwe(self,
                            image: Image,
                            seeds: Mask = 'checkerboard',
-                           iterations: int = 50,  # TODO: Set appr. value
+                           iterations: int = 10,  # TODO: Set appr. value
                            smoothing: int = 1,
                            lambda1: float = 1,
                            lambda2: float = 1,
