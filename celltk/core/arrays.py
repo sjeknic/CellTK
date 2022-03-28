@@ -1386,6 +1386,7 @@ class ExperimentArray():
                           layout_spec: dict = {},
                           show: bool = False,
                           save: str = None,
+                          figure: go.Figure = None,
                           _format: str = 'svg'
                           ) -> go.Figure:
         """
