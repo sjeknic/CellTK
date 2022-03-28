@@ -204,11 +204,12 @@ class Tracker(BaseTracker):
         app_fr = app[:, 1]  # second col is first frame of trace
         dis_fr = dis[:, 2]  # third col is last frame of trace
         rel_frames = np.unique(np.hstack([app_fr, dis_fr]))
-        image_data = [meas.regionprops_table(mask[fr], image[fr],
+        image_data = {fr:
+                      meas.regionprops_table(mask[fr], image[fr],
                                              ['label', 'centroid'],
                                              extra_properties=[total_intensity]
                                              )
-                      for fr in rel_frames]
+                      for fr in rel_frames}
 
         # Extract data from the regionprops
         app_xy = np.vstack(
@@ -221,11 +222,11 @@ class Tracker(BaseTracker):
         )
         dis_xy = np.vstack(
             data_from_regionprops_table(image_data, 'centroid',
-                                        dis[:, 0], dis[:, 1])
+                                        dis[:, 0], dis[:, 2])
         )
         dis_mass = np.vstack(
             data_from_regionprops_table(image_data, 'total_intensity',
-                                        dis[:, 0], dis[:, 1])
+                                        dis[:, 0], dis[:, 2])
         )
 
         # Calculate frame distance and mask
