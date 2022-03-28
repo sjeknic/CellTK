@@ -27,6 +27,7 @@ from celltk.utils.info_utils import nan_helper_2d, get_split_idxs
 
 
 # TODO: Write docstring explaining kwargs
+# TODO: Add tf.saved_model.LoadOptions(allow_partial_checkpoint=True)
 class _UNetStructure():
     _model_kws = {}
     _alpha = 0.3

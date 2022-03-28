@@ -10,6 +10,7 @@ import skimage.filters as filt
 import skimage.segmentation as segm
 import skimage.util as util
 import scipy.ndimage as ndi
+import sklearn.preprocessing as preproc
 
 from celltk.core.operation import BaseProcessor
 from celltk.utils._types import Image, Mask, Track, Same
@@ -17,7 +18,8 @@ from celltk.utils.utils import ImageHelper
 from celltk.utils.operation_utils import (sliding_window_generator,
                                           shift_array, crop_array, PadHelper,
                                           wavelet_background_estimate,
-                                          wavelet_noise_estimate, cast_sitk)
+                                          wavelet_noise_estimate, cast_sitk,
+                                          get_image_pixel_type)
 
 
 class Processor(BaseProcessor):
@@ -237,6 +239,15 @@ class Processor(BaseProcessor):
         TODO:
             - Could be run faster on whole stack
         """
+        # Input must be in [-1, 1]
+        px = get_image_pixel_type(image)
+        if px == 'float':
+            image = preproc.maxabs_scale(
+                image.reshape(-1, 1)
+            ).reshape(image.shape)
+        else:
+            image = util.img_as_float32(image)
+
         if orientation in ('h', 'horizontal'):
             sobel = filt.sobel_h(image)
         elif orientation in ('v', 'vertical'):
@@ -316,6 +327,9 @@ class Processor(BaseProcessor):
         alpha should be (K2 - K1) / 6
         beta should be (K1 + K2) / 2
         """
+        # Cast to float first to avoid precision errors
+        image = util.img_as_float32(image)
+
         img = sitk.GetImageFromArray(image)
         if method == 'sigmoid':
             if all([not a for a in (alpha, beta, k1, k2)]):
@@ -333,7 +347,8 @@ class Processor(BaseProcessor):
                 # Convert to array and use np to find values
                 _arr = sitk.GetArrayFromImage(_ma)
                 _arr = _arr[_arr > 0]
-                k1 = np.percentile(_arr, 95 )
+
+                k1 = np.percentile(_arr, 95)
                 k2 = np.mean(_arr)
                 if k1 <= k2: warnings.warn('Sigmoid param estimation poor.')
                 alpha = (k2 - k1) / 6.

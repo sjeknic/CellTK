@@ -471,7 +471,7 @@ class Operation():
 
         return inspect.signature(func).return_annotation.__name__
 
-    def _operation_to_dict(self) -> Dict[str]:
+    def _operation_to_dict(self) -> Dict[str, str]:
         """Returns a dictionary that fully defines the Operation and
         all of the user supplied parameters.
 

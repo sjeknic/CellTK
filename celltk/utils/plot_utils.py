@@ -141,7 +141,7 @@ def plot_trace_predictions(traces: np.ndarray,
                            roi: Union[int, Tuple[int]] = None,
                            cmap: str = 'plasma',
                            color_limit: Tuple[int] = (0, 1),
-                           y_limit: Tuple[int] = (0, 6),
+                           y_limit: Tuple[int] = None,
                            ) -> plt.Figure:
     """"""
     rows, cols = (8, 4)
