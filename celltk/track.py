@@ -135,7 +135,7 @@ class Tracker(BaseTracker):
                              image: Image,
                              track: Track,
                              mask: Mask = None,
-                             displacement_thres: float = 50,
+                             displacement_thres: float = 30,
                              frame_thres: int = 3,
                              mass_thres: float = 0.15,
                              dist_thres: float = 0.35,
@@ -178,9 +178,6 @@ class Tracker(BaseTracker):
             and angle information.
 
         :return: Track with objects linked and cell division marked
-
-        TODO:
-            - Could add more properties to use
         """
         # First, convert track to mask if needed
         if track is not None:
@@ -229,24 +226,26 @@ class Tracker(BaseTracker):
                                         dis[:, 0], dis[:, 2])
         )
 
+        # All matrices should be parent (dis) x daughter (app)
         # Calculate frame distance and mask
         app_fr, dis_fr = np.meshgrid(app_fr, dis_fr)
-        fr_dist = np.abs((app_fr - dis_fr)).T
-        fr_mask = fr_dist <= frame_thres
+        # uint data type, so negative values > frame_thres
+        fr_dist = (app_fr - dis_fr)
+        # cannot appear and disappear in the same frame
+        fr_mask = (fr_dist <= frame_thres) * (fr_dist > 0)
 
         # Calculate Euclidean distance between centroids and mask
-        euclid_dist = distance.cdist(app_xy, dis_xy)
+        euclid_dist = distance.cdist(dis_xy, app_xy)
         euclid_mask = euclid_dist <= displacement_thres
 
         # Calculate mass (intensity) distance and mask
         # (parent - daughter) + 0.5 = 1 is the assumption
         app_mass, dis_mass = np.meshgrid(app_mass, dis_mass)
-        mass_dist = ((app_mass - dis_mass).astype(np.int16) / dis_mass).T + 0.5
+        mass_dist = ((app_mass - dis_mass).astype(np.int16) / dis_mass) + 0.5
         mass_mask = np.abs(mass_dist) <= mass_thres
 
         # Now start finding distances between cells
-        # Transposing matrix to be parent x daughter
-        binary_cost = (fr_mask * euclid_mask * mass_mask).T
+        binary_cost = fr_mask * euclid_mask * mass_mask
         nonzero_idx = np.nonzero(binary_cost.any(1))[0]
 
         # For each possible parent cell
@@ -281,7 +280,7 @@ class Tracker(BaseTracker):
                         # Error based on sum of intensities
                         mass_error = np.abs(
                             np.sum([mass_dist[par, d0],
-                                   mass_dist[par, d1]])
+                                    mass_dist[par, d1]])
                         )
                         # Error based on location of daughters and parent
                         angle_error = ((1 - np.abs(dot[cd[0], cd[1]])) +
