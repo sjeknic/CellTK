@@ -1,6 +1,6 @@
 import os
 import warnings
-from typing import Tuple
+from typing import Tuple, Collection
 
 import numpy as np
 import btrack
@@ -8,6 +8,7 @@ import btrack.utils as butils
 import btrack.constants as bconstants
 import skimage.measure as meas
 import skimage.segmentation as segm
+import scipy.optimize as opti
 import scipy.spatial.distance as distance
 
 from celltk.core.operation import BaseTracker
@@ -20,8 +21,10 @@ from celltk.utils.operation_utils import (lineage_to_track,
                                           track_to_mask, track_to_lineage,
                                           label_by_parent,
                                           data_from_regionprops_table,
-                                          paired_dot_distance)
+                                          paired_dot_distance,
+                                          sliding_window_generator)
 from celltk.utils.metric_utils import total_intensity
+import celltk.utils.metric_utils as metric_utils
 
 # Tracking algorithm specific imports
 from kit_sch_ge.tracker.extract_data import get_indices_pandas
@@ -121,14 +124,147 @@ class Tracker(BaseTracker):
         return out
 
     @ImageHelper(by_frame=False)
-    def linear_tracking_w_properties(self,
-                                     mask: Mask,
-                                     ) -> Track:
+    def linear_tracker_w_properties(self,
+                                    image: Image,
+                                    mask: Mask,
+                                    properties: Collection[str] = [],
+                                    weights: Collection[float] = None,
+                                    thresholds: Collection[float] = None,
+                                    displacement_thres: float = 30,
+                                    mass_thres: float = 0.15,
+                                    ) -> Track:
         """Like simple_linear_tracker, but with the ability
         to specify specific properties to use in the cost
         function
+
+        TODO:
+            - Include custom thresholds for the properties
         """
-        pass
+        # Get any properties in metric utils
+        extra_props = []
+        props = []
+        for p in properties:
+            if hasattr(metric_utils, p):
+                extra_props.append(p)
+            else:
+                props.append(p)
+
+        # The following default properties are non-optional
+        if 'label' not in props:
+           props.insert(0, 'label')
+        if 'centroid' not in props:
+            props.append('centroid')
+        if 'total_intensity' not in extra_props:
+            extra_props.append('total_intensity')
+        extra_funcs = [getattr(metric_utils, e) for e in extra_props]
+        all_props = props + extra_props
+
+        # Get the weights now
+        if weights is not None:
+            try:
+                assert len(weights) == len(all_props)
+            except AssertionError:
+                # Not having a weight for 'label' shouldn't raise error
+                assert len(weights) == len(all_props) - 1
+        else:
+            weights = [1. for p in all_props]
+
+        # Collect the relevant property data
+        image_data = {fr:
+                      meas.regionprops_table(msk, img, props,
+                                             extra_properties=extra_funcs)
+                      for fr, (msk, img) in enumerate(zip(mask, image))}
+        property_data = {}
+        for prop in all_props:
+            if prop == 'label':
+                label_data = data_from_regionprops_table(image_data, prop)
+            else:
+                property_data[prop] = data_from_regionprops_table(image_data,
+                                                                  prop)
+
+        # Prep the output array
+        out = mask.copy()
+
+        # Iterate over the overlapping frames
+        arr = np.arange(mask.shape[0])
+        frames = sliding_window_generator(arr, overlap=1)
+
+        # All matrices should be past (fr0) x now (fr1)
+        curr_max = np.max(label_data[0])
+        for fr0, fr1 in frames:
+            # Cast labels to numpy array if not already
+            label0 = label_data[fr0]
+            if not isinstance(label0, np.ndarray):
+                label0 = np.hstack(label0).astype(int)
+            label1 = label_data[fr1]
+            if not isinstance(label1, np.ndarray):
+                label1 = np.hstack(label1).astype(int)
+
+            cost = np.zeros((len(label0), len(label1)), dtype=float)
+
+            # Iterate through all properties to get the cost
+            for prop, weight in zip(property_data, weights):
+                data0 = np.vstack(property_data[prop][fr0])
+                data1 = np.vstack(property_data[prop][fr1])
+
+                # If distance, use euclidean distance
+                if prop == 'centroid':
+                    prop_dist = distance.cdist(data0, data1)
+                    euclid_mask = prop_dist <= displacement_thres
+                    prop_dist *= weight
+
+                # Handle intensity separately to make mask
+                elif prop == 'total_intensity':
+                    mass1, mass0 = np.meshgrid(data1, data0)
+                    prop_dist = np.abs((mass0 - mass1).astype(float))
+                    prop_dist *= (1. / mass0) * weight
+                    mass_mask = prop_dist <= mass_thres
+
+                # Otherwise, just get relative distance for that metric
+                else:
+                    prop1, prop0 = np.meshgrid(data1, data0)
+                    prop_dist = np.abs((prop0 - prop1).astype(float))
+                    prop_dist *= (1. / prop0) * weight
+
+                # Sum the cost
+                cost += prop_dist
+
+            # Apply the masks - set to very high cost
+            idx_mask = euclid_mask * mass_mask
+
+            # Make assignment very costly - will be removed later...
+            cost[~idx_mask] = 1e10  # cannot use np.inf
+
+            # Assign the labels
+            _s_idx, _d_idx = opti.linear_sum_assignment(cost)
+
+            # Remove indices based on the euclidean and mass mask
+            s_idx = _s_idx[idx_mask[_s_idx, _d_idx]]
+            d_idx = _d_idx[idx_mask[_s_idx, _d_idx]]
+
+            # Check that all the labels were assigned
+            if len(d_idx) < len(label1):
+                # Get the indices of the unlabled and add to the original
+                unlabeled = set(range(len(label1))).difference(d_idx)
+                unlabeled = np.fromiter(unlabeled, int)
+
+                new_labels = np.arange(1, len(unlabeled) + 1) + curr_max
+                curr_max = new_labels.max()
+
+            # Update the output mask with the matched cells
+            m = out[fr1, ...].copy()
+            for s, d in zip(label0[s_idx], label1[d_idx]):
+                out[fr1, m == d] = s
+            # Update the output mask with the unmatched cells
+            for s, d in zip(new_labels, label1[unlabeled]):
+                out[fr1, m == d] = s
+
+            # Update the label data for fr1
+            label1[d_idx] = label0[s_idx]
+            label1[unlabeled] = new_labels
+            label_data[fr1] = label1
+
+        return out
 
     @ImageHelper(by_frame=False)
     def detect_cell_division(self,
