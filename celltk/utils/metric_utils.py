@@ -1,6 +1,7 @@
 from typing import Union, Tuple
 
 import numpy as np
+import scipy.stats as stats
 import matplotlib.pyplot as plt
 
 from celltk.utils.unet_model import UPeakModel
@@ -27,6 +28,10 @@ def intensity_stdev(mask: np.ndarray, image: np.ndarray) -> float:
     Returns standard deviation of all intensity values in region of interest.
     """
     return np.std(image[mask])
+
+
+def coeff_variation(mask: np.ndarray, image: np.ndarray) -> float:
+    return stats.variation(image[mask], axis=None, ddof=1, nan_policy='omit')
 
 
 # VVV These are more useful as derived_metrics VVV #
