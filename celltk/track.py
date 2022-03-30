@@ -473,7 +473,7 @@ class Tracker(BaseTracker):
             issues, please open an issue on Github. ______________
 
         NOTE:
-            - This tracking algorithm was developed by ____________
+            - The underlying tracking algorithm was developed by ____________
             and can be found at _______________.
 
         :param image: Image with intensity information
@@ -578,3 +578,18 @@ class Tracker(BaseTracker):
             new_mask = bayes_extract_tracker_data(bayes_id_mask, tracker)
 
         return lineage_to_track(new_mask, lineage)
+
+    @ImageHelper(by_frame=False)
+    def lineage_masks(self,
+                      track: Track,
+                      ) -> Mask:
+        """Creates a mask where all daughter cells have
+        the label of their parent cell.
+
+        :param track: Track with parent and daughter cells.
+
+        :return:
+        """
+        mask = track_to_mask(track)
+        lineage = track_to_lineage(track)
+        return label_by_parent(mask, lineage)
