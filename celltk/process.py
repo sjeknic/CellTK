@@ -27,7 +27,6 @@ class Processor(BaseProcessor):
     TODO:
         - Add stand-alone crop function
         - Add optical-flow registration
-        - Add N4 bias correction https://simpleitk.readthedocs.io/en/master/link_N4BiasFieldCorrection_docs.html
         - Add flat fielding from reference
         - Add rescaling intensity stand alone
     """
@@ -188,6 +187,55 @@ class Processor(BaseProcessor):
         bg = rest.rolling_ball(image, radius=radius,
                                kernel=kernel, nansafe=nansafe)
         return image - bg
+
+    @ImageHelper(by_frame=True)
+    def n4_illumination_bias_correction(self,
+                                        image: Image,
+                                        mask: Mask = None,
+                                        iterations: Collection[int] = 50,
+                                        num_points: Collection[int] = 4,
+                                        histogram_bins: int = 200,
+                                        spline_order: int = 3,
+                                        ) -> Image:
+        """
+
+        TODO:
+            - Add subsampling of the image
+        """
+        # Check the inputs
+        if (image < 1).any():
+            warnings.warn('N4 correction of images with small '
+                          'values can produce poor results.')
+
+        if isinstance(iterations, int):
+            iterations = [iterations] * 4  # 4 levels of correction
+        else:
+            assert len(iterations) == 4
+
+        if isinstance(num_points, int):
+            num_points = [num_points] * 2  # 2D image
+        else:
+            assert len(num_points) == 2
+
+        # Set up the filter
+        fil = sitk.N4BiasFieldCorrectionImageFilter()
+        fil.SetMaximumNumberOfIterations(iterations)
+        fil.SetNumberOfControlPoints(num_points)
+        fil.SetNumberOfHistogramBins(histogram_bins)
+        fil.SetSplineOrder(spline_order)
+
+        # Execute
+        img = sitk.GetImageFromArray(image)
+        img = cast_sitk(img, 'sitkFloat32', cast_up=True)
+        if mask is not None:
+            mask = sitk.GetImageFromArray(mask)
+            mask = cast_sitk(img, 'sitkUInt8')
+            out = fil.Execute(img, mask)
+        else:
+            out = fil.Execute(img)
+
+        out = cast_sitk(out, 'sitkFloat32')
+        return sitk.GetArrayFromImage(out)
 
     @ImageHelper(by_frame=True)
     def curvature_anisotropic_diffusion(self,
