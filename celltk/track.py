@@ -241,7 +241,8 @@ class Tracker(BaseTracker):
         # Calculate mass (intensity) distance and mask
         # (parent - daughter) + 0.5 = 1 is the assumption
         app_mass, dis_mass = np.meshgrid(app_mass, dis_mass)
-        mass_dist = ((app_mass - dis_mass).astype(np.int16) / dis_mass) + 0.5
+        half_dis_mass = dis_mass / 2.
+        mass_dist = ((half_dis_mass - app_mass).astype(np.int16) / half_dis_mass)
         mass_mask = np.abs(mass_dist) <= mass_thres
 
         # Now start finding distances between cells
