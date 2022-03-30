@@ -859,6 +859,21 @@ class Segmenter(BaseSegmenter):
 
         return out
 
+    @ImageHelper(by_frame=True)
+    def morphological_watershed(self,
+                                image: Image,
+                                watershed_line: bool = True
+                                ) -> Mask:
+        """"""
+        fil = sitk.MorphologicalWatershedImageFilter()
+        fil.SetMarkWatershedLine(watershed_line)
+
+        img = sitk.GetImageFromArray(image)
+        img = fil.Execute(img)
+        img = cast_sitk(img, 'sitkUInt16')
+
+        return sitk.GetArrayFromImage(img)
+
     @ImageHelper(by_frame=False, as_tuple=True)
     def label_by_voting(self,
                         mask: Mask,
