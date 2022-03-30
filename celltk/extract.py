@@ -1,15 +1,15 @@
 import warnings
-from typing import Collection, Tuple, Union
+from typing import Collection, Tuple, Union, Callable
 
 
 import numpy as np
 
 from celltk.core.operation import BaseExtractor
 from celltk.utils.utils import ImageHelper
-from celltk.utils._types import Image, Mask, Track, Arr
+from celltk.utils._types import Image, Mask, Track, Arr, RandomNameProperty
 from celltk.core.arrays import ConditionArray
 from celltk.utils.operation_utils import lineage_to_track, parents_from_track
-
+import celltk.utils.metric_utils as metric_utils
 
 class Extractor(BaseExtractor):
     _metrics = ['label', 'area', 'convex_area', 'filled_area', 'bbox',
@@ -35,22 +35,38 @@ class Extractor(BaseExtractor):
                                 remove_parent: bool = True,
                                 parent_track: int = 0
                                 ) -> Arr:
-        """
+        """Extracts data from stacks of images and constructs a ConditionArray.
+
+        :param images: Images to extract data from.
+        :param masks: Masks to segment images with.
+        :param tracks: Tracks to segment images with.
+        :param channels: Names of channels corresponding to
+        :param regions: Names of segmented regions corresponding,
+            tracks and masks, in that order.
+        :param lineages: Lineage files corresponding to masks if provided.
+        :param time: If int or float, designates time between frames.
+            If array, marks the frame time points.
+        :param condition: Name of the condition
+        :param position_id: Unique identifier if multiple ConditionArrays
+            will share the same condition
+        :param min_trace_length: All cells with shorter traces will
+            be deleted from the final array.
+        :param skip_frames: Use to specify frames to be skipped. If provided
+            to Pipeline, does not need to be provided again, but must match.
+        :param remove_parent: If true, parents of cells are not kept in
+            the final ConditionArray.
+        :param parent_track: If multiple tracks are provided, designates the
+            one to use for lineage tracking
+
+        :return: ConditionArray with data from the images.
+        :rtype: ConditionArray
+
+        The following axes dimensions are used:
         ax 0 - cell locations (nuc, cyto, population, etc.)
         ax 1 - channels (TRITC, FITC, etc.)
         ax 2 - metrics (median_int, etc.)
         ax 3 - cells
         ax 4 - frames
-
-        Args:
-            - image, masks, tracks = self-explanatory
-            - channels - names associated with images
-            - regions - names associated with tracks
-            - lineages - if masks are provided
-            - condition - name of dataframe
-            - remove_parent - if true, use a track to connect par_daught
-                              and remove parents
-            - parent_track - if remove_parent, track to use for lineage info
 
         TODO:
             - Allow an option for caching or not in regionprops
@@ -160,3 +176,150 @@ class Extractor(BaseExtractor):
         self._apply_filters(array)
 
         return array
+
+    def add_extra_metric(self, name: str, func: Callable = None) -> None:
+        """
+        Add custom metrics or metrics from regionprops to array.
+        If function is none, value will just be nan.
+
+        :param name: key for the metric in the ConditionArray
+        :param func: If str, name of the metric from skiamge.regionprops.
+            if Callable, function that calculates the metric. Cannot
+            be used if Operation must be saved as YAML before running.
+
+        :rtype: None
+
+        TODO:
+            - Callable function won't be saveable in YAML files
+            - Add link to regionprops to docstring
+        """
+        if not func:
+            if name in self._possible_metrics:
+                self._metrics.append(name)
+            else:
+                try:
+                    func = getattr(metric_utils, name)
+                except AttributeError:
+                    # Function not implemented by me
+                    func = RandomNameProperty()
+        else:
+            assert isinstance(func, Callable)
+
+        self._props_to_add[name] = func
+
+    def add_derived_metric(self,
+                           metric_name: str,
+                           keys: Collection[Tuple[str]],
+                           func: str = 'sum',
+                           inverse: bool = False,
+                           propagate: (str, bool) = False,
+                           frame_rng: Union[int, Tuple[int]] = None,
+                           *args, **kwargs
+                           ) -> None:
+        """
+        Calculate additional metrics based on information already in array
+
+        :param metric_name: Key to save the metric under
+        :param keys: One or multiple keys to calculate with.
+            Each key will be used to index an array, ConditionArray[key].
+            Each key should produce a 2D array when indexed.
+        :param func: Name of numpy function to apply, e.g. 'sum'
+        :param inverse: If True, repeats the calculation as if the keys
+            were passed in the opposite order and saves in the other keys.
+        :param propagate: If True, propagates the results of the calculation
+            to the other keys in the array.
+        :param frame_rng: Frames to use in calculation. If int, takes that
+            many frames from start of trace. If tuple, uses passed
+            frames.
+
+        TODO:
+            - Add possiblity for custom Callable function
+            - Peaks could probably be passed here???
+            - So could segmentation of peaks???
+        """
+        # Check the inputs now before calculation
+        # Assert that keys include channel, region, and metric
+        peak_metrics = ('predict_peaks', 'active_cells',
+                        'cumulative_active', 'active')
+        for key in keys:
+            assert len(key) == 3
+        if not hasattr(np, func) and not hasattr(metric_utils, func):
+            if metric_name not in peak_metrics:
+                raise ValueError('Metric must be numpy func '
+                                 'or in metric_utils.')
+
+        # Save to calculated metrics to get added after extract is done
+        # TODO: Make a dictionary
+        self._derived_metrics[metric_name] = tuple([func, keys, inverse, propagate,
+                                                    frame_rng, args, kwargs])
+
+        # Fill in the metric with just nan for now
+        if metric_name in peak_metrics:
+            if metric_name == 'predict_peaks':
+                self._props_to_add['slope_prob'] = RandomNameProperty()
+                self._props_to_add['plateau_prob'] = RandomNameProperty()
+                self._props_to_add['peaks'] = RandomNameProperty()
+            else:
+                self._props_to_add['active'] = RandomNameProperty()
+                self._props_to_add['cumulative_active'] = RandomNameProperty()
+        else:
+            self._props_to_add[metric_name] = RandomNameProperty()
+
+        self.logger.info(f'Added derived metric {metric_name}')
+
+    def add_filter(self,
+                   filter_name: str,
+                   metric: str,
+                   region: Union[str, int] = 0,
+                   channel: Union[str, int] = 0,
+                   frame_rng: Union[int, Tuple[int]] = None,
+                   *args, **kwargs
+                   ) -> None:
+        """
+        Remove cells from array that do not match the filter.
+
+        :param filter_name: Options are 'outside', 'inside',
+            'outside_percentile', 'inside_percentile'.
+        :param metric: Name of metric to use. Can be any key in the
+            array.
+        :param region: Name of region to calculate the filter in.
+        :param channel: Name of channel to calculate filter in.
+        :param frame_rng: Frames to use in calculation. If int, takes that
+            many frames from start of trace. If tuple, uses passed
+            frames.
+
+        TODO:
+            - Add ability to pass Callable, has to be done after Extract now
+        """
+        assert hasattr(filter_utils, filter_name), f'{filter_name} not found.'
+        added_metrics = (self._extra_properties
+                         + self._metrics
+                         + list(self._derived_metrics.keys()))
+        assert metric in added_metrics, f'Metric {metric} not found'
+
+        # TODO: Make a dictionary
+        self._filters.append(dict(filter_name=filter_name, metric=metric, region=region,
+                                  channel=channel, frame_rng=frame_rng,
+                                  args=args, kwargs=kwargs))
+
+    def set_metric_list(self, metrics: Collection[str]) -> None:
+        """Sets the list of metrics to get. For a possible list, see
+        skimage.regionprops or Extractor._possible_metrics.
+
+        :param metrics: List of metrics to measure from images
+
+        :return: None
+
+        NOTE:
+            - CellTK can only use the scalar metrics in regionprops.
+        """
+        # Check that skimage can handle the given metrics
+        allowed = [m for m in metrics if m in self._possible_metrics]
+        not_allowed = [m for m in metrics if m not in self._possible_metrics]
+
+        self._metrics = allowed
+
+        # Raise warning for the rest
+        if not_allowed:
+            warnings.warn(f'Metrics {[not_allowed]} are not supported. Use '
+                          'CellArray.add_extra_metric to add custom metrics.')

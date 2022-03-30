@@ -22,8 +22,6 @@ class ConditionArray():
     For now, this class is only built by Extractor. It's not meant to be
     built by the user yet.
     Stores the results from a single condition in an experiment.
-
-    :param regions: Names of the regions
     """
     __slots__ = ('_arr', 'name', 'time', 'coords', '_arr_dim', '_dim_idxs',
                  '_key_dim_pairs', '_key_coord_pairs', 'masks', 'pos_id',
@@ -93,54 +91,68 @@ class ConditionArray():
 
     @property
     def shape(self):
+        """Shape of the data array"""
         return self._arr.shape
 
     @property
     def ndim(self):
+        """Number of dimensions in the data array. Should equal 5."""
         return self._arr.ndim
 
     @property
     def dtype(self):
+        """Data type of the data array. Usually double."""
         return self._arr.dtype
 
     @property
     def coordinates(self):
+        """Names of the coordinates (axes) in the data array"""
         return tuple(self.coords.keys())
 
     @property
     def coordinate_dimensions(self):
+        """Dictionary of coordinate_name : coordinate_length"""
         return {k: len(v) for k, v in self.coords.items()}
 
     @property
     def condition(self):
+        """Name of the data array"""
         return self.name
 
     @property
     def regions(self):
+        """Names of the regions in the data array."""
         return self.coords['regions']
 
     @property
     def channels(self):
+        """Names of the channels in the data array."""
         return self.coords['channels']
 
     @property
     def metrics(self):
+        """Names of the metrics in the data array."""
         return self.coords['metrics']
 
     @property
     def keys(self):
+        """All the possible keys that can be used to index the data array."""
         return list(itertools.product(self.coords['regions'],
                                       self.coords['channels'],
                                       self.coords['metrics']))
 
     @property
     def _is_empty(self) -> bool:
-        """"""
+        """Returns True if any axis has size 0. Usually cell axis."""
         return any([not s for s in self.shape])
 
     def save(self, path: str) -> None:
         """
         Saves ConditionArray to an hdf5 file.
+
+        :param path: Absolute path to save the file.
+
+        :return: None
 
         TODO:
             - Add checking for path and overwrite options
@@ -168,9 +180,13 @@ class ConditionArray():
         f.close()
 
     @classmethod
-    def load(cls, path: str) -> None:
-        """
-        Load a structured arrary and convert to sites dict.
+    def load(cls, path: str) -> "ConditionArray":
+        """Load an hdf5 file and convert to a ConditionArray.
+
+        :param path: Path to the hdf5 file to be loaded.
+
+        :return: Loaded ConditionArray
+        :rtype: ConditionArray
 
         TODO:
             - Add a check that path exists
@@ -180,8 +196,12 @@ class ConditionArray():
 
     @classmethod
     def _build_from_file(cls, f: h5py.File) -> 'ConditionArray':
-        """
-        Given an hdf5 file, returns a ConditionArray instance
+        """Given an hdf5 file object, returns a ConditionArray instance.
+
+        :param f: h5py file object
+
+        :return: ConditionArray
+        :rtype: ConditionArray
         """
         if len(f) != 1:
             raise TypeError('Too many keys in hdf5 file.')
@@ -191,16 +211,33 @@ class ConditionArray():
 
         return _arr
 
-    def _getitem_w_idx(self, idx):
-        """
-        Index CustomArray w/o recalculating the indices each time
+    def _getitem_w_idx(self, idx: Tuple[slice]) -> np.ndarray:
+        """Index ConditionArray w/ pre-calculated slices. Typically
+        called by ExperimentArray. Just a wrapper for
+        _correct_output_dimensions().
+
+        :param idx: Indices to index as slices
+
+        :return: Indexed ConditionArray
+        :rtype: np.ndarray
         """
         return self._correct_output_dimensions(idx)
 
     def _correct_output_dimensions(self,
-                                   idx: Tuple[slice, str]
+                                   idx: Tuple[slice]
                                    ) -> np.ndarray:
-        """Output must be at least 2D, but no other axes of len 1"""
+        """Corrects the dimensions of the output array to be
+        at least 2D, but have no extraneous axes of length 1.
+
+        NOTE:
+            - This will always return at least a 2D array. So
+            cells and frames axes may be length 1.
+
+        :param idx: Indices to index as slices
+
+        :return: Indexed ConditionArray
+        :rtype: np.ndarray
+        """
         out = np.squeeze(self._arr[idx])
         if out.ndim == 1:
             # Figure out how many cells/frames total
@@ -233,22 +270,28 @@ class ConditionArray():
     def _convert_keys_to_index(self,
                                key: Tuple[(str, slice)]
                                ) -> Tuple[(int, slice)]:
-        """
-        Converts strings and slices given in key to the saved
-        dimensions and coordinates of self._xarr.
+        """Converts strings and slices given in key to slices
+        that can be used to index self._arr.
 
-        Args:
-            - key:
+        :param key: Desired key. Can contain str, int, and slice.
 
-        Returns:
-            Converted keys containing no strings
+        :return: Converted keys containing no strings
+        :rtype: Tuple[slice]
 
-        NOTE: integer indices are best provided last. If they are
+        NOTE:
+            - Strings can be used to index the regions, channels, and
+            metrics. Integers must be used to index cells and frames.
+            Passed integers are assumed to be for the cells first, then frames.
+            If more than two integers are passed, raises an error.
+
+        NOTE:
+            - Integer indices are best provided last. If they are
               provided first, they will possibly get overwritten if
               too few keys were provided.
 
         TODO:
             - Add handling of Ellipsis in key
+            - Add handling of bools in key
         """
         # Check that key is not too long
         if len(key) > len(self.coords):
@@ -359,7 +402,13 @@ class ConditionArray():
         return tuple(indices)
 
     def _make_key_coord_pairs(self, coords: dict) -> None:
-        """
+        """Calculates the indices for the user-provided coordinates,
+        and saves as an attribute.
+
+        :param coords: Dictionary of string and int defining the array
+            coordinates.
+
+        :return: None
         """
         # Convert string axis index to integer index
         self._dim_idxs = {k: n for n, k in enumerate(coords.keys())}
@@ -386,7 +435,16 @@ class ConditionArray():
                             key: Tuple[int, str],
                             exclude: str = 'metrics'
                             ) -> Tuple[int, str]:
-        """Returns the components in key that are NOT in the target axis"""
+        """Returns the components of the key that are NOT in the target axis.
+        For example, with ``exclude == metrics``, ['nuc', 'fitc', 'median_intensity']
+        would return ['nuc', 'fitc'].
+
+        :param key: Key to return components from
+        :param exclude: Components from key that will NOT be returned
+
+        :return: Partial key
+        :rtype: Tuple
+        """
         assert exclude in self.coords, f'Coordinate {exclude} not found.'
 
         # Get axis for each key and compare to exclude
@@ -399,8 +457,12 @@ class ConditionArray():
         return tuple(out)
 
     def set_position_id(self, pos: int = None) -> None:
-        """
-        Adds unique identifiers for cells in ConditionArray
+        """Adds unique identifiers to the cells in ConditionArray.
+        Typically called by Pipeline or ExperimentArray.
+
+        :param pos: Integer or string identifying the position
+
+        :return: None
 
         TODO:
             - Catch TypeError, ValueError for non-digit pos
@@ -419,9 +481,15 @@ class ConditionArray():
         self.__setitem__('position_id', arr)
 
     def add_metric_slots(self, name: List[str]) -> None:
-        """
-        This needs to expand self._arr along the metric axis
-        to make room for an additional metric
+        """Expands the ConditionArry to make room for more metrics.
+
+        NOTE:
+            - This method must be used before attempting to add new
+            metrics to the ConditionArray.
+
+        :param name: List of names of the metrics to add
+
+        :return: None
         """
         # Format inputs
         if isinstance(name, str):
@@ -455,15 +523,15 @@ class ConditionArray():
                      delete: bool = True,
                      *args, **kwargs
                      ) -> np.ndarray:
-        """
-        Either uses an arbitrary mask or a saved mask (key) to
-        filter the data. If delete, the underlying structure
+        """Uses an arbitrary mask or a saved mask (key) to
+        filter cells from the data. If delete, the underlying structure
         is changed, otherwise, the data are only returned.
 
         :param mask: A boolean mask to filter cells with. Can be 1D, 2D or 5D.
         :param key: Name of a saved mask to use for filtering cells. Overwrites
             msak if provided.
-        :param delete: If True, cells are removed in the base array
+        :param delete: If True, cells are removed in the base array. Otherwise
+        they are only removed in the array that is returned.
 
         :return: array with cells designated by maks or key removed.
         :rtype: np.ndarray
@@ -509,12 +577,17 @@ class ConditionArray():
     def reshape_mask(self,
                      mask: np.ndarray
                      ) -> Tuple[slice, type(Ellipsis), np.ndarray]:
-        """
-        Takes in a 1D, 2D, or 5D mask and casts to tuple of
-        5 dimensional indices. Use this to apply a 1D mask
+        """Takes in a 1D, 2D, or 5D boolean mask and casts to tuple of
+        5-dimensional indices. Use this to apply a 1D or 2D mask
         to self._arr.
 
-        Assumes that the only thing being filtered is cells.
+        NOTE:
+            - Always assumes that filtering is to happen in cell axis.
+
+        :param mask: Boolean mask to be used as filter.
+
+        :return: Indices that can be used to index ConditionArray
+        :rtype: Tuple
         """
         # new_mask = np.ones(self.shape).astype(bool)
         if mask.ndim == 1:
@@ -536,8 +609,15 @@ class ConditionArray():
                        parent_daughter: Dict,
                        cell_index: Dict
                        ) -> np.ndarray:
-        """
-        Returns 1D boolean mask to remove parent cells
+        """Returns 1D boolean mask to remove traces of cells that divided.
+        Daughter cell traces are kept. Use with reshape_mask to remove
+        parent cells. Typically called by Extractor.
+
+        :param parent_daughter: Dictionary of parent_label : daughter_label
+        :param cell_index: Dictionary of cell_label : cell_index_in_array
+
+        :return: Boolean mask with False in the rows of parent cells
+        :rtype: np.ndarray
 
         TODO:
             - Add option to create cell_index from track
@@ -553,8 +633,14 @@ class ConditionArray():
         return mask
 
     def remove_short_traces(self, min_trace_length: int) -> np.ndarray:
-        """
-        Removes cells with less than min_trace_length non-nan values
+        """Removes cells with less than min_trace_length non-nan values.
+        Uses label as the metric to determine non-nan values. Typically called
+        by Extractor
+
+        :param min_trace_length: Shortest trace that should not be deleted
+
+        :return: array with short traces removed
+        :rtype: np.ndarray
         """
         mask = np.ones(self.shape[self._dim_idxs['cells']]).astype(bool)
 
@@ -577,12 +663,24 @@ class ConditionArray():
                       key: str = None,
                       *args, **kwargs
                       ) -> np.ndarray:
-        """
-        I want this function to be able to generate arbitrary
-        masks from some default functions
-        i.e. percentiles, abs_val, etc..
+        """Generate a mask to remove cells using an arbitrary filter.
 
-        frame_rng only applies to filter_utils right now
+        :param function: If str, name of function in filter_utils. Otherwise,
+            should be a Callable that inputs a 2D array and returns a 2D
+            boolean array.
+        :param metric: Name of metric to use. Can be any key in the
+            array.
+        :param region: Name of region to calculate the filter in.
+        :param channel: Name of channel to calculate filter in.
+        :param frame_rng: Frames to use in calculation. If int, takes that
+            many frames from start of trace. If tuple, uses passed
+            frames.
+        :param key: If given, saves the mask in ConditionArray as key.
+        :param *args: passed to function
+        :param **kwargs: passed to function
+
+        :return: 2D boolean array that masks cells outside filter
+        :rtype: np.ndarray
         """
         # Format inputs to the correct type
         if isinstance(region, int):
@@ -599,13 +697,6 @@ class ConditionArray():
         elif isinstance(function, str):
             # Else mask should come from the filter utils
             try:
-                '''
-                There is a fundamental flaw to using nans to mask the frames
-                as elegant as it seems. The issue is if the frames in question
-                have nans in the data. If the user is expecting ignore_nans to
-                be False, those cells should be removed, but in this case, they
-                are not.
-                '''
                 user_mask = np.zeros_like(vals).astype(bool)
                 idx = None
                 # Select the opposite of the given idx to mark as nan
@@ -646,11 +737,24 @@ class ConditionArray():
         return mask
 
     def get_mask(self, key: str) -> np.ndarray:
+        """Returns a saved mask. Masks are generated and saved
+        using ConditionArray().generate_mask()
+
+        :param key: Name of mask to retreive
+
+        :return: The saved boolean mask
+        :rtype: np.ndarray
+        """
         return self.masks[key]
 
-    def set_time(self, time: float) -> None:
-        """
-        Define the time axis. Time is the interval between frames
+    def set_time(self, time: Union[float, np.ndarray]) -> None:
+        """Define the time axis. Time can be given as a frame interval
+        or an array specifying the time for each frame.
+
+        :param time: If int or float, designates time between frames.
+            If array, marks the frame time points.
+
+        :return: None
         """
         if time is None:
             self.time = self.coords['frames']
@@ -660,8 +764,11 @@ class ConditionArray():
             self.time = np.arange(len(self.coords['frames'])) * time
 
     def set_condition(self, condition: str) -> None:
-        """
-        Updates name of the ConditionArray.
+        """Updates name of the ConditionArray.
+
+        :param condition: New name of the ConditionArray
+
+        :return: None
         """
         self.name = condition
 
@@ -669,7 +776,14 @@ class ConditionArray():
                          key: Tuple[str],
                          prop_to: str = 'both'
                          ) -> None:
-        """Propagates metric value to other keys"""
+        """Propagates metric value to other keys in ConditionArray.
+
+        :param key: Key to metric containing the values to propagate
+        :param prop_to: Define the keys to propagate values to.
+            Options are 'channel', 'region', or 'both'.
+
+        :return: None
+        """
         assert isinstance(key, tuple)
         assert len(key) == 3
 
@@ -699,11 +813,12 @@ class ConditionArray():
             self[nk] = data
 
     def interpolate_nans(self, keys: Collection[tuple] = None) -> None:
-        """Linear interpolation of nans in each row
+        """Linear interpolation of nans for each cell. Modification is done in-place.
 
         :param keys: keys that will have nans removed.
             Each key should be a tuple of strings with length=3
 
+        :return: None
         """
         if not keys:
             keys = self.keys
@@ -720,7 +835,26 @@ class ConditionArray():
                       segment: bool = True,
                       **kwargs
                       ) -> None:
-        """"""
+        """Uses a UNet-based neural net to predict peaks in the traces defined
+        by key. Adds two keys to ConditionArray, 'slope_prob' and
+        'plateau_prob'. If `segment` is True, also adds a 'peaks' key. 'slope_prob'
+        is the probability that a point is on the upward or downward slope of
+        a peak. 'plateau_prob' is the probability that a point is at the top of a
+        peak.
+
+        :param key: Key to the traces to predict peaks with. Must return a
+            2D array.
+        :param model: An instantiated UPeakModel to use
+        :param weight_path: Path to the model weights to use for a new
+            UPeakModel instance
+        :param propagate: If True, propagates peak probabilities to the other
+            keys in ConditionArray
+        :param segment: If True, uses a watershed-based segmentation to label
+            peaks based on the predictions.
+        :param **kwargs: Passed to segmentation function
+
+        :return: None
+        """
         # Get the data that will be used for prediction
         assert isinstance(key, tuple)
         data = self[key]
@@ -759,7 +893,15 @@ class ConditionArray():
                           thres: float = 1,
                           propagate: bool = True
                           ) -> None:
-        """"""
+        """Uses peak labels to mark in what frames cells are active
+
+        :param key: Key defining peak labels
+        :param thres: Leave as 1, not currently used
+        :param propagate: if True, propagate active marks to other
+            keys in ConditionArray
+
+        :return: None
+        """
         # Get the data that will be used for prediction
         assert isinstance(key, tuple)
         data = self[key]
@@ -783,13 +925,14 @@ class ConditionArray():
 
 
 class ExperimentArray():
-    """
-    TODO:
-        - Add Typing hints when the imports are fixed
+    """Base class to create arrays that can store an almost arbitrary number
+    of ConditionArrays. Typically made by Orchestrator.build_experiment_file()
     """
     __slots__ = ('name', 'attrs', 'sites', 'masks', '__dict__')
 
     class _CondIndexer():
+        """Basically a wrapper for a list. Makes it easier to index
+        the ConditionArrays that are returned by ExperimentArray.__getitem__"""
         def __init__(self, data):
             self.data = data
 
@@ -857,63 +1000,84 @@ class ExperimentArray():
 
     @property
     def shape(self):
+        """Returns list of the shape of each ConditionArray."""
         return [v.shape for v in self.sites.values()]
 
     @property
     def ndim(self):
+        """Returns list of the number of dimensoins of each ConditionArray."""
         return [v.ndim for v in self.sites.values()]
 
     @property
     def dtype(self):
+        """Returns list of the data type of each ConditionArray."""
         return [v.dtype for v in self.sites.values()]
 
     @property
     def conditions(self) -> List:
+        """Returns list of the name of each ConditionArray."""
         return [v.name for v in self.sites.values()]
 
     @property
     def regions(self):
+        """Returns list of the names of the regions in each ConditionArray."""
         return [v.regions for v in self.sites.values()]
 
     @property
     def channels(self):
+        """Returns list of the names of the channels in each ConditionArray."""
         return [v.channels for v in self.sites.values()]
 
     @property
     def metrics(self):
+        """Returns list of the names of the metrics in each ConditionArray."""
         return [v.metrics for v in self.sites.values()]
 
     @property
     def time(self):
+        """Returns list of the time axis of each ConditionArray."""
         return [v.time for v in self.sites.values()]
 
     @property
     def coordinates(self):
+        """Returns the names of the coordinates of each ConditionArray."""
         return tuple(next(iter(self.values())).coords.keys())
 
     def items(self):
+        """Use to iterate through the key and array for each ConditionArray."""
         return self.sites.items()
 
     def values(self):
+        """Use to iterate through all of the ConditionArrays."""
         return self.sites.values()
 
     def keys(self):
+        """Use to iterate through all the keys in ExperimentArray."""
         return self.sites.keys()
 
     def update(self, *args, **kwargs):
         return self.sites.update(*args, **kwargs)
 
     def set_time(self, time: float = None) -> None:
-        """
-        Define the time axis
+        """Define the time axis in each ConditionArray. Time can be
+        given as a frame interval or an array specifying the time
+        for each frame.
+
+        :param time: If int or float, designates time between frames.
+            If array, marks the frame time points.
+
+        :return: None
         """
         for v in self.sites.values():
             v.set_time(time)
 
     def set_conditions(self, condition_map: Dict[str, str] = {}) -> None:
-        """
-        Updates name of Condition arrays in Experiment.
-        condition_map should map Condition.name to desired condition.
+        """Updates names of all of the ConditionArrays
+
+        :param condition: Dict of current_name : new_name for
+            each ConditionArray
+
+        :return: None
         """
         for k, v in condition_map.items():
             try:
@@ -927,13 +1091,19 @@ class ExperimentArray():
                        name: str = None,
                        pos_id: int = None,
                        ) -> None:
-        """
-        Used to add a Condition to experiment directly from an hdf5 file
-        Saves as name + pos_id
+        """Adds a ConditionArray to the ExperimentArray from an hdf5 file.
+        The new ConditionArray gets saved as name + pos_id if provided, otherwise
+        uses the name saved in the hdf5 file.
+
+        :param path: Path to the hdf5 file to load
+        :param name: Name of the ConditionArray to be loaded.
+        :param pos_id: Unique identifier for the ConditionArray.
+
+        :return: None
 
         TODO:
             - Add function to walk dirs, and load hdf5 files, with uniq names
-                See Orchestrator.build_experiment_file()
+            See Orchestrator.build_experiment_file()
         """
         # Get array and key
         arr = ConditionArray.load(path)
@@ -953,20 +1123,16 @@ class ExperimentArray():
         in a single hdf5 file at path. Runs merge_conditions() first
         to ensure data doesn't get overwritten.
 
-        Args:
-            path: Path to the location where file should be saved
+        :param path: Path to the location where file should be saved.
 
-        Returns:
-            None
+        :return: None
 
-        Raises:
-            ValueError: If any cell or frame is greater than 2 ** 16
-        """
-        '''
+        :raise: ValueError if any cell or frame is greater than 2 ** 16.
+
         TODO:
             - Add checking for path and overwrite options
             - Add low memory option
-        '''
+        """
         f = h5py.File(path, 'w')
         self.merge_conditions()
         for key, val in self.sites.items():
@@ -991,9 +1157,13 @@ class ExperimentArray():
         f.close()
 
     @classmethod
-    def load(cls, path: str) -> None:
-        """
-        Load a structured arrary and convert to sites dict.
+    def load(cls, path: str) -> "ExperimentArray":
+        """Load an ExperimentArray from an hdf5 file.
+
+        :param path: Path to the hdf5 file
+
+        :return: ExperimentArray
+        :rtype: ExperimentArray
 
         TODO:
             - Add a check that path exists
@@ -1002,19 +1172,21 @@ class ExperimentArray():
         return cls._build_from_file(f)
 
     def remove_empty_sites(self) -> None:
-        """Removes all sites that have any empty dimension"""
+        """Removes all sites that have one or more empty dimensions.
+
+        :return: None
+        """
         self.sites = {k: v for k, v in self.sites.items()
                       if not v._is_empty}
 
     def remove_short_traces(self, min_trace_length: int = 0) -> None:
         """Applies a filter to each condition to remove cells with
-        fewer good frames than min_trace_length
+        fewer non-nan frames than min_trace_length. The 'label' metric is used
+        for determining non-nan frames.
 
-        Args:
-            min_trace_length: Minimum number of frames allowed
+        :param min_trace_length: Minimum number of non-nan frames allowed
 
-        Returns:
-            None
+        :return: None
         """
         masks = [v.remove_short_traces(min_trace_length)
                  for v in self.sites.values()]
@@ -1031,21 +1203,28 @@ class ExperimentArray():
                       key: str = None,
                       individual: bool = True,
                       *args, **kwargs
-                      ) -> np.ndarray:
-        """Generates a boolean mask for each Condition
+                      ) -> List[np.ndarray]:
+        """Generates a boolean mask for each ConditionArray based on
+        an arbitrary filter.
 
-        Args:
-            function:
-            metric:
-            region:
-            channel:
-            frame_rng:
-            key:
-            *args:
-            **kwargs:
+        :param function: If str, name of function in filter_utils. Otherwise,
+            should be a Callable that inputs a 2D array and returns a 2D
+            boolean array.
+        :param metric: Name of metric to use. Can be any key in the
+            array.
+        :param region: Name of region to calculate the filter in.
+        :param channel: Name of channel to calculate filter in.
+        :param frame_rng: Frames to use in calculation. If int, takes that
+            many frames from start of trace. If tuple, uses passed
+            frames.
+        :param key: If given, saves the mask in ConditionArray as key.
+        :param individual: If true, the filter is calculated for each
+            ConditionArray independently. Otherwise, calculated on
+            the whole data set, then applied to ConditionArrays.
+        :param *args: passed to function
+        :param **kwargs: passed to function
 
-        Returns:
-            np.ndarray
+        :return: List of 2D boolean array to masks cells outside filter
         """
         # Format inputs to the correct type
         if isinstance(region, int):
@@ -1083,10 +1262,20 @@ class ExperimentArray():
                      delete: bool = True,
                      *args, **kwargs
                      ) -> np.ndarray:
-        """
-        Either uses an arbitrary mask or a saved mask (key) to
-        filter the data. If delete, the underlying structure
-        is changed, otherwise, the data are only returned.
+        """Uses an arbitrary mask or a saved mask (key) to
+        filter cells from each ConditionArray. If delete, the underlying data
+        are changed. Otherwise, the filtered data are only returned.
+
+        :param mask: A boolean mask to filter cells with. Can be 1D, 2D or 5D.
+        :param key: Name of a saved mask to use for filtering cells. Overwrites
+            msak if provided.
+        :param delete: If True, cells are removed in the base array. Otherwise
+            they are only removed in the array that is returned.
+        :param *args: Passed to filtering function.
+        :param **kwargs: Passed to filtering function.
+
+        :return: array with cells designated by maks or key removed.
+        :rtype: np.ndarray
 
         TODO:
             - Add option to return a new Condition instead of
@@ -1117,17 +1306,35 @@ class ExperimentArray():
         return out
 
     def add_metric_slots(self, name: List[str]) -> None:
-        """"""
+        """Expands each ConditionArry to make room for more metrics.
+
+        NOTE:
+            - This method must be used before attempting to add new
+              metrics to the ConditionArray.
+
+        :param name: List of names of the metrics to add
+
+        :return: None
+        """
         for v in self.sites.values():
             v.add_metric_slots(name)
 
     def merge_conditions(self) -> None:
-        """
-        Concatenate Conditions with matching conditions
+        """Concatenate ConditionArrays with matching conditions.
+        If no arrays have matching conditions, nothing is done.
+        If matching conditions are found, looks for position map to
+        label each uniquely, or will just number them in the order
+        that they were saved in the ExperimentArray. Arrays are concatenated
+        along the cell axis.
+
+        :return: None
+
+        NOTE:
+            - Any masks that have been saved in the individual
+            ConditionArrays will be lost.
 
         TODO:
             - Add a way to pass lists of keys to merge
-            - Difflib might be a way to handle this...
             - Saved masks should also be concatenated and saved
         """
         # Get the unique conditions and respective arrs
@@ -1182,11 +1389,13 @@ class ExperimentArray():
                 self.sites[cond][:] = new_arr
 
     def interpolate_nans(self, keys: Collection[tuple] = None) -> None:
-        """Linear interpolation of nans in each row
+        """Linear interpolation of nans for each cell in each ConditionArray.
+         Modification is done in-place.
 
-        Args:
+        :param keys: keys that will have nans removed.
+            Each key should be a tuple of strings with length=3
 
-        Returns:
+        :return: None
         """
         for v in self.sites.values():
             v.interpolate_nans(keys)
@@ -1198,9 +1407,24 @@ class ExperimentArray():
                       segment: bool = True,
                       **kwargs
                       ) -> None:
-        """
-        kwargs are passed to the segmentation algorithm
-        TODO: Initialize the UPeak model here and pass to the sites
+        """Uses a UNet-based neural net to predict peaks in the traces defined
+        by key in each ConditionArray. Adds two keys to ConditionArrays,
+        'slope_prob' and 'plateau_prob'. If `segment` is True, also adds a
+        'peaks' key. 'slope_prob' is the probability that a point is on
+        the upward or downward slope of a peak. 'plateau_prob' is the
+        probability that a point is at the top of a peak.
+
+        :param key: Key to the traces to predict peaks with. Must return a
+            2D array.
+        :param weight_path: Path to the model weights to use for a new
+            UPeakModel instance
+        :param propagate: If True, propagates peak probabilities to the other
+            keys in ConditionArray
+        :param segment: If True, uses a watershed-based segmentation to label
+            peaks based on the predictions.
+        :param **kwargs: Passed to segmentation function,
+
+        :return: None
         """
         '''
         NOTE: This will fail if any of the sites have different dimensions
@@ -1216,7 +1440,16 @@ class ExperimentArray():
                           thres: float = 1,
                           propagate: bool = True
                           ) -> None:
-        """"""
+        """Uses peak labels to mark in what frames cells are active in
+        each ConditionArray.
+
+        :param key: Key defining peak labels
+        :param thres: Leave as 1, not currently used
+        :param propagate: if True, propagate active marks to other
+            keys in ConditionArray
+
+        :return: None
+        """
         for v in self.sites.values():
             v.mark_active_cells(key, thres, propagate)
 
@@ -1235,13 +1468,57 @@ class ExperimentArray():
                           layout_spec: dict = {},
                           show: bool = False,
                           save: str = None,
+                          figure: go.Figure = None,
                           _format: str = 'svg'
                           ) -> go.Figure:
-        """
-        rename to be like time_plot or something
-        keys must return a 2D arr for this to work.
-        TODO: More generic way to group conditions
-        TODO: Add option to save figures
+        """Used to generate a variety of plots comparing the ConditionArrays for the
+        conditions passed.
+
+        NOTE:
+            - Plotting should still be considered in the beta-stage.
+              Bugs may exist. The API of this function will likely
+              change and/or be replaced in the near future.
+
+        :param keys: Keys to plot from each ConditiomArray. Likely best to
+            pass only one key at a time
+            (e.g. ['nuc', 'fitc', 'median_intensity']).
+        :param condtions: Conditons from the ExperimentArray to plot. If not
+            provided, defaults to plotting all conditions.
+        :param estimator: Used to combine the traces in each ConditionArray.
+            If str, must be name of numpy function. If a function object,
+            will be applied across axis 0 (like numpy). If a functools.partial
+            object, must accept a 2D array and return a 1D array.
+            For example, if 'mean' is provided, the plotted trace will
+            be the mean of all the cells in each ConditionArray.
+            This kwarg is currently incompatible with 'overlay' plot kind.
+        :param err_estimator: Used to estimate the error bars around the
+            estimator. Same stipulations as 'estimator' kwarg.
+        :param colors: Name of colormap or color to use. Seaborn and matplotlib
+            colormaps can be used. Any named CSS color can be used.
+        :param kind: Type of plot. Options are 'line' (self-explanatory),
+            'overlay' (plots the mean over lightened inidivudal traces),
+            and 'hist' (histogram, only alphpa right now)
+        :param title: Title to display on the plot.
+        :param x_label: Label for the x-axis of the plot.
+        :param y_label: Label for the y-axis of the plot.
+        :param x_limit: Lower and upper limit of the x-axis
+        :param y_limit: Lower and upper limit of the y-axis.
+        :param layout_spec: Dictionary specifiying the layout of the go.Figure
+            object. See plotly documentation for options.
+        :paraqm show: If True, plots are displayed to the user.
+        :param save: If given, saves plots with the given filename. The
+            extension of the given string determines the format of the saved
+            plot. If saved as HTML, plot is interactive.
+        :param figure: If given, all plots are made in the given go.Figure
+            object. Otherwise, a new object is created.
+        :param _format: HTML plots give the option to download as a different
+            figure format after making adjustments. This parameter determines
+            that format.
+
+        :return: go.Figure with the data plotted.
+
+        TODO:
+            - More generic way to group conditions
         """
         # Get the data to plot
         keys = tuple(keys) if not isinstance(keys, tuple) else keys
@@ -1251,7 +1528,7 @@ class ExperimentArray():
 
         # Make the base plot
         fig = plot_groups(arrs, conditions, estimator, err_estimator,
-                          kind=kind, time=time, colors=colors)
+                          kind=kind, time=time, colors=colors, figure=figure)
 
         # Update the figure layout
         fig.update_xaxes(title=x_label, range=x_limit)
@@ -1289,7 +1566,9 @@ class ExperimentArray():
                               show: bool = False,
                               save: str = None
                               ) -> plt.Figure:
-        """"""
+        """Use celltk.utils.plot_utils.plot_trace_predictions() instead.
+        Not currently well implemented.
+        """
         # Get the data to plot
         keys = tuple(keys) if not isinstance(keys, tuple) else keys
         conditions = conditions if conditions else self.conditions

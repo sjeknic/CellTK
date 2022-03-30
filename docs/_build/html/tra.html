@@ -40,6 +40,7 @@
               <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
 <ul class="current">
 <li class="toctree-l1"><a class="reference internal" href="quick.html">Quickstart Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="pipes.html">Pipelines</a></li>
 <li class="toctree-l1 current"><a class="reference internal" href="opers.html">Operations</a><ul class="current">
 <li class="toctree-l2"><a class="reference internal" href="pro.html">Processor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="seg.html">Segmenter</a></li>
@@ -77,6 +78,227 @@
              
   <section id="module-celltk.track">
 <span id="tracker"></span><h1>Tracker<a class="headerlink" href="#module-celltk.track" title="Permalink to this headline"></a></h1>
+<dl class="py class">
+<dt class="sig sig-object py" id="celltk.track.Tracker">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">celltk.track.</span></span><span class="sig-name descname"><span class="pre">Tracker</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">output</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'track'</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#celltk.track.Tracker" title="Permalink to this definition"></a></dt>
+<dd><dl class="py method">
+<dt class="sig sig-object py" id="celltk.track.Tracker.bayesian_tracker">
+<span class="sig-name descname"><span class="pre">bayesian_tracker</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">mask</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">config_path</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'celltk/config/bayes_config.json'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">update_method</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'exact'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#celltk.track.Tracker.bayesian_tracker" title="Permalink to this definition"></a></dt>
+<dd><p>Wrapper for btrack, a Bayesian-based tracking algorithm.
+Please see: <a class="reference external" href="https://github.com/quantumjot/BayesianTracker">https://github.com/quantumjot/BayesianTracker</a></p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>mask</strong> (<code class="xref py py-func docutils literal notranslate"><span class="pre">NewType()</span></code>(<code class="docutils literal notranslate"><span class="pre">mask</span></code>, <code class="xref py py-class docutils literal notranslate"><span class="pre">ndarray</span></code>)) – Mask with objects to be segmented</p></li>
+<li><p><strong>config_path</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>) – Path to configuration file. Must be JSON.</p></li>
+<li><p><strong>update_method</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>) – Method to use when optimizing the solution.
+Options are ‘exact’ and ‘approximate’. Use approximate if
+exact is taking too long or utilizing excessive resources.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p><code class="xref py py-func docutils literal notranslate"><span class="pre">NewType()</span></code>(<code class="docutils literal notranslate"><span class="pre">track</span></code>, <code class="xref py py-class docutils literal notranslate"><span class="pre">ndarray</span></code>)</p>
+</dd>
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><p>Track with objects linked</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="celltk.track.Tracker.detect_cell_division">
+<span class="sig-name descname"><span class="pre">detect_cell_division</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">image</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">track</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mask</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">displacement_thres</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">50</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">frame_thres</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">3</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mass_thres</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.15</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dist_thres</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.35</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dot_thres</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">-</span> <span class="pre">0.7</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">angle_weight</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.5</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#celltk.track.Tracker.detect_cell_division" title="Permalink to this definition"></a></dt>
+<dd><p>Detects cells that have divided based on location, size,
+and intensity information. Daughter cells are expected to
+be approximately half the total intensity of the mother cell,
+and to have the mother cell roughly in line and between them.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<ul class="simple">
+<li><p>Any Track passed to this function will have all other
+division events removed.</p></li>
+</ul>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>image</strong> (<code class="xref py py-func docutils literal notranslate"><span class="pre">NewType()</span></code>(<code class="docutils literal notranslate"><span class="pre">image</span></code>, <code class="xref py py-class docutils literal notranslate"><span class="pre">ndarray</span></code>)) – Image with intensity information.</p></li>
+<li><p><strong>track</strong> (<code class="xref py py-func docutils literal notranslate"><span class="pre">NewType()</span></code>(<code class="docutils literal notranslate"><span class="pre">track</span></code>, <code class="xref py py-class docutils literal notranslate"><span class="pre">ndarray</span></code>)) – Track of objects to detect division on.</p></li>
+<li><p><strong>mask</strong> (<code class="xref py py-data docutils literal notranslate"><span class="pre">Optional</span></code>[<code class="xref py py-func docutils literal notranslate"><span class="pre">NewType()</span></code>(<code class="docutils literal notranslate"><span class="pre">mask</span></code>, <code class="xref py py-class docutils literal notranslate"><span class="pre">ndarray</span></code>)]) – Mask of objects to detect division on. Note
+that the objects must already be linked from frame
+to frame for the algorithm to work.</p></li>
+<li><p><strong>displacement_thres</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code>) – Maximum distance allowed from
+the centroid of a parent cell to the centroid of a
+daughter cell.</p></li>
+<li><p><strong>frame_thres</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code>) – Maximum number of frames from the division
+event to a daughter cell.</p></li>
+<li><p><strong>mass_thres</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code>) – Maximum error for total intensity of a
+daughter cell relataive to half of the mother cell’s
+intensity.</p></li>
+<li><p><strong>dist_thres</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code>) – Maximum error allowed for location of
+mother cell relative to location of the daughter cells.
+Mother cell is expected to be equidistant from the
+daughter cells.</p></li>
+<li><p><strong>dot_thres</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code>) – Maximum value of the normalized dot
+product between the two vectors from each daughter
+cell to the mother cell. Essentially a measure
+of the angle between the daughter cells.</p></li>
+<li><p><strong>angle_weight</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code>) – Weight given to angle and distance information
+when assigning daughter cells. If multiple candidate daughters are
+found, they are assigned based on intensity information
+and angle information.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p><code class="xref py py-func docutils literal notranslate"><span class="pre">NewType()</span></code>(<code class="docutils literal notranslate"><span class="pre">track</span></code>, <code class="xref py py-class docutils literal notranslate"><span class="pre">ndarray</span></code>)</p>
+</dd>
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><p>Track with objects linked and cell division marked</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="celltk.track.Tracker.kit_sch_ge_tracker">
+<span class="sig-name descname"><span class="pre">kit_sch_ge_tracker</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">image</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mask</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">default_roi_size</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">2</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">delta_t</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">3</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cut_off_distance</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">allow_cell_division</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">postprocessing_key</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#celltk.track.Tracker.kit_sch_ge_tracker" title="Permalink to this definition"></a></dt>
+<dd><p>Tree-based tracking algorithm. First creates small
+tracklets within delta_t frames, then finds a globally optimal
+solution for linking the tracklets to form full tracks. Has
+built-in cell detection and can also combine objects.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<ul class="simple">
+<li><p>Objects can change in this algorithm, so the output is</p></li>
+</ul>
+<p>not guaranteed to have the exact same objects as the input
+mask.</p>
+</div>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<ul class="simple">
+<li><p>A current Gurobi license is required to use this algorithm.</p></li>
+</ul>
+<p>Personal licenses are free for academics. Please see _________
+if you need help installing or using a license. If you run into
+issues, please open an issue on Github. ______________</p>
+</div>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<ul class="simple">
+<li><p>This tracking algorithm was developed by ____________</p></li>
+</ul>
+<p>and can be found at _______________.</p>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>image</strong> (<code class="xref py py-func docutils literal notranslate"><span class="pre">NewType()</span></code>(<code class="docutils literal notranslate"><span class="pre">image</span></code>, <code class="xref py py-class docutils literal notranslate"><span class="pre">ndarray</span></code>)) – Image with intensity information</p></li>
+<li><p><strong>mask</strong> (<code class="xref py py-func docutils literal notranslate"><span class="pre">NewType()</span></code>(<code class="docutils literal notranslate"><span class="pre">mask</span></code>, <code class="xref py py-class docutils literal notranslate"><span class="pre">ndarray</span></code>)) – Mask with objects to be tracked</p></li>
+<li><p><strong>default_roi_size</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code>) – Size of the region to look for connecting
+objects. Set relative to the mean size of the objects. i.e. 2
+means a search area twice as large as the mean object.</p></li>
+<li><p><strong>delta_t</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code>) – Number of frames in each window for forming tracklets.</p></li>
+<li><p><strong>cut_off_distance</strong> (<code class="xref py py-data docutils literal notranslate"><span class="pre">Optional</span></code>[<code class="xref py py-data docutils literal notranslate"><span class="pre">Tuple</span></code>]) – Maximum distance between linked objects</p></li>
+<li><p><strong>allow_cell_division</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code>) – If True, attempt to locate and mark
+dividing cells.</p></li>
+<li><p><strong>postprocessing_key</strong> (<code class="xref py py-data docutils literal notranslate"><span class="pre">Optional</span></code>[<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>]) – TODO. See KIT-Sch-GE documentation</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p><code class="xref py py-func docutils literal notranslate"><span class="pre">NewType()</span></code>(<code class="docutils literal notranslate"><span class="pre">track</span></code>, <code class="xref py py-class docutils literal notranslate"><span class="pre">ndarray</span></code>)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="celltk.track.Tracker.lineage_masks">
+<span class="sig-name descname"><span class="pre">lineage_masks</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">track</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#celltk.track.Tracker.lineage_masks" title="Permalink to this definition"></a></dt>
+<dd><p>Creates a mask where all daughter cells have
+the label of their parent cell.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>track</strong> (<code class="xref py py-func docutils literal notranslate"><span class="pre">NewType()</span></code>(<code class="docutils literal notranslate"><span class="pre">track</span></code>, <code class="xref py py-class docutils literal notranslate"><span class="pre">ndarray</span></code>)) – Track with parent and daughter cells.</p>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p><code class="xref py py-func docutils literal notranslate"><span class="pre">NewType()</span></code>(<code class="docutils literal notranslate"><span class="pre">mask</span></code>, <code class="xref py py-class docutils literal notranslate"><span class="pre">ndarray</span></code>)</p>
+</dd>
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><p></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="celltk.track.Tracker.linear_tracker_w_properties">
+<span class="sig-name descname"><span class="pre">linear_tracker_w_properties</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">mask</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#celltk.track.Tracker.linear_tracker_w_properties" title="Permalink to this definition"></a></dt>
+<dd><p>Like simple_linear_tracker, but with the ability
+to specify specific properties to use in the cost
+function</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p><code class="xref py py-func docutils literal notranslate"><span class="pre">NewType()</span></code>(<code class="docutils literal notranslate"><span class="pre">track</span></code>, <code class="xref py py-class docutils literal notranslate"><span class="pre">ndarray</span></code>)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="celltk.track.Tracker.simple_linear_tracker">
+<span class="sig-name descname"><span class="pre">simple_linear_tracker</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">mask</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">voronoi_split</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#celltk.track.Tracker.simple_linear_tracker" title="Permalink to this definition"></a></dt>
+<dd><p>Tracks objects by optimizing the area overlap
+from frame to frame.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>mask</strong> (<code class="xref py py-func docutils literal notranslate"><span class="pre">NewType()</span></code>(<code class="docutils literal notranslate"><span class="pre">mask</span></code>, <code class="xref py py-class docutils literal notranslate"><span class="pre">ndarray</span></code>)) – Mask with the objects to be tracked uniquely labeled.</p></li>
+<li><p><strong>voronoi_split</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code>) – If True, creates a voronoi
+map from the objects in mask. Uses that map
+to keep objects separated in each frame. Slows
+down computation.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p><code class="xref py py-func docutils literal notranslate"><span class="pre">NewType()</span></code>(<code class="docutils literal notranslate"><span class="pre">track</span></code>, <code class="xref py py-class docutils literal notranslate"><span class="pre">ndarray</span></code>)</p>
+</dd>
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><p>Track with objects linked</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="celltk.track.Tracker.simple_watershed_tracker">
+<span class="sig-name descname"><span class="pre">simple_watershed_tracker</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">mask</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">connectivity</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">2</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">watershed_line</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">keep_seeds</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#celltk.track.Tracker.simple_watershed_tracker" title="Permalink to this definition"></a></dt>
+<dd><p>Uses watershed to track from objects in one frame to objects
+in the next. Useful for objects that grow in size, but don’t move
+much, such as bacterial colonies.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>mask</strong> (<code class="xref py py-func docutils literal notranslate"><span class="pre">NewType()</span></code>(<code class="docutils literal notranslate"><span class="pre">mask</span></code>, <code class="xref py py-class docutils literal notranslate"><span class="pre">ndarray</span></code>)) – Mask with the objects to be tracked uniquely labeled.</p></li>
+<li><p><strong>connectivity</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code>) – Determines the local neighborhood around a pixel.
+Defined as the number of orthogonal steps needed to reach a pixel.</p></li>
+<li><p><strong>watershed_line</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code>) – If True, a one-pixel wide line separates the
+regions obtained by the watershed algorithm. The line is labeled 0.</p></li>
+<li><p><strong>keep_seeds</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code>) – If True, seeds from previous frame are always
+kept. This is more robust for segmentation that is incomplete
+or fragmented in some frames. However, the mask will be
+monotonically increasing in size. Not appropriate for images
+with drift or for moving objects.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p><code class="xref py py-func docutils literal notranslate"><span class="pre">NewType()</span></code>(<code class="docutils literal notranslate"><span class="pre">track</span></code>, <code class="xref py py-class docutils literal notranslate"><span class="pre">ndarray</span></code>)</p>
+</dd>
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><p>Track with objects linked</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
 </section>
 
 

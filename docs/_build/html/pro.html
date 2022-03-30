@@ -40,6 +40,7 @@
               <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
 <ul class="current">
 <li class="toctree-l1"><a class="reference internal" href="quick.html">Quickstart Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="pipes.html">Pipelines</a></li>
 <li class="toctree-l1 current"><a class="reference internal" href="opers.html">Operations</a><ul class="current">
 <li class="toctree-l2 current"><a class="current reference internal" href="#">Processor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="seg.html">Segmenter</a></li>
@@ -175,7 +176,7 @@ beta should be (K1 + K2) / 2</p>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="celltk.process.Processor.unet_predict">
-<span class="sig-name descname"><span class="pre">unet_predict</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">image</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">weight_path</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">roi</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">2</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">batch</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">classes</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">3</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#celltk.process.Processor.unet_predict" title="Permalink to this definition"></a></dt>
+<span class="sig-name descname"><span class="pre">unet_predict</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">image</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">weight_path</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'celltk/config/unet_example_cell_weights.hdf5'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">roi</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">2</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">batch</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">classes</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">3</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#celltk.process.Processor.unet_predict" title="Permalink to this definition"></a></dt>
 <dd><p>roi - the prediction values are returned only for the roi
 batch - number of frames passed to model. None is all of them.
 classes - number of output categories from the model (has to match weights)</p>

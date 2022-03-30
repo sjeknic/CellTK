@@ -10,6 +10,7 @@ import skimage.filters as filt
 import skimage.segmentation as segm
 import skimage.util as util
 import scipy.ndimage as ndi
+import sklearn.preprocessing as preproc
 
 from celltk.core.operation import BaseProcessor
 from celltk.utils._types import Image, Mask, Track, Same
@@ -17,7 +18,8 @@ from celltk.utils.utils import ImageHelper
 from celltk.utils.operation_utils import (sliding_window_generator,
                                           shift_array, crop_array, PadHelper,
                                           wavelet_background_estimate,
-                                          wavelet_noise_estimate, cast_sitk)
+                                          wavelet_noise_estimate, cast_sitk,
+                                          get_image_pixel_type)
 
 
 class Processor(BaseProcessor):
@@ -25,7 +27,6 @@ class Processor(BaseProcessor):
     TODO:
         - Add stand-alone crop function
         - Add optical-flow registration
-        - Add N4 bias correction https://simpleitk.readthedocs.io/en/master/link_N4BiasFieldCorrection_docs.html
         - Add flat fielding from reference
         - Add rescaling intensity stand alone
     """
@@ -188,6 +189,55 @@ class Processor(BaseProcessor):
         return image - bg
 
     @ImageHelper(by_frame=True)
+    def n4_illumination_bias_correction(self,
+                                        image: Image,
+                                        mask: Mask = None,
+                                        iterations: Collection[int] = 50,
+                                        num_points: Collection[int] = 4,
+                                        histogram_bins: int = 200,
+                                        spline_order: int = 3,
+                                        ) -> Image:
+        """
+
+        TODO:
+            - Add subsampling of the image
+        """
+        # Check the inputs
+        if (image < 1).any():
+            warnings.warn('N4 correction of images with small '
+                          'values can produce poor results.')
+
+        if isinstance(iterations, int):
+            iterations = [iterations] * 4  # 4 levels of correction
+        else:
+            assert len(iterations) == 4
+
+        if isinstance(num_points, int):
+            num_points = [num_points] * 2  # 2D image
+        else:
+            assert len(num_points) == 2
+
+        # Set up the filter
+        fil = sitk.N4BiasFieldCorrectionImageFilter()
+        fil.SetMaximumNumberOfIterations(iterations)
+        fil.SetNumberOfControlPoints(num_points)
+        fil.SetNumberOfHistogramBins(histogram_bins)
+        fil.SetSplineOrder(spline_order)
+
+        # Execute
+        img = sitk.GetImageFromArray(image)
+        img = cast_sitk(img, 'sitkFloat32', cast_up=True)
+        if mask is not None:
+            mask = sitk.GetImageFromArray(mask)
+            mask = cast_sitk(img, 'sitkUInt8')
+            out = fil.Execute(img, mask)
+        else:
+            out = fil.Execute(img)
+
+        out = cast_sitk(out, 'sitkFloat32')
+        return sitk.GetArrayFromImage(out)
+
+    @ImageHelper(by_frame=True)
     def curvature_anisotropic_diffusion(self,
                                         image: Image,
                                         iterations: int = 5,
@@ -237,6 +287,15 @@ class Processor(BaseProcessor):
         TODO:
             - Could be run faster on whole stack
         """
+        # Input must be in [-1, 1]
+        px = get_image_pixel_type(image)
+        if px == 'float':
+            image = preproc.maxabs_scale(
+                image.reshape(-1, 1)
+            ).reshape(image.shape)
+        else:
+            image = util.img_as_float32(image)
+
         if orientation in ('h', 'horizontal'):
             sobel = filt.sobel_h(image)
         elif orientation in ('v', 'vertical'):
@@ -316,6 +375,9 @@ class Processor(BaseProcessor):
         alpha should be (K2 - K1) / 6
         beta should be (K1 + K2) / 2
         """
+        # Cast to float first to avoid precision errors
+        image = util.img_as_float32(image)
+
         img = sitk.GetImageFromArray(image)
         if method == 'sigmoid':
             if all([not a for a in (alpha, beta, k1, k2)]):
@@ -333,7 +395,8 @@ class Processor(BaseProcessor):
                 # Convert to array and use np to find values
                 _arr = sitk.GetArrayFromImage(_ma)
                 _arr = _arr[_arr > 0]
-                k1 = np.percentile(_arr, 95 )
+
+                k1 = np.percentile(_arr, 95)
                 k2 = np.mean(_arr)
                 if k1 <= k2: warnings.warn('Sigmoid param estimation poor.')
                 alpha = (k2 - k1) / 6.
@@ -470,7 +533,7 @@ class Processor(BaseProcessor):
     @ImageHelper(by_frame=False)
     def unet_predict(self,
                      image: Image,
-                     weight_path: str,
+                     weight_path: str = 'celltk/config/unet_example_cell_weights.hdf5',
                      roi: Union[int, str] = 2,
                      batch: int = None,
                      classes: int = 3,

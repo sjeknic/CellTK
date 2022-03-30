@@ -43,6 +43,7 @@ def plot_groups(arrs: Collection[np.ndarray],
                 legend: bool = True,
                 template: str = None,
                 figure_spec: dict = {},
+                figure: go.Figure = None,
                 *args, **kwargs
                 ) -> go.Figure:
     """
@@ -65,14 +66,14 @@ def plot_groups(arrs: Collection[np.ndarray],
     if colors:
         if isinstance(colors, str):
             # TODO: This won't work well for discrete colorscales
-            colorscale = itertools.cycle(pcol.get_colorscale(colors))
+            # colorscale = itertools.cycle(pcol.get_colorscale(colors))
             colorscale = itertools.cycle(sns.color_palette(colors, len(arrs)))
         elif isinstance(colors, (list, tuple)):
             colorscale  = itertools.cycle(colors)
 
 
     # Make the plot and add the data
-    fig = go.Figure()
+    fig = figure if figure else go.Figure()
     for idx, data in enumerate(itertools.zip_longest(arrs, keys)):
         arr, key = data
 
@@ -140,7 +141,7 @@ def plot_trace_predictions(traces: np.ndarray,
                            roi: Union[int, Tuple[int]] = None,
                            cmap: str = 'plasma',
                            color_limit: Tuple[int] = (0, 1),
-                           y_limit: Tuple[int] = (0, 6),
+                           y_limit: Tuple[int] = None,
                            ) -> plt.Figure:
     """"""
     rows, cols = (8, 4)

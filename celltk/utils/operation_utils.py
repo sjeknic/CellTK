@@ -8,12 +8,14 @@ import skimage.measure as meas
 import skimage.segmentation as segm
 import scipy.ndimage as ndi
 import scipy.optimize as opti
+import scipy.spatial.distance as distance
 import mahotas.segmentation as mahotas_seg
 import SimpleITK as sitk
 
 from celltk.utils._types import Mask, Track
 
-# TODO: Add label by parent function
+# TODO: Add create lineage tree graph (maybe in plot_utils)
+
 
 def gray_fill_holes(labels: np.ndarray) -> np.ndarray:
     """
@@ -283,11 +285,13 @@ def ndi_binary_fill_holes(labels: np.ndarray,
 def mask_to_seeds(mask: np.ndarray,
                   method: str = 'sitk',
                   output: str = 'mask',
-                  binary: bool = True) -> Union[np.ndarray, list]:
+                  binary: bool = True
+                  ) -> Union[np.ndarray, list]:
     """Find centroid of all objects and return, either as list of points or labeled mask
     If binary, all seeds are 1, otherwise, preserve labels
 
-    Currently, none of the options d anything
+    TOOD:
+        - Make the input options actually do something
     """
     if method == 'sitk':
         img = sitk.GetImageFromArray(mask)
@@ -316,8 +320,6 @@ def track_to_mask(track: Track, idx: np.ndarray = None) -> Mask:
     Args:
         - track
         - idx: locations of parent values to fill in
-
-    See https://stackoverflow.com/questions/3662361/
     """
     if idx is None: idx = track < 0
     ind = ndi.distance_transform_edt(idx,
@@ -358,8 +360,11 @@ def track_to_lineage(track: Track) -> np.ndarray:
     # lineage[:, 1] = (label, first frame, last frame, parent)
     lineage = np.empty((len(cells), 4)).astype(np.uint16)
     for row, cell in enumerate(cells):
-        frames = np.where(track == cell)[0]
-        first, last = frames[0], frames[-1]
+        # Mark if cell is in each frame
+        cell_mask = np.array([cell in t for t in track])
+        first = np.argmax(cell_mask)
+        # -1 is needed because reversed array is still 0-indexed
+        last = len(cell_mask) - 1 - np.argmax(cell_mask[::-1])
 
         lineage[row] = [cell, first, last, parent_lookup[cell]]
 
@@ -372,12 +377,9 @@ def lineage_to_track(mask: Mask,
     """
     Each mask in each frame should have a pixel == -1 * parent
 
-    See CellTrackingChallenge and BayesianTracker.ldep for possible
-    formats of the lineage array.
-
     TODO:
         - This won't work if area(region) <= ~6, depending on shape
-        - Also might not work for discontinuous regions
+        - Also may not work for discontinuous regions
     """
     out = mask.copy().astype(np.int16)
     for (lab, app, dis, par) in lineage:
@@ -389,6 +391,17 @@ def lineage_to_track(mask: Mask,
             x = int(np.floor(np.sum(lab_pxl[0]) / len(lab_pxl[0])))
             y = int(np.floor(np.sum(lab_pxl[1]) / len(lab_pxl[1])))
             out[app, x, y] = -1 * par
+
+    return out
+
+
+def label_by_parent(mask: Mask, lineage: np.ndarray) -> Mask:
+    """Replaces daughter cell labels with their parent label
+    """
+    out = mask.copy().astype(np.int16)
+    for (lab, app, dis, par) in lineage:
+        if par and par != lab:
+            out[mask == lab] = par
 
     return out
 
@@ -418,7 +431,99 @@ def sliding_window_generator(arr: np.ndarray, overlap: int = 0) -> Generator:
         yield from arr
 
 
-# TODO: Test including @numba.njit here
+def data_from_regionprops_table(regionprops: Dict[int, dict],
+                                metric: str,
+                                labels: List[int] = None,
+                                frames: List[int] = None,
+                                ) -> Union[np.ndarray, float]:
+    """Given a list of regionprops data, return data for specified metrics
+    at certain label, frame indices"""
+    if labels is not None or frames is not None:
+        assert len(labels) == len(frames)
+        out = []
+        for lab, fr, in zip(labels, frames):
+            # Each regionprop comes from regionprops_table (i.e. is Dict)
+            data = regionprops[fr]
+            # Assume labels in regionprops are unique
+            idx = np.argmax(data['label'] == lab)
+            out.append(np.array([data[k][idx] for k in data if metric in k]))
+    else:
+        # If not provided, collect data for all frames
+        # Each entry in out are the data for a single label for all frames
+        # i.e. out = [([cell0]...[cellN])_0 ... ([cell0]...[cellN])_F]
+        out = []
+        # Each rp is one frame
+        for rp in regionprops.values():
+            fr = []
+            keys = [k for k in rp if metric in k]
+            # Each n is one cell
+            for n in range(len(rp[keys[0]])):
+                fr.append([rp[k][n] for k in keys])
+            out.append(fr)
+
+    return out
+
+
+def paired_dot_distance(par_xy: np.ndarray,
+                        dau_xy: np.ndarray
+                        ) -> Tuple[np.ndarray]:
+    """Calculates error for normalized dot distance and error along line
+
+
+    NOTE:
+        - x, y are switched in this function relative to the image.
+    TODO:
+        - Better docstring
+    """
+    # Get the vector from the candidate parent to each daughter
+    vectors = []
+    for (x, y) in dau_xy:
+        vectors.append([par_xy[0] - x, par_xy[1] - y])
+
+    # Slow, but only a few samples so does it really matter?
+    dot = np.ones((len(vectors), len(vectors)))
+    dist = np.ones_like(dot)
+    for i, (v0, d0) in enumerate(zip(vectors, dau_xy)):
+        for j, (v1, d1) in enumerate(zip(vectors, dau_xy)):
+            if j > i:
+                dot[i, j] = (
+                    np.dot(v0, v1) / (np.linalg.norm(v0) * np.linalg.norm(v1))
+                )
+                dist[i, j] = _get_intersect_to_midpt_error(d0, d1, par_xy)
+
+    return dot, dist
+
+
+def _get_intersect_to_midpt_error(lp0: np.ndarray,
+                                  lp1: np.ndarray,
+                                  tp: np.ndarray
+                                  ) -> float:
+    """From: http://paulbourke.net/geometry/pointlineplane/
+
+    :param lp0: line point 0
+    :param lp1: line point 1
+    :param tp: test point
+
+    """
+    # Line pts must be array for norm calculation
+    lp0 = np.asarray(lp0)
+    lp1 = np.asarray(lp1)
+
+    u = ((tp[0] - lp0[0]) * (lp1[0] - lp0[0]) +
+         (tp[1] - lp0[1]) * (lp1[1] - lp0[1]))
+    u /= np.linalg.norm(lp0 - lp1) ** 2
+
+    x = lp0[0] + u * (lp1[0] - lp0[0])
+    y = lp0[1] + u * (lp1[1] - lp0[1])
+
+    total = distance.pdist(np.vstack([lp0, lp1]))
+    parent = distance.pdist(np.vstack([lp0, [x, y]]))
+
+    # This is error from mid point. If parent is exactly
+    # in the middle, this will return 0
+    return np.abs(0.5 - parent / total)
+
+
 def shift_array(array: np.ndarray,
                 shift: tuple,
                 fill: float = np.nan,
@@ -578,7 +683,7 @@ def match_labels_linear(source: np.ndarray, dest: np.ndarray) -> np.ndarray:
     # Check if all dest labels were labeled
     # TODO: Should add option to check source labels
     if len(d_idx) < len(dest_labels):
-        # Get the indices of the unlabled and add to the original.
+        # Get the indices of the unlabled and add to the original
         unlabeled = set(range(len(dest_labels))).difference(d_idx)
         unlabeled = np.fromiter(unlabeled, int)
         new_labels = np.arange(1, len(unlabeled) + 1) + np.max(source_labels)

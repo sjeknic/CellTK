@@ -39,6 +39,7 @@
               <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
 <ul class="current">
 <li class="toctree-l1"><a class="reference internal" href="quick.html">Quickstart Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="pipes.html">Pipelines</a></li>
 <li class="toctree-l1"><a class="reference internal" href="opers.html">Operations</a></li>
 <li class="toctree-l1 current"><a class="current reference internal" href="#">Arrays</a></li>
 </ul>
@@ -75,28 +76,70 @@
 <dd><p>For now, this class is only built by Extractor. It’s not meant to be
 built by the user yet.
 Stores the results from a single condition in an experiment.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
-<dd class="field-odd"><p><strong>regions</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">List</span></code>[<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>]) – Names of the regions</p>
-</dd>
-</dl>
 <dl class="py method">
 <dt class="sig sig-object py" id="celltk.core.arrays.ConditionArray.add_metric_slots">
 <span class="sig-name descname"><span class="pre">add_metric_slots</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#celltk.core.arrays.ConditionArray.add_metric_slots" title="Permalink to this definition"></a></dt>
-<dd><p>This needs to expand self._arr along the metric axis
-to make room for an additional metric</p>
+<dd><p>Expands the ConditionArry to make room for more metrics.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<ul class="simple">
+<li><p>This method must be used before attempting to add new</p></li>
+</ul>
+<p>metrics to the ConditionArray.</p>
+</div>
 <dl class="field-list simple">
-<dt class="field-odd">Return type</dt>
-<dd class="field-odd"><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">None</span></code></p>
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>name</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">List</span></code>[<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>]) – List of names of the metrics to add</p>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">None</span></code></p>
+</dd>
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><p>None</p>
 </dd>
 </dl>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="celltk.core.arrays.ConditionArray.channels">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">channels</span></span><a class="headerlink" href="#celltk.core.arrays.ConditionArray.channels" title="Permalink to this definition"></a></dt>
+<dd><p>Names of the channels in the data array.</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="celltk.core.arrays.ConditionArray.condition">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">condition</span></span><a class="headerlink" href="#celltk.core.arrays.ConditionArray.condition" title="Permalink to this definition"></a></dt>
+<dd><p>Name of the data array</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="celltk.core.arrays.ConditionArray.coordinate_dimensions">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">coordinate_dimensions</span></span><a class="headerlink" href="#celltk.core.arrays.ConditionArray.coordinate_dimensions" title="Permalink to this definition"></a></dt>
+<dd><p>coordinate_length</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>Dictionary of coordinate_name</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="celltk.core.arrays.ConditionArray.coordinates">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">coordinates</span></span><a class="headerlink" href="#celltk.core.arrays.ConditionArray.coordinates" title="Permalink to this definition"></a></dt>
+<dd><p>Names of the coordinates (axes) in the data array</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="celltk.core.arrays.ConditionArray.dtype">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">dtype</span></span><a class="headerlink" href="#celltk.core.arrays.ConditionArray.dtype" title="Permalink to this definition"></a></dt>
+<dd><p>Data type of the data array. Usually double.</p>
 </dd></dl>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="celltk.core.arrays.ConditionArray.filter_cells">
 <span class="sig-name descname"><span class="pre">filter_cells</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">mask</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">key</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">delete</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#celltk.core.arrays.ConditionArray.filter_cells" title="Permalink to this definition"></a></dt>
-<dd><p>Either uses an arbitrary mask or a saved mask (key) to
-filter the data. If delete, the underlying structure
+<dd><p>Uses an arbitrary mask or a saved mask (key) to
+filter cells from the data. If delete, the underlying structure
 is changed, otherwise, the data are only returned.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
@@ -104,7 +147,429 @@ is changed, otherwise, the data are only returned.</p>
 <li><p><strong>mask</strong> (<code class="xref py py-data docutils literal notranslate"><span class="pre">Optional</span></code>[<code class="xref py py-class docutils literal notranslate"><span class="pre">ndarray</span></code>]) – A boolean mask to filter cells with. Can be 1D, 2D or 5D.</p></li>
 <li><p><strong>key</strong> (<code class="xref py py-data docutils literal notranslate"><span class="pre">Optional</span></code>[<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>]) – Name of a saved mask to use for filtering cells. Overwrites
 msak if provided.</p></li>
-<li><p><strong>delete</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code>) – If True, cells are removed in the base array</p></li>
+<li><p><strong>delete</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code>) – If True, cells are removed in the base array. Otherwise</p></li>
+</ul>
+</dd>
+</dl>
+<p>they are only removed in the array that is returned.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><p>array with cells designated by maks or key removed.</p>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p>np.ndarray</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="celltk.core.arrays.ConditionArray.generate_mask">
+<span class="sig-name descname"><span class="pre">generate_mask</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">function</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">metric</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">region</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">channel</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">frame_rng</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">key</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#celltk.core.arrays.ConditionArray.generate_mask" title="Permalink to this definition"></a></dt>
+<dd><p>Generate a mask to remove cells using an arbitrary filter.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>function</strong> – If str, name of function in filter_utils. Otherwise,
+should be a Callable that inputs a 2D array and returns a 2D
+boolean array.</p></li>
+<li><p><strong>metric</strong> – Name of metric to use. Can be any key in the
+array.</p></li>
+<li><p><strong>region</strong> – Name of region to calculate the filter in.</p></li>
+<li><p><strong>channel</strong> – Name of channel to calculate filter in.</p></li>
+<li><p><strong>frame_rng</strong> – Frames to use in calculation. If int, takes that
+many frames from start of trace. If tuple, uses passed
+frames.</p></li>
+<li><p><strong>key</strong> – If given, saves the mask in ConditionArray as key.</p></li>
+<li><p><strong>*args</strong> – <p>passed to function</p>
+</p></li>
+<li><p><strong>**kwargs</strong> – <p>passed to function</p>
+</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>2D boolean array that masks cells outside filter</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>np.ndarray</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="celltk.core.arrays.ConditionArray.get_mask">
+<span class="sig-name descname"><span class="pre">get_mask</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">key</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#celltk.core.arrays.ConditionArray.get_mask" title="Permalink to this definition"></a></dt>
+<dd><p>Returns a saved mask. Masks are generated and saved
+using ConditionArray().generate_mask()</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>key</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>) – Name of mask to retreive</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>The saved boolean mask</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>np.ndarray</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="celltk.core.arrays.ConditionArray.interpolate_nans">
+<span class="sig-name descname"><span class="pre">interpolate_nans</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">keys</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#celltk.core.arrays.ConditionArray.interpolate_nans" title="Permalink to this definition"></a></dt>
+<dd><p>Linear interpolation of nans for each cell. Modification is done in-place.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>keys</strong> (<code class="xref py py-data docutils literal notranslate"><span class="pre">Optional</span></code>[<code class="xref py py-class docutils literal notranslate"><span class="pre">Collection</span></code>[<code class="xref py py-class docutils literal notranslate"><span class="pre">tuple</span></code>]]) – keys that will have nans removed.
+Each key should be a tuple of strings with length=3</p>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">None</span></code></p>
+</dd>
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><p>None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="celltk.core.arrays.ConditionArray.keys">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">keys</span></span><a class="headerlink" href="#celltk.core.arrays.ConditionArray.keys" title="Permalink to this definition"></a></dt>
+<dd><p>All the possible keys that can be used to index the data array.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="celltk.core.arrays.ConditionArray.load">
+<em class="property"><span class="pre">classmethod</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">load</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">path</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#celltk.core.arrays.ConditionArray.load" title="Permalink to this definition"></a></dt>
+<dd><p>Load an hdf5 file and convert to a ConditionArray.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>path</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>) – Path to the hdf5 file to be loaded.</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>Loaded ConditionArray</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p><a class="reference internal" href="#celltk.core.arrays.ConditionArray" title="celltk.core.arrays.ConditionArray">ConditionArray</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="celltk.core.arrays.ConditionArray.mark_active_cells">
+<span class="sig-name descname"><span class="pre">mark_active_cells</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">key</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">thres</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">propagate</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#celltk.core.arrays.ConditionArray.mark_active_cells" title="Permalink to this definition"></a></dt>
+<dd><p>Uses peak labels to mark in what frames cells are active</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>key</strong> (<code class="xref py py-data docutils literal notranslate"><span class="pre">Tuple</span></code>[<code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code>, <code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>]) – Key defining peak labels</p></li>
+<li><p><strong>thres</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code>) – Leave as 1, not currently used</p></li>
+<li><p><strong>propagate</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code>) – if True, propagate active marks to other
+keys in ConditionArray</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">None</span></code></p>
+</dd>
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><p>None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="celltk.core.arrays.ConditionArray.metrics">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">metrics</span></span><a class="headerlink" href="#celltk.core.arrays.ConditionArray.metrics" title="Permalink to this definition"></a></dt>
+<dd><p>Names of the metrics in the data array.</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="celltk.core.arrays.ConditionArray.ndim">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">ndim</span></span><a class="headerlink" href="#celltk.core.arrays.ConditionArray.ndim" title="Permalink to this definition"></a></dt>
+<dd><p>Number of dimensions in the data array. Should equal 5.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="celltk.core.arrays.ConditionArray.predict_peaks">
+<span class="sig-name descname"><span class="pre">predict_peaks</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">key</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">model</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">weight_path</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'celltk/config/upeak_example_weights.tf'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">propagate</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">segment</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#celltk.core.arrays.ConditionArray.predict_peaks" title="Permalink to this definition"></a></dt>
+<dd><p>Uses a UNet-based neural net to predict peaks in the traces defined
+by key. Adds two keys to ConditionArray, ‘slope_prob’ and
+‘plateau_prob’. If <cite>segment</cite> is True, also adds a ‘peaks’ key. ‘slope_prob’
+is the probability that a point is on the upward or downward slope of
+a peak. ‘plateau_prob’ is the probability that a point is at the top of a
+peak.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>key</strong> (<code class="xref py py-data docutils literal notranslate"><span class="pre">Tuple</span></code>[<code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code>, <code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>]) – Key to the traces to predict peaks with. Must return a
+2D array.</p></li>
+<li><p><strong>model</strong> (<code class="xref py py-data docutils literal notranslate"><span class="pre">Optional</span></code>[<code class="xref py py-class docutils literal notranslate"><span class="pre">UPeakModel</span></code>]) – An instantiated UPeakModel to use</p></li>
+<li><p><strong>weight_path</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>) – Path to the model weights to use for a new
+UPeakModel instance</p></li>
+<li><p><strong>propagate</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code>) – If True, propagates peak probabilities to the other
+keys in ConditionArray</p></li>
+<li><p><strong>segment</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code>) – If True, uses a watershed-based segmentation to label
+peaks based on the predictions.</p></li>
+<li><p><strong>**kwargs</strong> – <p>Passed to segmentation function</p>
+</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">None</span></code></p>
+</dd>
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><p>None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="celltk.core.arrays.ConditionArray.propagate_values">
+<span class="sig-name descname"><span class="pre">propagate_values</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">key</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">prop_to</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'both'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#celltk.core.arrays.ConditionArray.propagate_values" title="Permalink to this definition"></a></dt>
+<dd><p>Propagates metric value to other keys in ConditionArray.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>key</strong> (<code class="xref py py-data docutils literal notranslate"><span class="pre">Tuple</span></code>[<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>]) – Key to metric containing the values to propagate</p></li>
+<li><p><strong>prop_to</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>) – Define the keys to propagate values to.
+Options are ‘channel’, ‘region’, or ‘both’.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">None</span></code></p>
+</dd>
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><p>None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="celltk.core.arrays.ConditionArray.regions">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">regions</span></span><a class="headerlink" href="#celltk.core.arrays.ConditionArray.regions" title="Permalink to this definition"></a></dt>
+<dd><p>Names of the regions in the data array.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="celltk.core.arrays.ConditionArray.remove_parents">
+<span class="sig-name descname"><span class="pre">remove_parents</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">parent_daughter</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cell_index</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#celltk.core.arrays.ConditionArray.remove_parents" title="Permalink to this definition"></a></dt>
+<dd><p>Returns 1D boolean mask to remove traces of cells that divided.
+Daughter cell traces are kept. Use with reshape_mask to remove
+parent cells. Typically called by Extractor.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>parent_daughter</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">Dict</span></code>) – Dictionary of parent_label : daughter_label</p></li>
+<li><p><strong>cell_index</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">Dict</span></code>) – Dictionary of cell_label : cell_index_in_array</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>Boolean mask with False in the rows of parent cells</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>np.ndarray</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="celltk.core.arrays.ConditionArray.remove_short_traces">
+<span class="sig-name descname"><span class="pre">remove_short_traces</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">min_trace_length</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#celltk.core.arrays.ConditionArray.remove_short_traces" title="Permalink to this definition"></a></dt>
+<dd><p>Removes cells with less than min_trace_length non-nan values.
+Uses label as the metric to determine non-nan values. Typically called
+by Extractor</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>min_trace_length</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code>) – Shortest trace that should not be deleted</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>array with short traces removed</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>np.ndarray</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="celltk.core.arrays.ConditionArray.reshape_mask">
+<span class="sig-name descname"><span class="pre">reshape_mask</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">mask</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#celltk.core.arrays.ConditionArray.reshape_mask" title="Permalink to this definition"></a></dt>
+<dd><p>Takes in a 1D, 2D, or 5D boolean mask and casts to tuple of
+5-dimensional indices. Use this to apply a 1D or 2D mask
+to self._arr.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<ul class="simple">
+<li><p>Always assumes that filtering is to happen in cell axis.</p></li>
+</ul>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>mask</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">ndarray</span></code>) – Boolean mask to be used as filter.</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>Indices that can be used to index ConditionArray</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>Tuple</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="celltk.core.arrays.ConditionArray.save">
+<span class="sig-name descname"><span class="pre">save</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">path</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#celltk.core.arrays.ConditionArray.save" title="Permalink to this definition"></a></dt>
+<dd><p>Saves ConditionArray to an hdf5 file.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>path</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>) – Absolute path to save the file.</p>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">None</span></code></p>
+</dd>
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><p>None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="celltk.core.arrays.ConditionArray.set_condition">
+<span class="sig-name descname"><span class="pre">set_condition</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">condition</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#celltk.core.arrays.ConditionArray.set_condition" title="Permalink to this definition"></a></dt>
+<dd><p>Updates name of the ConditionArray.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>condition</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>) – New name of the ConditionArray</p>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">None</span></code></p>
+</dd>
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><p>None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="celltk.core.arrays.ConditionArray.set_position_id">
+<span class="sig-name descname"><span class="pre">set_position_id</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">pos</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#celltk.core.arrays.ConditionArray.set_position_id" title="Permalink to this definition"></a></dt>
+<dd><p>Adds unique identifiers to the cells in ConditionArray.
+Typically called by Pipeline or ExperimentArray.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>pos</strong> (<code class="xref py py-data docutils literal notranslate"><span class="pre">Optional</span></code>[<code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code>]) – Integer or string identifying the position</p>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">None</span></code></p>
+</dd>
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><p>None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="celltk.core.arrays.ConditionArray.set_time">
+<span class="sig-name descname"><span class="pre">set_time</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">time</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#celltk.core.arrays.ConditionArray.set_time" title="Permalink to this definition"></a></dt>
+<dd><p>Define the time axis. Time can be given as a frame interval
+or an array specifying the time for each frame.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>time</strong> (<code class="xref py py-data docutils literal notranslate"><span class="pre">Union</span></code>[<code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code>, <code class="xref py py-class docutils literal notranslate"><span class="pre">ndarray</span></code>]) – If int or float, designates time between frames.
+If array, marks the frame time points.</p>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">None</span></code></p>
+</dd>
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><p>None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="celltk.core.arrays.ConditionArray.shape">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">shape</span></span><a class="headerlink" href="#celltk.core.arrays.ConditionArray.shape" title="Permalink to this definition"></a></dt>
+<dd><p>Shape of the data array</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="celltk.core.arrays.ExperimentArray">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">celltk.core.arrays.</span></span><span class="sig-name descname"><span class="pre">ExperimentArray</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">arrays</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">time</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#celltk.core.arrays.ExperimentArray" title="Permalink to this definition"></a></dt>
+<dd><p>Base class to create arrays that can store an almost arbitrary number
+of ConditionArrays. Typically made by Orchestrator.build_experiment_file()</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="celltk.core.arrays.ExperimentArray.add_metric_slots">
+<span class="sig-name descname"><span class="pre">add_metric_slots</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#celltk.core.arrays.ExperimentArray.add_metric_slots" title="Permalink to this definition"></a></dt>
+<dd><p>Expands each ConditionArry to make room for more metrics.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<ul class="simple">
+<li><p>This method must be used before attempting to add new
+metrics to the ConditionArray.</p></li>
+</ul>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>name</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">List</span></code>[<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>]) – List of names of the metrics to add</p>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">None</span></code></p>
+</dd>
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><p>None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="celltk.core.arrays.ExperimentArray.channels">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">channels</span></span><a class="headerlink" href="#celltk.core.arrays.ExperimentArray.channels" title="Permalink to this definition"></a></dt>
+<dd><p>Returns list of the names of the channels in each ConditionArray.</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="celltk.core.arrays.ExperimentArray.conditions">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">conditions</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">List</span></em><a class="headerlink" href="#celltk.core.arrays.ExperimentArray.conditions" title="Permalink to this definition"></a></dt>
+<dd><p>Returns list of the name of each ConditionArray.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p><code class="xref py py-class docutils literal notranslate"><span class="pre">List</span></code></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="celltk.core.arrays.ExperimentArray.coordinates">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">coordinates</span></span><a class="headerlink" href="#celltk.core.arrays.ExperimentArray.coordinates" title="Permalink to this definition"></a></dt>
+<dd><p>Returns the names of the coordinates of each ConditionArray.</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="celltk.core.arrays.ExperimentArray.dtype">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">dtype</span></span><a class="headerlink" href="#celltk.core.arrays.ExperimentArray.dtype" title="Permalink to this definition"></a></dt>
+<dd><p>Returns list of the data type of each ConditionArray.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="celltk.core.arrays.ExperimentArray.filter_cells">
+<span class="sig-name descname"><span class="pre">filter_cells</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">mask</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">key</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">delete</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#celltk.core.arrays.ExperimentArray.filter_cells" title="Permalink to this definition"></a></dt>
+<dd><p>Uses an arbitrary mask or a saved mask (key) to
+filter cells from each ConditionArray. If delete, the underlying data
+are changed. Otherwise, the filtered data are only returned.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>mask</strong> (<code class="xref py py-data docutils literal notranslate"><span class="pre">Optional</span></code>[<code class="xref py py-class docutils literal notranslate"><span class="pre">List</span></code>[<code class="xref py py-class docutils literal notranslate"><span class="pre">ndarray</span></code>]]) – A boolean mask to filter cells with. Can be 1D, 2D or 5D.</p></li>
+<li><p><strong>key</strong> (<code class="xref py py-data docutils literal notranslate"><span class="pre">Optional</span></code>[<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>]) – Name of a saved mask to use for filtering cells. Overwrites
+msak if provided.</p></li>
+<li><p><strong>delete</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code>) – If True, cells are removed in the base array. Otherwise
+they are only removed in the array that is returned.</p></li>
+<li><p><strong>*args</strong> – <p>Passed to filtering function.</p>
+</p></li>
+<li><p><strong>**kwargs</strong> – <p>Passed to filtering function.</p>
+</p></li>
 </ul>
 </dd>
 <dt class="field-even">Returns</dt>
@@ -117,18 +582,46 @@ msak if provided.</p></li>
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="celltk.core.arrays.ConditionArray.generate_mask">
-<span class="sig-name descname"><span class="pre">generate_mask</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">function</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">metric</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">region</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">channel</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">frame_rng</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">key</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#celltk.core.arrays.ConditionArray.generate_mask" title="Permalink to this definition"></a></dt>
-<dd><p>I want this function to be able to generate arbitrary
-masks from some default functions
-i.e. percentiles, abs_val, etc..</p>
-<p>frame_rng only applies to filter_utils right now</p>
+<dt class="sig sig-object py" id="celltk.core.arrays.ExperimentArray.generate_mask">
+<span class="sig-name descname"><span class="pre">generate_mask</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">function</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">metric</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">region</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">channel</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">frame_rng</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">key</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">individual</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#celltk.core.arrays.ExperimentArray.generate_mask" title="Permalink to this definition"></a></dt>
+<dd><p>Generates a boolean mask for each ConditionArray based on
+an arbitrary filter.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>function</strong> – If str, name of function in filter_utils. Otherwise,
+should be a Callable that inputs a 2D array and returns a 2D
+boolean array.</p></li>
+<li><p><strong>metric</strong> – Name of metric to use. Can be any key in the
+array.</p></li>
+<li><p><strong>region</strong> – Name of region to calculate the filter in.</p></li>
+<li><p><strong>channel</strong> – Name of channel to calculate filter in.</p></li>
+<li><p><strong>frame_rng</strong> – Frames to use in calculation. If int, takes that
+many frames from start of trace. If tuple, uses passed
+frames.</p></li>
+<li><p><strong>key</strong> – If given, saves the mask in ConditionArray as key.</p></li>
+<li><p><strong>individual</strong> – If true, the filter is calculated for each
+ConditionArray independently. Otherwise, calculated on
+the whole data set, then applied to ConditionArrays.</p></li>
+<li><p><strong>*args</strong> – <p>passed to function</p>
+</p></li>
+<li><p><strong>**kwargs</strong> – <p>passed to function</p>
+</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>List of 2D boolean array to masks cells outside filter</p>
+</dd>
+</dl>
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="celltk.core.arrays.ConditionArray.interpolate_nans">
-<span class="sig-name descname"><span class="pre">interpolate_nans</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">keys</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#celltk.core.arrays.ConditionArray.interpolate_nans" title="Permalink to this definition"></a></dt>
-<dd><p>Linear interpolation of nans in each row</p>
+<dt class="sig sig-object py" id="celltk.core.arrays.ExperimentArray.interpolate_nans">
+<span class="sig-name descname"><span class="pre">interpolate_nans</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">keys</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#celltk.core.arrays.ExperimentArray.interpolate_nans" title="Permalink to this definition"></a></dt>
+<dd><dl class="simple">
+<dt>Linear interpolation of nans for each cell in each ConditionArray.</dt><dd><p>Modification is done in-place.</p>
+</dd>
+</dl>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><p><strong>keys</strong> (<code class="xref py py-data docutils literal notranslate"><span class="pre">Optional</span></code>[<code class="xref py py-class docutils literal notranslate"><span class="pre">Collection</span></code>[<code class="xref py py-class docutils literal notranslate"><span class="pre">tuple</span></code>]]) – keys that will have nans removed.
@@ -137,172 +630,37 @@ Each key should be a tuple of strings with length=3</p>
 <dt class="field-even">Return type</dt>
 <dd class="field-even"><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">None</span></code></p>
 </dd>
-</dl>
-</dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="celltk.core.arrays.ConditionArray.load">
-<em class="property"><span class="pre">classmethod</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">load</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">path</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#celltk.core.arrays.ConditionArray.load" title="Permalink to this definition"></a></dt>
-<dd><p>Load a structured arrary and convert to sites dict.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Return type</dt>
-<dd class="field-odd"><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">None</span></code></p>
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><p>None</p>
 </dd>
 </dl>
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="celltk.core.arrays.ConditionArray.propagate_values">
-<span class="sig-name descname"><span class="pre">propagate_values</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">key</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">prop_to</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'both'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#celltk.core.arrays.ConditionArray.propagate_values" title="Permalink to this definition"></a></dt>
-<dd><p>Propagates metric value to other keys</p>
-<dl class="field-list simple">
-<dt class="field-odd">Return type</dt>
-<dd class="field-odd"><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">None</span></code></p>
-</dd>
-</dl>
+<dt class="sig sig-object py" id="celltk.core.arrays.ExperimentArray.items">
+<span class="sig-name descname"><span class="pre">items</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#celltk.core.arrays.ExperimentArray.items" title="Permalink to this definition"></a></dt>
+<dd><p>Use to iterate through the key and array for each ConditionArray.</p>
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="celltk.core.arrays.ConditionArray.remove_parents">
-<span class="sig-name descname"><span class="pre">remove_parents</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">parent_daughter</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cell_index</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#celltk.core.arrays.ConditionArray.remove_parents" title="Permalink to this definition"></a></dt>
-<dd><p>Returns 1D boolean mask to remove parent cells</p>
-<dl class="field-list simple">
-<dt class="field-odd">Return type</dt>
-<dd class="field-odd"><p><code class="xref py py-class docutils literal notranslate"><span class="pre">ndarray</span></code></p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="celltk.core.arrays.ConditionArray.remove_short_traces">
-<span class="sig-name descname"><span class="pre">remove_short_traces</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">min_trace_length</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#celltk.core.arrays.ConditionArray.remove_short_traces" title="Permalink to this definition"></a></dt>
-<dd><p>Removes cells with less than min_trace_length non-nan values</p>
-<dl class="field-list simple">
-<dt class="field-odd">Return type</dt>
-<dd class="field-odd"><p><code class="xref py py-class docutils literal notranslate"><span class="pre">ndarray</span></code></p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="celltk.core.arrays.ConditionArray.reshape_mask">
-<span class="sig-name descname"><span class="pre">reshape_mask</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">mask</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#celltk.core.arrays.ConditionArray.reshape_mask" title="Permalink to this definition"></a></dt>
-<dd><p>Takes in a 1D, 2D, or 5D mask and casts to tuple of
-5 dimensional indices. Use this to apply a 1D mask
-to self._arr.</p>
-<p>Assumes that the only thing being filtered is cells.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Return type</dt>
-<dd class="field-odd"><p><code class="xref py py-data docutils literal notranslate"><span class="pre">Tuple</span></code>[<code class="xref py py-class docutils literal notranslate"><span class="pre">slice</span></code>, <code class="xref py py-class docutils literal notranslate"><span class="pre">ellipsis</span></code>, <code class="xref py py-class docutils literal notranslate"><span class="pre">ndarray</span></code>]</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="celltk.core.arrays.ConditionArray.save">
-<span class="sig-name descname"><span class="pre">save</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">path</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#celltk.core.arrays.ConditionArray.save" title="Permalink to this definition"></a></dt>
-<dd><p>Saves ConditionArray to an hdf5 file.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Return type</dt>
-<dd class="field-odd"><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">None</span></code></p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="celltk.core.arrays.ConditionArray.set_condition">
-<span class="sig-name descname"><span class="pre">set_condition</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">condition</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#celltk.core.arrays.ConditionArray.set_condition" title="Permalink to this definition"></a></dt>
-<dd><p>Updates name of the ConditionArray.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Return type</dt>
-<dd class="field-odd"><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">None</span></code></p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="celltk.core.arrays.ConditionArray.set_position_id">
-<span class="sig-name descname"><span class="pre">set_position_id</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">pos</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#celltk.core.arrays.ConditionArray.set_position_id" title="Permalink to this definition"></a></dt>
-<dd><p>Adds unique identifiers for cells in ConditionArray</p>
-<dl class="field-list simple">
-<dt class="field-odd">Return type</dt>
-<dd class="field-odd"><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">None</span></code></p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="celltk.core.arrays.ConditionArray.set_time">
-<span class="sig-name descname"><span class="pre">set_time</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">time</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#celltk.core.arrays.ConditionArray.set_time" title="Permalink to this definition"></a></dt>
-<dd><p>Define the time axis. Time is the interval between frames</p>
-<dl class="field-list simple">
-<dt class="field-odd">Return type</dt>
-<dd class="field-odd"><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">None</span></code></p>
-</dd>
-</dl>
-</dd></dl>
-
-</dd></dl>
-
-<dl class="py class">
-<dt class="sig sig-object py" id="celltk.core.arrays.ExperimentArray">
-<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">celltk.core.arrays.</span></span><span class="sig-name descname"><span class="pre">ExperimentArray</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">arrays</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">time</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#celltk.core.arrays.ExperimentArray" title="Permalink to this definition"></a></dt>
-<dd><dl class="py method">
-<dt class="sig sig-object py" id="celltk.core.arrays.ExperimentArray.filter_cells">
-<span class="sig-name descname"><span class="pre">filter_cells</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">mask</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">key</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">delete</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#celltk.core.arrays.ExperimentArray.filter_cells" title="Permalink to this definition"></a></dt>
-<dd><p>Either uses an arbitrary mask or a saved mask (key) to
-filter the data. If delete, the underlying structure
-is changed, otherwise, the data are only returned.</p>
-<dl class="field-list simple">
-<dt class="field-odd">Return type</dt>
-<dd class="field-odd"><p><code class="xref py py-class docutils literal notranslate"><span class="pre">ndarray</span></code></p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="celltk.core.arrays.ExperimentArray.generate_mask">
-<span class="sig-name descname"><span class="pre">generate_mask</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">function</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">metric</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">region</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">channel</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">frame_rng</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">key</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">individual</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#celltk.core.arrays.ExperimentArray.generate_mask" title="Permalink to this definition"></a></dt>
-<dd><p>Generates a boolean mask for each Condition</p>
-<dl class="field-list simple">
-<dt class="field-odd">Parameters</dt>
-<dd class="field-odd"><ul class="simple">
-<li><p><strong>function</strong> – </p></li>
-<li><p><strong>metric</strong> – </p></li>
-<li><p><strong>region</strong> – </p></li>
-<li><p><strong>channel</strong> – </p></li>
-<li><p><strong>frame_rng</strong> – </p></li>
-<li><p><strong>key</strong> – </p></li>
-<li><p><strong>*args</strong> – </p></li>
-<li><p><strong>**kwargs</strong> – </p></li>
-</ul>
-</dd>
-<dt class="field-even">Returns</dt>
-<dd class="field-even"><p>np.ndarray</p>
-</dd>
-</dl>
-</dd></dl>
-
-<dl class="py method">
-<dt class="sig sig-object py" id="celltk.core.arrays.ExperimentArray.interpolate_nans">
-<span class="sig-name descname"><span class="pre">interpolate_nans</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">keys</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#celltk.core.arrays.ExperimentArray.interpolate_nans" title="Permalink to this definition"></a></dt>
-<dd><p>Linear interpolation of nans in each row</p>
-<p>Args:</p>
-<p>Returns:</p>
-<dl class="field-list simple">
-<dt class="field-odd">Return type</dt>
-<dd class="field-odd"><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">None</span></code></p>
-</dd>
-</dl>
+<dt class="sig sig-object py" id="celltk.core.arrays.ExperimentArray.keys">
+<span class="sig-name descname"><span class="pre">keys</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#celltk.core.arrays.ExperimentArray.keys" title="Permalink to this definition"></a></dt>
+<dd><p>Use to iterate through all the keys in ExperimentArray.</p>
 </dd></dl>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="celltk.core.arrays.ExperimentArray.load">
 <em class="property"><span class="pre">classmethod</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">load</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">path</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#celltk.core.arrays.ExperimentArray.load" title="Permalink to this definition"></a></dt>
-<dd><p>Load a structured arrary and convert to sites dict.</p>
+<dd><p>Load an ExperimentArray from an hdf5 file.</p>
 <dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>path</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>) – Path to the hdf5 file</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>ExperimentArray</p>
+</dd>
 <dt class="field-odd">Return type</dt>
-<dd class="field-odd"><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">None</span></code></p>
+<dd class="field-odd"><p><a class="reference internal" href="#celltk.core.arrays.ExperimentArray" title="celltk.core.arrays.ExperimentArray">ExperimentArray</a></p>
 </dd>
 </dl>
 </dd></dl>
@@ -310,11 +668,45 @@ is changed, otherwise, the data are only returned.</p>
 <dl class="py method">
 <dt class="sig sig-object py" id="celltk.core.arrays.ExperimentArray.load_condition">
 <span class="sig-name descname"><span class="pre">load_condition</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">path</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">pos_id</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#celltk.core.arrays.ExperimentArray.load_condition" title="Permalink to this definition"></a></dt>
-<dd><p>Used to add a Condition to experiment directly from an hdf5 file
-Saves as name + pos_id</p>
+<dd><p>Adds a ConditionArray to the ExperimentArray from an hdf5 file.
+The new ConditionArray gets saved as name + pos_id if provided, otherwise
+uses the name saved in the hdf5 file.</p>
 <dl class="field-list simple">
-<dt class="field-odd">Return type</dt>
-<dd class="field-odd"><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">None</span></code></p>
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>path</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>) – Path to the hdf5 file to load</p></li>
+<li><p><strong>name</strong> (<code class="xref py py-data docutils literal notranslate"><span class="pre">Optional</span></code>[<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>]) – Name of the ConditionArray to be loaded.</p></li>
+<li><p><strong>pos_id</strong> (<code class="xref py py-data docutils literal notranslate"><span class="pre">Optional</span></code>[<code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code>]) – Unique identifier for the ConditionArray.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">None</span></code></p>
+</dd>
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><p>None</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="celltk.core.arrays.ExperimentArray.mark_active_cells">
+<span class="sig-name descname"><span class="pre">mark_active_cells</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">key</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">thres</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">propagate</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#celltk.core.arrays.ExperimentArray.mark_active_cells" title="Permalink to this definition"></a></dt>
+<dd><p>Uses peak labels to mark in what frames cells are active in
+each ConditionArray.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>key</strong> (<code class="xref py py-data docutils literal notranslate"><span class="pre">Tuple</span></code>[<code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code>, <code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>]) – Key defining peak labels</p></li>
+<li><p><strong>thres</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code>) – Leave as 1, not currently used</p></li>
+<li><p><strong>propagate</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code>) – if True, propagate active marks to other
+keys in ConditionArray</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">None</span></code></p>
+</dd>
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><p>None</p>
 </dd>
 </dl>
 </dd></dl>
@@ -322,21 +714,110 @@ Saves as name + pos_id</p>
 <dl class="py method">
 <dt class="sig sig-object py" id="celltk.core.arrays.ExperimentArray.merge_conditions">
 <span class="sig-name descname"><span class="pre">merge_conditions</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#celltk.core.arrays.ExperimentArray.merge_conditions" title="Permalink to this definition"></a></dt>
-<dd><p>Concatenate Conditions with matching conditions</p>
+<dd><p>Concatenate ConditionArrays with matching conditions.
+If no arrays have matching conditions, nothing is done.
+If matching conditions are found, looks for position map to
+label each uniquely, or will just number them in the order
+that they were saved in the ExperimentArray. Arrays are concatenated
+along the cell axis.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Return type</dt>
 <dd class="field-odd"><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">None</span></code></p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>None</p>
+</dd>
+</dl>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<ul class="simple">
+<li><p>Any masks that have been saved in the individual</p></li>
+</ul>
+<p>ConditionArrays will be lost.</p>
+</div>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="celltk.core.arrays.ExperimentArray.metrics">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">metrics</span></span><a class="headerlink" href="#celltk.core.arrays.ExperimentArray.metrics" title="Permalink to this definition"></a></dt>
+<dd><p>Returns list of the names of the metrics in each ConditionArray.</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="celltk.core.arrays.ExperimentArray.ndim">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">ndim</span></span><a class="headerlink" href="#celltk.core.arrays.ExperimentArray.ndim" title="Permalink to this definition"></a></dt>
+<dd><p>Returns list of the number of dimensoins of each ConditionArray.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="celltk.core.arrays.ExperimentArray.plot_by_condition">
+<span class="sig-name descname"><span class="pre">plot_by_condition</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">keys</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">conditions</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">estimator</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">err_estimator</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">colors</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">kind</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'line'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">title</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x_label</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y_label</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x_limit</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y_limit</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">layout_spec</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">{}</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">show</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">save</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">figure</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">_format</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'svg'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#celltk.core.arrays.ExperimentArray.plot_by_condition" title="Permalink to this definition"></a></dt>
+<dd><p>Used to generate a variety of plots comparing the ConditionArrays for the
+conditions passed.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<ul class="simple">
+<li><p>Plotting should still be considered in the beta-stage.
+Bugs may exist. The API of this function will likely
+change and/or be replaced in the near future.</p></li>
+</ul>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>keys</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">List</span></code>[<code class="xref py py-data docutils literal notranslate"><span class="pre">Tuple</span></code>[<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>]]) – Keys to plot from each ConditiomArray. Likely best to
+pass only one key at a time
+(e.g. [‘nuc’, ‘fitc’, ‘median_intensity’]).</p></li>
+<li><p><strong>condtions</strong> – Conditons from the ExperimentArray to plot. If not
+provided, defaults to plotting all conditions.</p></li>
+<li><p><strong>estimator</strong> (<code class="xref py py-data docutils literal notranslate"><span class="pre">Union</span></code>[<code class="xref py py-data docutils literal notranslate"><span class="pre">Callable</span></code>, <code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>, <code class="xref py py-class docutils literal notranslate"><span class="pre">partial</span></code>, <code class="xref py py-obj docutils literal notranslate"><span class="pre">None</span></code>]) – Used to combine the traces in each ConditionArray.
+If str, must be name of numpy function. If a function object,
+will be applied across axis 0 (like numpy). If a functools.partial
+object, must accept a 2D array and return a 1D array.
+For example, if ‘mean’ is provided, the plotted trace will
+be the mean of all the cells in each ConditionArray.
+This kwarg is currently incompatible with ‘overlay’ plot kind.</p></li>
+<li><p><strong>err_estimator</strong> (<code class="xref py py-data docutils literal notranslate"><span class="pre">Union</span></code>[<code class="xref py py-data docutils literal notranslate"><span class="pre">Callable</span></code>, <code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>, <code class="xref py py-class docutils literal notranslate"><span class="pre">partial</span></code>, <code class="xref py py-obj docutils literal notranslate"><span class="pre">None</span></code>]) – Used to estimate the error bars around the
+estimator. Same stipulations as ‘estimator’ kwarg.</p></li>
+<li><p><strong>colors</strong> (<code class="xref py py-data docutils literal notranslate"><span class="pre">Union</span></code>[<code class="xref py py-data docutils literal notranslate"><span class="pre">Callable</span></code>, <code class="xref py py-class docutils literal notranslate"><span class="pre">Collection</span></code>, <code class="xref py py-obj docutils literal notranslate"><span class="pre">None</span></code>]) – Name of colormap or color to use. Seaborn and matplotlib
+colormaps can be used. Any named CSS color can be used.</p></li>
+<li><p><strong>kind</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>) – Type of plot. Options are ‘line’ (self-explanatory),
+‘overlay’ (plots the mean over lightened inidivudal traces),
+and ‘hist’ (histogram, only alphpa right now)</p></li>
+<li><p><strong>title</strong> (<code class="xref py py-data docutils literal notranslate"><span class="pre">Optional</span></code>[<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>]) – Title to display on the plot.</p></li>
+<li><p><strong>x_label</strong> (<code class="xref py py-data docutils literal notranslate"><span class="pre">Optional</span></code>[<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>]) – Label for the x-axis of the plot.</p></li>
+<li><p><strong>y_label</strong> (<code class="xref py py-data docutils literal notranslate"><span class="pre">Optional</span></code>[<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>]) – Label for the y-axis of the plot.</p></li>
+<li><p><strong>x_limit</strong> (<code class="xref py py-data docutils literal notranslate"><span class="pre">Optional</span></code>[<code class="xref py py-data docutils literal notranslate"><span class="pre">Tuple</span></code>[<code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code>]]) – Lower and upper limit of the x-axis</p></li>
+<li><p><strong>y_limit</strong> (<code class="xref py py-data docutils literal notranslate"><span class="pre">Optional</span></code>[<code class="xref py py-data docutils literal notranslate"><span class="pre">Tuple</span></code>[<code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code>]]) – Lower and upper limit of the y-axis.</p></li>
+<li><p><strong>layout_spec</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">dict</span></code>) – Dictionary specifiying the layout of the go.Figure
+object. See plotly documentation for options.</p></li>
+<li><p><strong>save</strong> (<code class="xref py py-data docutils literal notranslate"><span class="pre">Optional</span></code>[<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>]) – If given, saves plots with the given filename. The
+extension of the given string determines the format of the saved
+plot. If saved as HTML, plot is interactive.</p></li>
+<li><p><strong>figure</strong> (<code class="xref py py-data docutils literal notranslate"><span class="pre">Optional</span></code>[<code class="xref py py-class docutils literal notranslate"><span class="pre">Figure</span></code>]) – If given, all plots are made in the given go.Figure
+object. Otherwise, a new object is created.</p></li>
+<li><p><strong>_format</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>) – HTML plots give the option to download as a different
+figure format after making adjustments. This parameter determines
+that format.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Paraqm show</dt>
+<dd class="field-even"><p>If True, plots are displayed to the user.</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p><code class="xref py py-class docutils literal notranslate"><span class="pre">Figure</span></code></p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>go.Figure with the data plotted.</p>
 </dd>
 </dl>
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="celltk.core.arrays.ExperimentArray.plot_by_condition">
-<span class="sig-name descname"><span class="pre">plot_by_condition</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">keys</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">conditions</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">estimator</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">err_estimator</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">colors</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">kind</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'line'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">title</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x_label</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y_label</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x_limit</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y_limit</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">layout_spec</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">{}</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">show</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">save</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">_format</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'svg'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#celltk.core.arrays.ExperimentArray.plot_by_condition" title="Permalink to this definition"></a></dt>
-<dd><p>rename to be like time_plot or something
-keys must return a 2D arr for this to work.
-TODO: More generic way to group conditions
-TODO: Add option to save figures</p>
+<dt class="sig sig-object py" id="celltk.core.arrays.ExperimentArray.plot_peak_predictions">
+<span class="sig-name descname"><span class="pre">plot_peak_predictions</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">keys</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">conditions</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">estimator</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">title</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x_label</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y_label</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">x_limit</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">y_limit</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">layout_spec</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">{}</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">show</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">save</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#celltk.core.arrays.ExperimentArray.plot_peak_predictions" title="Permalink to this definition"></a></dt>
+<dd><p>Use celltk.utils.plot_utils.plot_trace_predictions() instead.
+Not currently well implemented.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Return type</dt>
 <dd class="field-odd"><p><code class="xref py py-class docutils literal notranslate"><span class="pre">Figure</span></code></p>
@@ -347,22 +828,52 @@ TODO: Add option to save figures</p>
 <dl class="py method">
 <dt class="sig sig-object py" id="celltk.core.arrays.ExperimentArray.predict_peaks">
 <span class="sig-name descname"><span class="pre">predict_peaks</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">key</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">weight_path</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'celltk/config/upeak_example_weights.tf'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">propagate</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">segment</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#celltk.core.arrays.ExperimentArray.predict_peaks" title="Permalink to this definition"></a></dt>
-<dd><p>kwargs are passed to the segmentation algorithm
-TODO: Initialize the UPeak model here and pass to the sites</p>
+<dd><p>Uses a UNet-based neural net to predict peaks in the traces defined
+by key in each ConditionArray. Adds two keys to ConditionArrays,
+‘slope_prob’ and ‘plateau_prob’. If <cite>segment</cite> is True, also adds a
+‘peaks’ key. ‘slope_prob’ is the probability that a point is on
+the upward or downward slope of a peak. ‘plateau_prob’ is the
+probability that a point is at the top of a peak.</p>
 <dl class="field-list simple">
-<dt class="field-odd">Return type</dt>
-<dd class="field-odd"><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">None</span></code></p>
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>key</strong> (<code class="xref py py-data docutils literal notranslate"><span class="pre">Tuple</span></code>[<code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code>, <code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>]) – Key to the traces to predict peaks with. Must return a
+2D array.</p></li>
+<li><p><strong>weight_path</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>) – Path to the model weights to use for a new
+UPeakModel instance</p></li>
+<li><p><strong>propagate</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code>) – If True, propagates peak probabilities to the other
+keys in ConditionArray</p></li>
+<li><p><strong>segment</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code>) – If True, uses a watershed-based segmentation to label
+peaks based on the predictions.</p></li>
+<li><p><strong>**kwargs</strong> – <p>Passed to segmentation function,</p>
+</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">None</span></code></p>
+</dd>
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><p>None</p>
 </dd>
 </dl>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="celltk.core.arrays.ExperimentArray.regions">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">regions</span></span><a class="headerlink" href="#celltk.core.arrays.ExperimentArray.regions" title="Permalink to this definition"></a></dt>
+<dd><p>Returns list of the names of the regions in each ConditionArray.</p>
 </dd></dl>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="celltk.core.arrays.ExperimentArray.remove_empty_sites">
 <span class="sig-name descname"><span class="pre">remove_empty_sites</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#celltk.core.arrays.ExperimentArray.remove_empty_sites" title="Permalink to this definition"></a></dt>
-<dd><p>Removes all sites that have any empty dimension</p>
+<dd><p>Removes all sites that have one or more empty dimensions.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Return type</dt>
 <dd class="field-odd"><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">None</span></code></p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>None</p>
 </dd>
 </dl>
 </dd></dl>
@@ -371,10 +882,11 @@ TODO: Initialize the UPeak model here and pass to the sites</p>
 <dt class="sig sig-object py" id="celltk.core.arrays.ExperimentArray.remove_short_traces">
 <span class="sig-name descname"><span class="pre">remove_short_traces</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">min_trace_length</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#celltk.core.arrays.ExperimentArray.remove_short_traces" title="Permalink to this definition"></a></dt>
 <dd><p>Applies a filter to each condition to remove cells with
-fewer good frames than min_trace_length</p>
+fewer non-nan frames than min_trace_length. The ‘label’ metric is used
+for determining non-nan frames.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
-<dd class="field-odd"><p><strong>min_trace_length</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code>) – Minimum number of frames allowed</p>
+<dd class="field-odd"><p><strong>min_trace_length</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code>) – Minimum number of non-nan frames allowed</p>
 </dd>
 <dt class="field-even">Return type</dt>
 <dd class="field-even"><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">None</span></code></p>
@@ -394,7 +906,7 @@ in a single hdf5 file at path. Runs merge_conditions() first
 to ensure data doesn’t get overwritten.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
-<dd class="field-odd"><p><strong>path</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>) – Path to the location where file should be saved</p>
+<dd class="field-odd"><p><strong>path</strong> (<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>) – Path to the location where file should be saved.</p>
 </dd>
 <dt class="field-even">Return type</dt>
 <dd class="field-even"><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">None</span></code></p>
@@ -402,8 +914,8 @@ to ensure data doesn’t get overwritten.</p>
 <dt class="field-odd">Returns</dt>
 <dd class="field-odd"><p>None</p>
 </dd>
-<dt class="field-even">Raises</dt>
-<dd class="field-even"><p><strong>ValueError</strong> – If any cell or frame is greater than 2 ** 16</p>
+<dt class="field-even">Raise</dt>
+<dd class="field-even"><p>ValueError if any cell or frame is greater than 2 ** 16.</p>
 </dd>
 </dl>
 </dd></dl>
@@ -411,11 +923,17 @@ to ensure data doesn’t get overwritten.</p>
 <dl class="py method">
 <dt class="sig sig-object py" id="celltk.core.arrays.ExperimentArray.set_conditions">
 <span class="sig-name descname"><span class="pre">set_conditions</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">condition_map</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">{}</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#celltk.core.arrays.ExperimentArray.set_conditions" title="Permalink to this definition"></a></dt>
-<dd><p>Updates name of Condition arrays in Experiment.
-condition_map should map Condition.name to desired condition.</p>
+<dd><p>Updates names of all of the ConditionArrays</p>
 <dl class="field-list simple">
-<dt class="field-odd">Return type</dt>
-<dd class="field-odd"><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">None</span></code></p>
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>condition</strong> – Dict of current_name : new_name for
+each ConditionArray</p>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">None</span></code></p>
+</dd>
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><p>None</p>
 </dd>
 </dl>
 </dd></dl>
@@ -423,12 +941,39 @@ condition_map should map Condition.name to desired condition.</p>
 <dl class="py method">
 <dt class="sig sig-object py" id="celltk.core.arrays.ExperimentArray.set_time">
 <span class="sig-name descname"><span class="pre">set_time</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">time</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#celltk.core.arrays.ExperimentArray.set_time" title="Permalink to this definition"></a></dt>
-<dd><p>Define the time axis</p>
+<dd><p>Define the time axis in each ConditionArray. Time can be
+given as a frame interval or an array specifying the time
+for each frame.</p>
 <dl class="field-list simple">
-<dt class="field-odd">Return type</dt>
-<dd class="field-odd"><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">None</span></code></p>
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>time</strong> (<code class="xref py py-data docutils literal notranslate"><span class="pre">Optional</span></code>[<code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code>]) – If int or float, designates time between frames.
+If array, marks the frame time points.</p>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">None</span></code></p>
+</dd>
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><p>None</p>
 </dd>
 </dl>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="celltk.core.arrays.ExperimentArray.shape">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">shape</span></span><a class="headerlink" href="#celltk.core.arrays.ExperimentArray.shape" title="Permalink to this definition"></a></dt>
+<dd><p>Returns list of the shape of each ConditionArray.</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="celltk.core.arrays.ExperimentArray.time">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">time</span></span><a class="headerlink" href="#celltk.core.arrays.ExperimentArray.time" title="Permalink to this definition"></a></dt>
+<dd><p>Returns list of the time axis of each ConditionArray.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="celltk.core.arrays.ExperimentArray.values">
+<span class="sig-name descname"><span class="pre">values</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#celltk.core.arrays.ExperimentArray.values" title="Permalink to this definition"></a></dt>
+<dd><p>Use to iterate through all of the ConditionArrays.</p>
 </dd></dl>
 
 </dd></dl>

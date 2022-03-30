@@ -1,5 +1,5 @@
 Pipelines
-=======
+=========
 
 .. automodule:: celltk.core.pipeline
     :members:

@@ -27,6 +27,25 @@ import celltk.utils.filter_utils as filter_utils
 
 
 class Operation():
+    """
+    Base class for all other Operations.
+
+    :param images: Names of images to use in this operation
+    :param masks: Names of masks to use in this operation
+    :param tracks: Names of tracks to use in this operation
+    :param arrays: Names of arrays to use in this operation
+    :param output: Name to save the output stack
+    :param save: If False, the final result will not be saved
+        to disk.
+    :param force_rerun: If True, all functions are run even
+        if the output stack is already loaded.
+    :param _output_id: Private attribute used to track output
+        from the Operation.
+    :param _split_key: Used to specify outputs from functions that
+        return multiple outputs. For example, if you align two channels
+        the outputs will be saved as 'align&channel000' and
+        'align&channel001' for _split_key = '&'
+    """
     __name__ = 'Operation'
 
     def __init__(self,
@@ -115,7 +134,8 @@ class Operation():
                  images: Collection[Image] = [],
                  masks: Collection[Mask] = [],
                  tracks: Collection[Track] = [],
-                 arrays: Collection[Arr] = []
+                 arrays: Collection[Arr] = [],
+                 _return_keys: bool = False
                  ) -> Union[Image, Mask, Track, Arr]:
         """
         __call__ runs operation independently of Pipeline class
@@ -125,8 +145,30 @@ class Operation():
               it will have to take the inputs and build the ImageContainer. Only
               question will be the keys, they have to match the inputs.
         """
-        raise NotImplementedError('Will be implemented in a future version.')
-        return self.run_operation(images, masks, tracks, arrays)
+        # Cast all to lists if they are not
+        if not isinstance(images, (tuple, list)): images = [images]
+        if not isinstance(masks, (tuple, list)): masks = [masks]
+        if not isinstance(tracks, (tuple, list)): tracks = [tracks]
+        if not isinstance(arrays, (tuple, list)): arrays = [arrays]
+
+        # Generate keys based on enumeration
+        container = ImageContainer()
+        inputs = [Image, Mask, Track, Arr]
+        for nm, stack in zip(inputs, [images, masks, tracks, arrays]):
+            if stack:
+                nm = nm.__name__
+                for i, st in enumerate(stack):
+                    key = (f'{nm}_{i}', nm)
+                    container[key] = st
+
+        # TODO: How to format the output?
+        # Output is a generator
+        out = self.run_operation(container)
+
+        if _return_keys:
+            return tuple(dict(out).items())
+        else:
+            return list(dict(out).values())
 
     def __enter__(self) -> None:
         """
@@ -171,7 +213,20 @@ class Operation():
                                   output_type: str = None,
                                   **kwargs
                                   ) -> None:
-        """
+        """Adds a function to be run by the Operation
+
+        :param func: Name of the function. Must exist in
+            the Operation class.
+        :param save_as: Name to save the result as. If not
+            set, will not be saved unless it is the last
+            function and Operation.save is True.
+        :param output_type: If given, changes the default output type to
+            another CellTK type (i.e iimage, mask, track)
+        :pararm kwargs: All other kwargs are passed to the function.
+            Note that they must be provided as kwargs.
+
+        :return: None
+
         TODO:
             - Add option for func to be a Callable
         """
@@ -184,12 +239,26 @@ class Operation():
     def run_operation(self,
                       inputs: ImageContainer
                       ) -> Generator:
-        """
+        """Sets up a generator to run the operation and return
+        results for each function in turn. This function also
+        handles naming and typing the outputs of each function.
+        Typically used by Pipeline. To use an operation with
+        arrays and get arrays in return, preferably use the
+        __call__ method instead.
+
+        :param inputs: ImageContainer with all of the inputs
+            required by the Operation.
+
+        :return: A signle generator for the results of each function.
         """
         # By default, return all inputs of output type
         return_container = ImageContainer()
         return_container.update({k: v for k, v in inputs.items()
                                  if k[1] == self._output_type.__name__})
+
+        if not self.functions:
+            warnings.warn(f'No functions found in {self}.', UserWarning)
+            yield from return_container.items()
 
         # fidx is function index
         for fidx, (func, save_as, user_type, kwargs) in enumerate(self.functions):
@@ -300,7 +369,11 @@ class Operation():
         yield from return_container.items()
 
     def set_logger(self, logger: logging.Logger) -> None:
-        """
+        """Add a custom logger object to log Pipeline operation.
+
+        :param logger: Custom logging object. Must be type logging.Logger.
+
+        :return: None
         """
         # logger is either a Pipeline or Operation logger
         log_name = logger.name
@@ -309,13 +382,17 @@ class Operation():
         self.logger = logging.getLogger(f'{log_name}.{self.__name__}')
 
     def get_inputs_and_outputs(self) -> List[List[tuple]]:
-        """
-        Returns all possible inputs and outputs expected.
-        It's likely not all will actually get made/used.
+        """Returns all possible inputs and outputs expected
+        by the Operation. Not all will be made or used. Typically
+        this function is used by Pipeline to determine which files
+        to load.
 
-        Needed for Pipeline._input_output_handler
+        NOTE:
+            - This function is expected to change soon in a new
+            version.
 
-        TODO: This whole system should be handled differently.
+        TODO:
+            - This whole system should be handled differently.
               Inputs and outputs are now basically the same, so
               one of them should be removed.
         """
@@ -353,9 +430,15 @@ class Operation():
                          check_key: Tuple[str],
                          inputs: ImageContainer
                          ) -> bool:
-        """"""
-        # Check if input is already loaded
-        # TODO: Add ability to use keys with _split_key
+        """Checks if the expected output of a function has
+        already been loaded.
+
+        :param check_key: Name and type of the expected output.
+        :param inputs: ImageContainer with the loaded images.
+
+        :return: True if the image has been loaded. False otherwise.
+        """
+
         if check_key not in inputs:
             # Try with the split_key
             _split = lambda x: x[0].split(self._split_key)[0]
@@ -377,15 +460,22 @@ class Operation():
         return True
 
     def _get_func_output_type(self, func: (Callable, str)) -> str:
-        """Returns the annotated output type of the function"""
+        """Returns the annotated output type of the given function.
+
+        :param func: Function to inspect.
+
+        :return: Name of expected output type
+        """
         if isinstance(func, str):
             func = getattr(self, func)
 
         return inspect.signature(func).return_annotation.__name__
 
-    def _operation_to_dict(self) -> Dict:
-        """
-        Returns a dictionary that fully defines the operation
+    def _operation_to_dict(self) -> Dict[str, str]:
+        """Returns a dictionary that fully defines the Operation and
+        all of the user supplied parameters.
+
+        :return: Dictionary defining the Operation and parameters.
         """
         # Get attributes to lookup and save in dictionary
         base_slots = ('__name__', '__module__', 'images', 'masks',
@@ -424,10 +514,14 @@ class Operation():
                                 fname: str,
                                 kwargs: dict
                                 ) -> str:
-        """
-        Nicely formats the function specifications for the Operation
+        """Formats the function specifications for the function to
+        be displayed to user or logged.
 
-        TODO: is there a way to neatly include type and save name?
+        :param fname: Name of the function
+        :param kwargs: User supplied kwargs to the function.
+
+        TODO:
+            - Is there a way to neatly include type and save name?
         """
         # Format kwargs to str
         if len(kwargs) > 0:
@@ -442,8 +536,14 @@ class Operation():
     def image_to_mask(self,
                        image: Image,
                        ) -> Mask:
-        """
-        TODO: Should be able to wrtie a complete function
+        """Convert an Image stack to a Mask stack.
+
+        :param image: Image stack to be typed as a Mask
+
+        :return: Input stack with Mask designation.
+
+        TODO:
+            - Should be able to wrtie a complete function
               to handle all types, but that might require
               some work in ImageHelper
         """
@@ -453,30 +553,60 @@ class Operation():
     def image_to_track(self,
                        image: Image,
                        ) -> Track:
+        """Convert an Image stack to a Track stack.
+
+        :param image: Image stack to be typed as a Track
+
+        :return: Input stack with Track designation.
+        """
         return image
 
     @ImageHelper(by_frame=False, as_tuple=True)
     def mask_to_image(self,
                       mask: Mask,
                       ) -> Image:
+        """Convert a Mask stack to a Image stack.
+
+        :param mask: Mask stack to be typed as a Image
+
+        :return: Input stack with Image designation.
+        """
         return mask
 
     @ImageHelper(by_frame=False, as_tuple=True)
     def mask_to_track(self,
                       mask: Mask,
                       ) -> Track:
+        """Convert an Mask stack to a Track stack.
+
+        :param mask: Mask stack to be typed as a Track
+
+        :return: Input stack with Track designation.
+        """
         return mask
 
     @ImageHelper(by_frame=False, as_tuple=True)
     def track_to_mask(self,
                       track: Track,
                       ) -> Mask:
+        """Convert an Track stack to a Mask stack.
+
+        :param track: Track stack to be typed as a Mask
+
+        :return: Input stack with Mask designation.
+        """
         return track
 
     @ImageHelper(by_frame=False, as_tuple=True)
     def track_to_image(self,
                        track: Track,
                        ) -> Image:
+        """Convert an Track stack to a Image stack.
+
+        :param track: Track stack to be typed as a Image
+
+        :return: Input stack with Image designation.
+        """
         return track
 
     @ImageHelper(by_frame=True)
@@ -486,12 +616,18 @@ class Operation():
                    mask_name: str = None,
                    *args, **kwargs
                    ) -> Same:
-        """
-        Applies a boolean mask.
-        if mask_name is given, overrides mask
+        """ Applies a boolean mask to an image. User can supply
+        a boolean mask or the name of a function from filter_utils.
 
-        mask_name can be any mask in filter_utils
-        *args and **kwargs passed there.
+        :param image: Image to be masked
+        :param mask: Boolean mask of same shape as image
+        :param mask_name: Name of a function in filter_utils to
+            use to create a boolean mask. If given, any input
+            mask is ignored
+        :param *args: Passed to mask_name function
+        :param **kwargs: Passed to mask_name function.
+
+        :return: Masked image
         """
         if mask_name:
             mask = getattr(filter_utils, mask_name)
@@ -510,7 +646,15 @@ class Operation():
                           mask_name: str = 'outside',
                           *args, **kwargs
                           ) -> Mask:
-        """Generates a mask using filter_utils"""
+        """Generates a mask using a function from filter_utils.
+
+        :param image: Image to use for generating mask
+        :param mask_name: Name of the function in filter_utils
+        :param *args: Passed to mask_name function
+        :param **kwargs: Passed to mask_name function.
+
+        :return: Boolean mask with same shape as input image
+        """
         mask = getattr(filter_utils, mask_name)
         return mask(image, *args, **kwargs).astype(bool)
 
@@ -519,6 +663,15 @@ class Operation():
                             dest: Mask,
                             source: Mask
                             ) -> Mask:
+        """Transfers labels from source mask to dest mask based on
+        maximizing the area overlap. Objects with no overlap are given
+        a new label starting at max_label_value + 1.
+
+        :param dest: Mask with objects to be labeled
+        :param source: Mask with labeled objects to use as template
+
+        :return: Labeled mask
+        """
         return match_labels_linear(source, dest)
 
     @ImageHelper(by_frame=False)
@@ -526,7 +679,11 @@ class Operation():
                image: Image,
                signed_float: bool = False
                ) -> Image:
-        """"""
+        """Inverts the intensity of the given image. Wrapper for
+        skimage.util.invert.
+
+        :param image: Image to be inverted.
+        :param signed_float: Set to True if _______________"""
         return util.invert(image, signed_float)
 
     @ImageHelper(by_frame=True)
@@ -535,14 +692,28 @@ class Operation():
                       n_points: int = 25,
                       dtype: type = np.uint8
                       ) -> Mask:
-        """Labels ~n points with unique integers"""
+        """Labels an arbitrary number of approximately evenly-spaced
+        pixels with unique integers.
+
+        :param image: Images to serve as template for making seed mask
+        :param n_points: Number of pixels to label
+        :param dtype: Data type of the output array.
+
+        :return: Mask of same shape as image with n_points pixels labeled
+            with a unique integer.
+        """
         return util.regular_seeds(image.shape, n_points, dtype)
 
     @ImageHelper(by_frame=True)
     def mask_to_seeds(self,
                       mask: Mask
                       ) -> Mask:
-        """"""
+        """Create seed points at the centroid of each object in mask.
+
+        :param mask: Mask to serve as template
+
+        :return: Mask of same shape as input mask with the pixel corresponding
+            to the centroid of each object labeled."""
         return mask_to_seeds(mask)
 
     @ImageHelper(by_frame=True)
@@ -553,10 +724,10 @@ class Operation():
                          inside: float = None,
                          outside: float = None
                          ) -> Image:
-        """"""
-        out = np.where(image>0, 0, 1)
-        return out.astype(np.uint8)
-
+        """
+        This function is too much. Write a simpler binarize function
+        This is more like constant_thres w/o label as is.
+        """
         # Set up the filter
         fil = sitk.BinaryThresholdImageFilter()
         if lower is not None: fil.SetLowerThreshold(lower)
@@ -569,6 +740,10 @@ class Operation():
 
 
 class BaseProcessor(Operation):
+    """
+    Base class for Processor operations. Typically used to apply image filters
+    such as gaussian blurring or edge detection.
+    """
     __name__ = 'Processor'
     _input_type = (Image,)
     _output_type = Image
@@ -585,11 +760,18 @@ class BaseProcessor(Operation):
         """
         Calls run_operation. This is intended to be
         used independently of Pipeline.
+
+        TOOD:
+            - I don't think I need this here anymore.
         """
         return self.run_operation(images, [], [], [])
 
 
 class BaseSegmenter(Operation):
+    """
+    Base class for Segmenter operations. Typically used to create masks
+    from images or to adjust and label already existing masks.
+    """
     __name__ = 'Segmenter'
     _input_type = (Image,)
     _output_type = Mask
@@ -600,18 +782,22 @@ class BaseSegmenter(Operation):
                  ) -> None:
         super().__init__(output=output, **kwargs)
 
-    def __call__(self,
-                 images: Collection[Image] = [],
-                 masks: Collection[Mask] = []
-                 ) -> Mask:
-        """
-        Calls run_operation. This is intended to be
-        used independently of Pipeline.
-        """
-        return self.run_operation(images, masks, [], [])
+    # def __call__(self,
+    #              images: Collection[Image] = [],
+    #              masks: Collection[Mask] = []
+    #              ) -> Mask:
+    #     """
+    #     Calls run_operation. This is intended to be
+    #     used independently of Pipeline.
+    #     """
+    #     return self.run_operation(images, masks, [], [])
 
 
 class BaseTracker(Operation):
+    """
+    Base class for Tracker operations. Typically used to link objects
+    in a provided mask. Can also be used to detect dividing cells.
+    """
     __name__ = 'Tracker'
     _input_type = (Image, Mask)
     _output_type = Track
@@ -634,7 +820,39 @@ class BaseTracker(Operation):
 
 
 class BaseExtractor(Operation):
-    """TODO: Include add_derived_metrics"""
+    """
+    Base class for Extractor operations. Typically used to extract data
+    from an intensity image using masks as a guide.
+
+    :param images: Images to extract data from.
+    :param masks: Masks to segment images with.
+    :param tracks: Tracks to segment images with.
+    :param channels: Names of channels corresponding to
+    :param regions: Names of segmented regions corresponding,
+        tracks and masks, in that order.
+    :param lineages: Lineage files corresponding to masks if provided.
+    :param time: If int or float, designates time between frames.
+        If array, marks the frame time points.
+    :param condition: Name of the condition
+    :param position_id: Unique identifier if multiple ConditionArrays
+        will share the same condition
+    :param min_trace_length: All cells with shorter traces will
+        be deleted from the final array. Length of trace is determined
+        by number of nans in the 'label' metric
+    :param remove_parent: If true, parents of cells are not kept in
+        the final ConditionArray.
+    :param output: Name to save the output stack
+    :param save: If False, the final result will not be saved
+        to disk.
+    :param force_rerun: If True, all functions are run even
+        if the output stack is already loaded.
+    :param skip_frames: Use to specify frames to be skipped. If provided
+        to Pipeline, does not need to be provided again, but must match.
+    :param _split_key: Used to specify outputs from functions that
+        return multiple outputs. For example, if you align two channels
+        the outputs will be saved as 'align&channel000' and
+        'align&channel001' for _split_key = '&'
+    """
     __name__ = 'Extractor'
     _input_type = (Image, Mask, Track)
     _output_type = Arr
@@ -967,113 +1185,6 @@ class BaseExtractor(Operation):
             new_func[-1] = new_kwargs
             self.functions = [tuple(new_func)]
 
-    def add_extra_metric(self, name: str, func: Callable = None) -> None:
-        """
-        Allows for adding custom metrics. If function is none, value will just
-        be nan.
-
-        TODO: Callable function won't be saveable in YAML files
-        """
-        if not func:
-            if name in self._possible_metrics:
-                self._metrics.append(name)
-            else:
-                try:
-                    func = getattr(metric_utils, name)
-                except AttributeError:
-                    # Function not implemented by me
-                    func = RandomNameProperty()
-        else:
-            assert isinstance(func, Callable)
-
-        self._props_to_add[name] = func
-
-    def add_derived_metric(self,
-                           metric_name: str,
-                           keys: Collection[Tuple[str]],
-                           func: str = 'sum',
-                           inverse: bool = False,
-                           propagate: (str, bool) = False,
-                           frame_rng: Union[int, Tuple[int]] = None,
-                           *args, **kwargs
-                           ) -> None:
-        """
-        Calculates additional metrics based on information already in array
-        func can be any numpy function
-        propagate can be bool, or the name of dimension to propagate to
-
-        TODO: Add possiblity for custom Callable function
-        TODO: Peaks could probably be passed here???
-        TODO: So could segmentation of peaks???
-        """
-        # Check the inputs now before calculation
-        # Assert that keys include channel, region, and metric
-        peak_metrics = ('predict_peaks', 'active_cells',
-                        'cumulative_active', 'active')
-        for key in keys:
-            assert len(key) == 3
-        if not hasattr(np, func) and not hasattr(metric_utils, func):
-            if metric_name not in peak_metrics:
-                raise ValueError('Metric must be numpy func '
-                                 'or in metric_utils.')
-
-        # Save to calculated metrics to get added after extract is done
-        # TODO: Make a dictionary
-        self._derived_metrics[metric_name] = tuple([func, keys, inverse, propagate,
-                                                    frame_rng, args, kwargs])
-
-        # Fill in the metric with just nan for now
-        if metric_name in peak_metrics:
-            if metric_name == 'predict_peaks':
-                self._props_to_add['slope_prob'] = RandomNameProperty()
-                self._props_to_add['plateau_prob'] = RandomNameProperty()
-                self._props_to_add['peaks'] = RandomNameProperty()
-            else:
-                self._props_to_add['active'] = RandomNameProperty()
-                self._props_to_add['cumulative_active'] = RandomNameProperty()
-        else:
-            self._props_to_add[metric_name] = RandomNameProperty()
-
-        self.logger.info(f'Added derived metric {metric_name}')
-
-    def add_filter(self,
-                   filter_name: str,
-                   metric: str,
-                   region: Union[str, int] = 0,
-                   channel: Union[str, int] = 0,
-                   frame_rng: Union[int, Tuple[int]] = None,
-                   *args, **kwargs
-                   ) -> None:
-        """
-        TODO: Add ability to pass Callable, has to be done after Extract now
-        """
-        assert hasattr(filter_utils, filter_name), f'{filter_name} not found.'
-        added_metrics = (self._extra_properties
-                         + self._metrics
-                         + list(self._derived_metrics.keys()))
-        assert metric in added_metrics, f'Metric {metric} not found'
-
-        # TODO: Make a dictionary
-        self._filters.append(dict(filter_name=filter_name, metric=metric, region=region,
-                                  channel=channel, frame_rng=frame_rng,
-                                  args=args, kwargs=kwargs))
-
-    def set_metric_list(self, metrics: Collection[str]) -> None:
-        """
-        Adds metrics the user wants to pass to regionprops. Label will be made the
-        first argument by default.
-        """
-        # Check that skimage can handle the given metrics
-        allowed = [m for m in metrics if m in self._possible_metrics]
-        not_allowed = [m for m in metrics if m not in self._possible_metrics]
-
-        self._metrics = allowed
-
-        # Raise warning for the rest
-        if not_allowed:
-            warnings.warn(f'Metrics {[not_allowed]} are not supported. Use '
-                          'CellArray.add_extra_metric to add custom metrics.')
-
     def add_function_to_operation(self,
                                   func: str, *,
                                   output_type: str = None,
@@ -1110,6 +1221,11 @@ class BaseExtractor(Operation):
 
 
 class BaseEvaluator(Operation):
+    """
+    Base class for Evaluator operations. Not currently implemented, but
+    will be used to generate plots and metrics regarding the data from
+    Extractor.
+    """
     __name__ = 'Evaluator'
     _input_type = (Arr,)
     _output_type = Arr
