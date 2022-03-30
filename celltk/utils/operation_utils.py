@@ -8,13 +8,14 @@ import skimage.measure as meas
 import skimage.segmentation as segm
 import scipy.ndimage as ndi
 import scipy.optimize as opti
+import scipy.spatial.distance as distance
 import mahotas.segmentation as mahotas_seg
 import SimpleITK as sitk
 
 from celltk.utils._types import Mask, Track
 
-# TODO: Add label by parent function
 # TODO: Add create lineage tree graph (maybe in plot_utils)
+
 
 def gray_fill_holes(labels: np.ndarray) -> np.ndarray:
     """
@@ -284,11 +285,13 @@ def ndi_binary_fill_holes(labels: np.ndarray,
 def mask_to_seeds(mask: np.ndarray,
                   method: str = 'sitk',
                   output: str = 'mask',
-                  binary: bool = True) -> Union[np.ndarray, list]:
+                  binary: bool = True
+                  ) -> Union[np.ndarray, list]:
     """Find centroid of all objects and return, either as list of points or labeled mask
     If binary, all seeds are 1, otherwise, preserve labels
 
-    Currently, none of the options d anything
+    TOOD:
+        - Make the input options actually do something
     """
     if method == 'sitk':
         img = sitk.GetImageFromArray(mask)
@@ -374,12 +377,9 @@ def lineage_to_track(mask: Mask,
     """
     Each mask in each frame should have a pixel == -1 * parent
 
-    See CellTrackingChallenge and BayesianTracker.ldep for possible
-    formats of the lineage array.
-
     TODO:
         - This won't work if area(region) <= ~6, depending on shape
-        - Also might not work for discontinuous regions
+        - Also may not work for discontinuous regions
     """
     out = mask.copy().astype(np.int16)
     for (lab, app, dis, par) in lineage:
@@ -431,22 +431,35 @@ def sliding_window_generator(arr: np.ndarray, overlap: int = 0) -> Generator:
         yield from arr
 
 
-def data_from_regionprops_table(regionprops: List[dict],
+def data_from_regionprops_table(regionprops: Dict[int, dict],
                                 metric: str,
-                                labels: List[int],
-                                frames: List[int],
+                                labels: List[int] = None,
+                                frames: List[int] = None,
                                 ) -> Union[np.ndarray, float]:
-    """Given a list of regionprops data, yield data for specified metrics
+    """Given a list of regionprops data, return data for specified metrics
     at certain label, frame indices"""
-
-    assert len(labels) == len(frames)
-    out = []
-    for lab, fr, in zip(labels, frames):
-        # Each regionprop comes from regionprops_table (i.e. is Dict)
-        data = regionprops[fr]
-        # Assume labels in regionprops are unique
-        idx = np.argmax(data['label'] == lab)
-        out.append(np.array([data[k][idx] for k in data if metric in k]))
+    if labels is not None or frames is not None:
+        assert len(labels) == len(frames)
+        out = []
+        for lab, fr, in zip(labels, frames):
+            # Each regionprop comes from regionprops_table (i.e. is Dict)
+            data = regionprops[fr]
+            # Assume labels in regionprops are unique
+            idx = np.argmax(data['label'] == lab)
+            out.append(np.array([data[k][idx] for k in data if metric in k]))
+    else:
+        # If not provided, collect data for all frames
+        # Each entry in out are the data for a single label for all frames
+        # i.e. out = [([cell0]...[cellN])_0 ... ([cell0]...[cellN])_F]
+        out = []
+        # Each rp is one frame
+        for rp in regionprops.values():
+            fr = []
+            keys = [k for k in rp if metric in k]
+            # Each n is one cell
+            for n in range(len(rp[keys[0]])):
+                fr.append([rp[k][n] for k in keys])
+            out.append(fr)
 
     return out
 
@@ -670,7 +683,7 @@ def match_labels_linear(source: np.ndarray, dest: np.ndarray) -> np.ndarray:
     # Check if all dest labels were labeled
     # TODO: Should add option to check source labels
     if len(d_idx) < len(dest_labels):
-        # Get the indices of the unlabled and add to the original.
+        # Get the indices of the unlabled and add to the original
         unlabeled = set(range(len(dest_labels))).difference(d_idx)
         unlabeled = np.fromiter(unlabeled, int)
         new_labels = np.arange(1, len(unlabeled) + 1) + np.max(source_labels)
