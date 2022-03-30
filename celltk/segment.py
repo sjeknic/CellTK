@@ -445,6 +445,38 @@ class Segmenter(BaseSegmenter):
         return out
 
     @ImageHelper(by_frame=True)
+    def chan_vese_dense_levelset(self,
+                                 image: Image,
+                                 seeds: Mask,
+                                 iterations: int = 70,
+                                 smoothing: float = 0,
+                                 curve_weight: float = 1,
+                                 area_weight: float = 1,
+                                 lambda1: float = 1,
+                                 lambda2: float = 1,
+                                 epsilon: float = 1,
+                                 ) -> Mask:
+        """"""
+        # Set up the filter
+        fil = sitk.ScalarChanAndVeseDenseLevelSetImageFilter()
+        fil.SetNumberOfIterations(iterations)
+        fil.SetReinitializationSmoothingWeight(smoothing)
+        fil.SetAreaWeight(area_weight)
+        fil.SetCurvatureWeight(curve_weight)
+        fil.SetLambda1(lambda1)
+        fil.SetLambda2(lambda2)
+        fil.SetEpsilon(epsilon)
+
+        # Get the images and execute
+        img = sitk.GetImageFromArray(image)
+        img = cast_sitk(img, 'sitkFloat32', cast_up=True)
+        msk = sitk.GetImageFromArray(seeds)
+        msk = cast_sitk(msk, 'sitkFloat32', cast_up=True)
+        out = fil.Execute(msk, img)
+
+        return sitk.GetArrayFromImage(cast_sitk(out, 'sitkUInt16'))
+
+    @ImageHelper(by_frame=True)
     def morphological_acwe(self,
                            image: Image,
                            seeds: Mask = 'checkerboard',
