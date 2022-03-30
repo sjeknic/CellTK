@@ -395,6 +395,17 @@ def lineage_to_track(mask: Mask,
     return out
 
 
+def label_by_parent(mask: Mask, lineage: np.ndarray) -> Mask:
+    """Replaces daughter cell labels with their parent label
+    """
+    out = mask.copy().astype(np.int16)
+    for (lab, app, dis, par) in lineage:
+        if par and par != lab:
+            out[mask == lab] = par
+
+    return out
+
+
 def sliding_window_generator(arr: np.ndarray, overlap: int = 0) -> Generator:
     """
     overlap: int(amount of frames to overlap between passing)
