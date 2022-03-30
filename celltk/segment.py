@@ -292,6 +292,8 @@ class Segmenter(BaseSegmenter):
         # TODO: Should use Stack type
         if kwargs:
             assert len(kwargs) == len(filters)
+        else:
+            kwargs = [{}] * len(filters)
 
         _sfilt = []
         for f, kw in zip(filters, kwargs):
