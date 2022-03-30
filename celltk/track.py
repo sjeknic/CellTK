@@ -135,9 +135,9 @@ class Tracker(BaseTracker):
                              image: Image,
                              track: Track,
                              mask: Mask = None,
-                             displacement_thres: float = 30,
+                             displacement_thres: float = 15,
                              frame_thres: int = 3,
-                             mass_thres: float = 0.15,
+                             mass_thres: float = 0.25,
                              dist_thres: float = 0.35,
                              dot_thres: float = -0.7,
                              angle_weight: float = 0.5
@@ -189,7 +189,7 @@ class Tracker(BaseTracker):
         # Find start and end of each trace
         # app_diapp = label, first_frame, last_frame, parent_label
         app_disapp = track_to_lineage(track)
-        fr_min, fr_max = (0, mask.shape[1])
+        fr_min, fr_max = (0, mask.shape[0] - 1)  # 0-indexed
 
         # Remove cells that appeared in first frame or disappered in last
         after_first = app_disapp[:, 1] > fr_min
@@ -282,9 +282,11 @@ class Tracker(BaseTracker):
                             np.sum([mass_dist[par, d0],
                                     mass_dist[par, d1]])
                         )
-                        # Error based on location of daughters and parent
+                        # Error based on angle of daughters and parent
                         angle_error = ((1 - np.abs(dot[cd[0], cd[1]])) +
                                        dist[cd[0], cd[1]])
+
+                        # TODO: Add an error based on the total distance??
 
                         costs.append((1 - angle_weight) * mass_error +
                                      angle_weight * angle_error)
@@ -303,7 +305,7 @@ class Tracker(BaseTracker):
         new_lineage = np.zeros((len(dau_idx), 4), dtype=np.uint16)
         for n, dau in enumerate(dau_idx):
             new_lineage[n, :] = app[dau]
-            new_lineage[n, -1] = np.argmax(binary_cost[:, dau])
+            new_lineage[n, -1] = dis[np.argmax(binary_cost[:, dau]), 0]
 
         return lineage_to_track(mask, new_lineage)
 
