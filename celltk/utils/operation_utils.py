@@ -309,6 +309,8 @@ def mask_to_seeds(mask: np.ndarray,
         pt1 = np.array([int(round(p)) for p in pt1])
 
         out[pt1, pt0] = 1
+    elif output == 'points':
+        return centroids
 
     return out
 
