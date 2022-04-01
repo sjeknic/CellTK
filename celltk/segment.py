@@ -113,15 +113,16 @@ class Segmenter(BaseSegmenter):
                                 mask: Mask,
                                 properties: List[str],
                                 limits: Collection[Tuple[float]],
+                                image: Image = None,
                                 ) -> Mask:
         """
         Image has to already be labeled
 
         :param mask:
+        :param image:
         :param properties:
+        :param limits:
 
-        TODO:
-            - Add option to utilize an intensity image
         """
         # User must provide both low and high bound
         assert all([len(l) == 2 for l in limits])
@@ -130,12 +131,12 @@ class Segmenter(BaseSegmenter):
         if 'label' not in properties:
             properties.append('label')
 
-        rp = meas.regionprops_table(mask, properties=properties)
+        rp = meas.regionprops_table(mask, image, properties=properties)
 
         # True in these masks are the indices for the cells to remove
         failed = [~np.logical_and(rp[prop] > lim[0], rp[prop] <= lim[1])
                   for (lim, prop) in zip(limits, properties)]
-        to_remove = np.sum(failed).astype(bool)
+        to_remove = functools.reduce(np.add, failed).astype(bool)
         to_remove = rp['label'][to_remove]
 
         # Get the values and again mark indices as True
