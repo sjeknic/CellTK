@@ -425,7 +425,7 @@ class Segmenter(BaseSegmenter):
                                    watershed_line=True, compactness=compact)
             _old_perc = _perc
 
-        return util.img_as_uint(meas.label(seeds, connectivity=connectivity))
+        return util.img_as_uint(seeds)
 
     @ImageHelper(by_frame=True)
     def watershed_ift_segmentation(self,
@@ -564,6 +564,17 @@ class Segmenter(BaseSegmenter):
         return segm.morphological_geodesic_active_contour(image, iterations,
                                                           seeds, smoothing,
                                                           threshold, balloon)
+
+    @ImageHelper(by_frame=True)
+    def convex_hull_object(self,
+                           mask: Mask,
+                           connectivity: int = 2,
+                           ) -> Mask:
+        """"""
+        # Binarize image
+        if mask.max() > 1: mask = mask.astype(bool)
+
+        return morph.convex_hull_object(mask)
 
     @ImageHelper(by_frame=True)
     def canny_edge_segmentation(self,
