@@ -25,7 +25,6 @@ jobs:
         run: |
           pip install --upgrade pip
           pip install -r requirements.txt
-          pip install -r nodep_requirements.txt --no-deps
       - name: Run tests
         run: |
-          pytest --ignore kit_sch_ge --ignore miscellaneous
+          pytest --ignore external --ignore miscellaneous
