@@ -923,7 +923,8 @@ class BaseExtractor(Operation):
                 regions = masks
 
         # These kwargs get passed to self.extract_data_from_image
-        kwargs = dict(channels=channels, regions=regions, lineages=lineages,
+        kwargs = dict(images=images, masks=masks, tracks=tracks,
+                      channels=channels, regions=regions, lineages=lineages,
                       condition=condition, min_trace_length=min_trace_length,
                       remove_parent=remove_parent, position_id=position_id,
                       skip_frames=skip_frames, time=time)
