@@ -19,7 +19,8 @@ from celltk.utils.operation_utils import (dilate_sitk, voronoi_boundaries,
                                           skimage_level_set, gray_fill_holes,
                                           match_labels_linear, cast_sitk,
                                           sitk_binary_fill_holes,
-                                          ndi_binary_fill_holes)
+                                          ndi_binary_fill_holes,
+                                          mask_to_seeds)
 
 
 class Segmenter(BaseSegmenter):
@@ -36,18 +37,32 @@ class Segmenter(BaseSegmenter):
     @ImageHelper(by_frame=True)
     def label(self,
               mask: Mask,
-              connectivity: int = 2) -> Mask:
-        """"""
+              connectivity: int = 2
+              ) -> Mask:
+        """Uniiquely labels connected pixels.
+
+        :param mask: Mask of objects to be labeled. Can be binary or greyscale.
+        :param connectivity: Determines the local neighborhood around a pixel.
+            Defined as the number of orthogonal steps needed to reach a pixel.
+
+        :return: Labeled mask.
+        """
         return util.img_as_uint(meas.label(mask, connectivity=connectivity))
 
     @ImageHelper(by_frame=True)
     def sitk_label(self,
                    mask: Mask,
                    ) -> Mask:
-        """"""
+        """Uniquely labels connected pixels using a SimpleITK filter
+
+        :param mask: Mask of objects to be labeled. Can be binary or greyscale.
+
+        :return: Labeled mask
+        """
         fil = sitk.ConnectedComponentImageFilter()
         msk = sitk.GetImageFromArray(mask)
-        return sitk.GetArrayFromImage(fil.Execute(msk))
+        msk = cast_sitk(fil.Execute(msk), 'sitkUInt16')
+        return sitk.GetArrayFromImage(msk)
 
     @ImageHelper(by_frame=True)
     def clean_labels(self,
@@ -155,7 +170,8 @@ class Segmenter(BaseSegmenter):
         else:
             test_arr = image >= thres
 
-        return meas.label(test_arr, connectivity=connectivity)
+        # return meas.label(test_arr, connectivity=connectivity).astype(np.uint16)
+        return test_arr.astype(np.uint8)
 
     @ImageHelper(by_frame=True)
     def adaptive_thres(self,
@@ -170,7 +186,7 @@ class Segmenter(BaseSegmenter):
         """
         fil = ndi.gaussian_filter(image, sigma)
         fil = image > fil * (1 + relative_thres)
-        return meas.label(fil, connectivity=connectivity)
+        return fil.astype(np.uint8)
 
     @ImageHelper(by_frame=True)
     def otsu_thres(self,
@@ -192,8 +208,7 @@ class Segmenter(BaseSegmenter):
             labels = morph.binary_closing(labels)
             labels = sitk_binary_fill_holes(labels)
 
-        labels = meas.label(labels, connectivity=connectivity)
-        return util.img_as_uint(labels)
+        return labels.astype(np.uint8)
 
     @ImageHelper(by_frame=False)
     def multiotsu_thres(self,
@@ -221,7 +236,7 @@ class Segmenter(BaseSegmenter):
         if binarize:
             out[out > 0] = 1
 
-        return out
+        return out.astype(np.uint16)
 
     @ImageHelper(by_frame=True)
     def li_thres(self,
@@ -237,7 +252,7 @@ class Segmenter(BaseSegmenter):
         fil.SetOutsideValue(1)
         out = fil.Execute(sitk.GetImageFromArray(image))
 
-        out = cast_sitk(out, 'sitkUInt16')
+        out = cast_sitk(out, 'sitkUInt8')
         return sitk.GetArrayFromImage(out)
 
     @ImageHelper(by_frame=True)
@@ -278,7 +293,7 @@ class Segmenter(BaseSegmenter):
         relab = sitk.RelabelComponentImageFilter()
         relab.SetMinimumObjectSize(min_size)
         labels = relab.Execute(conn.Execute(extrema))
-
+        labels = cast_sitk(labels, 'sitkUInt16')
         return sitk.GetArrayFromImage(labels)
 
     @ImageHelper(by_frame=False)
@@ -360,7 +375,7 @@ class Segmenter(BaseSegmenter):
             # Where mask is True, label those pixels with p
             np.place(out, mask[p, ...], p)
 
-        return out
+        return util.img_as_uint(out)
 
     @ImageHelper(by_frame=True)
     def agglomeration_segmentation(self,
@@ -410,7 +425,7 @@ class Segmenter(BaseSegmenter):
                                    watershed_line=True, compactness=compact)
             _old_perc = _perc
 
-        return meas.label(seeds, connectivity=connectivity)
+        return util.img_as_uint(meas.label(seeds, connectivity=connectivity))
 
     @ImageHelper(by_frame=True)
     def watershed_ift_segmentation(self,
@@ -442,7 +457,7 @@ class Segmenter(BaseSegmenter):
         out = ndi.watershed_ift(util.img_as_uint(image), seeds, struct)
         out[out < 0] = 0
 
-        return out
+        return util.img_as_uint(out)
 
     @ImageHelper(by_frame=True)
     def chan_vese_dense_levelset(self,
@@ -567,7 +582,7 @@ class Segmenter(BaseSegmenter):
         if fill_holes:
             out = sitk_binary_fill_holes(out)
 
-        return out
+        return util.img_as_uint(out)
 
     @ImageHelper(by_frame=True)
     def find_boundaries(self,
@@ -634,7 +649,7 @@ class Segmenter(BaseSegmenter):
             antinucmask = dilate_sitk(np.int32(mask), margin)
         dilated_nuc[antinucmask.astype(bool)] = 0
 
-        return dilated_nuc.astype(np.uint16)
+        return util.img_as_uint(np.uint16)
 
     @ImageHelper(by_frame=True)
     def expand_to_cytoring(self,
@@ -647,14 +662,14 @@ class Segmenter(BaseSegmenter):
 
         TODO:
             - need to implement margin
-
-            - This is important. Consider the pipeline expand_to_cytoring()
-            followed by remove_nuc_from_cyto. After the first function, the mask
-            (nuclear) will be overwritten by the output, because they have the same input
-            However, remove_nuc_from_Cyto requires two inputs... So I need to figure out how to handle that
-            but probably not right now...
         """
-        return segm.expand_labels(mask, distance)
+        # Expand initial seeds before applying expansion
+        if margin:
+            mask = segm.expand_labels(mask, margin)
+
+        out = segm.expand_labels(mask, distance)
+
+        return out - mask
 
     @ImageHelper(by_frame=True)
     def remove_nuc_from_cyto(self,
@@ -676,7 +691,7 @@ class Segmenter(BaseSegmenter):
             eroded_img = morph.binary_erosion(binary_img)
             new_cyto_mask = np.where(eroded_img, new_cyto_mask, 0)
 
-        return new_cyto_mask
+        return util.img_as_uint(new_cyto_mask)
 
     @ImageHelper(by_frame=True)
     def binary_fill_holes(self,
@@ -748,7 +763,7 @@ class Segmenter(BaseSegmenter):
         init = cast_sitk(init, 'sitkFloat32', cast_up=True)
         edge = cast_sitk(edge, 'sitkFloat32')
 
-        out = fil.Execute(edge, init)
+        out = cast_sitk(fil.Execute(edge, init), 'sitkUInt16')
         return sitk.GetArrayFromImage(out)
 
     @ImageHelper(by_frame=True)
@@ -778,7 +793,7 @@ class Segmenter(BaseSegmenter):
         init = cast_sitk(init, 'sitkFloat32', cast_up=True)
         img = cast_sitk(img, 'sitkFloat32', cast_up=True)
 
-        out = fil.Execute(init, img)
+        out = cast_sitk(fil.Execute(init, img), 'sitkUInt16')
         return sitk.GetArrayFromImage(out)
 
     @ImageHelper(by_frame=True)
@@ -803,12 +818,13 @@ class Segmenter(BaseSegmenter):
 
         # Execute and return
         img = fil.Execute(sitk.GetImageFromArray(image))
+        img = cast_sitk(img, 'sitkUInt16')
         return sitk.GetArrayFromImage(img)
 
     @ImageHelper(by_frame=True)
     def fast_marching_level_set(self,
                                 image: Image,
-                                seeds: Mask = None,
+                                seeds: Mask,
                                 n_points: int = 0
                                 ) -> Mask:
         """"""
@@ -817,7 +833,8 @@ class Segmenter(BaseSegmenter):
             seeds = self.regular_seeds(image, n_points)
 
         # Set up filter with trial points from seeds
-        pts = list(zip(*np.where(seeds)))
+        # pts = list(zip(*np.where(seeds)))
+        pts = mask_to_seeds(seeds, output='points')
         fil = sitk.FastMarchingImageFilter()
         for pt in pts:
             fil.AddTrialPoint((int(pt[0]), int(pt[1]), int(0)))
@@ -845,7 +862,7 @@ class Segmenter(BaseSegmenter):
         img = cast_sitk(img, 'sitkUInt16', cast_up=True)
         msk = cast_sitk(msk, 'sitkUInt16', cast_up=True)
 
-        out = sitk.GetArrayFromImage(fil.Execute(img, msk)).astype(np.uint16)
+        out = util.img_as_uint(sitk.GetArrayFromImage(fil.Execute(img, msk)))
 
         if remove_large:
             # The background sometimes gets segmented, so remove it
@@ -941,7 +958,7 @@ class Segmenter(BaseSegmenter):
     @ImageHelper(by_frame=False)
     def misic_predict(self,
                       image: Image,
-                      model_path: str = 'celltk/external/MiSiCv2.h5',
+                      model_path: str = 'external/misic/MiSiCv2.h5',
                       weight_path: str = None,
                       batch: int = None,
                       ) -> Mask:
