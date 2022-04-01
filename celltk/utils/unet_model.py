@@ -18,9 +18,9 @@ from tensorflow.keras.layers import (Conv1D, MaxPooling1D, UpSampling1D,
 from tensorflow.keras import backend as K
 from keras.layers.advanced_activations import LeakyReLU
 import tensorflow.keras.models
-import misic.misic as misic
-import misic.extras as miext
-import misic.utils as miutil
+import external.misic.misic as misic
+import external.misic.extras as miext
+import external.misic.utils as miutil
 
 from celltk.utils._types import Image
 from celltk.utils.info_utils import nan_helper_2d, get_split_idxs

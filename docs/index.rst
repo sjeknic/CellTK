@@ -11,12 +11,10 @@ CellTK is collection of tools to simplify working with live-cell and fixed-cell 
 
 Installation
 ------------
-There are a couple dependency conflicts that I am still resolving. Until those are resolved, the package will not be published to Pypi. Please use the following steps to
-install and run CellTK.
+A package will be published soon. In the meantime, please use the following steps to install and run CellTK.
 
 | ``git clone https://github.com/sjeknic/CellTK/``
 | ``pip install -r requirements.txt``
-| ``pip install -r nodep_requirements.txt --no-deps``
 
 That's it! You should be good to go. If you run into any problems, please open an issue on github.
 

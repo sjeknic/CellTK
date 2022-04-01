@@ -1,19 +1,19 @@
 [![Documentation Status](https://readthedocs.org/projects/celltk/badge/?version=docs2)](https://celltk.readthedocs.io/en/docs2/?badge=docs2)
-![Action branch status](https://github.com/github/docs/actions/workflows/main.yml/badge.svg?branch=main)
+[![pytest](https://github.com/sjeknic/CellTK/actions/workflows/main.yml/badge.svg)](https://github.com/sjeknic/CellTK/actions/workflows/main.yml)
 
 
-# CellST
+# CellTK
 Toolkit for analysis of live-cell microscopy data
-
-## Documentation
-https://celltk.readthedocs.io/en/docs2/
 
 ## Installation
 
-The standard `pip install -r requirements.txt` will install most, but not all of the required packages. This is due to supposed conflicts in dependency versions, that don't affect function of this repo. A separate file contains packages to install without dependencies.
+Simply `git clone` the repository and install the requirements in a clean python environment.
+Requires python 3.7+
 
-Proper installation:  
+`git clone https://github.com/sjeknic/CellTK`
 `pip install -r requirements.txt`  
-`pip install -r nodep_requirements.txt --no-deps`  
 
-Note: You may get warnings during installation of `mahotas`. This is normal, as long as it installs, you're good to go.
+If you run into any issues, please open an issue.
+
+## Documentation
+https://celltk.readthedocs.io/en/latest/
