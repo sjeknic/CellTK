@@ -12,19 +12,14 @@ import pytest
 from celltk.core.arrays import ConditionArray, ExperimentArray
 
 
-class ArrayTester():
+class TestArray():
     # TODO: Replace with smaller files
-    _cond_array_path = os.path.join(par, 'examples', 'data_frame.hdf5')
-    _exp_array_path = os.path.join(par, 'examples', 'experiment.hdf5')
+    _cond_array_path = os.path.join(par, 'examples', 'example_df.hdf5')
+    _exp_array_path = os.path.join(par, 'examples', 'example_experiment.hdf5')
     _cond_temp_path = os.path.join(par, 'examples', '_df.hdf5')
     _exp_temp_path = os.path.join(par, 'examples', '_exp.hdf5')
 
-    # def __init__(self):
-    #     self.test_load_array()
-    #     self.test_saving_loading_arrays()
-    #     self.test_filter_condition()
-
-    def test_load_array(self):
+    def _test_load_array(self):
         # ConditionArray should fail to load ExperimentArray
         with pytest.raises(TypeError):
             ConditionArray.load(self._exp_array_path)
@@ -42,6 +37,8 @@ class ArrayTester():
         assert all([all(s) for s in self.exp_arr.shape])
 
     def test_filter_condition(self):
+        self._test_load_array()
+
         # Try removing no cells from the array - confirm shape is same
         old_shape = self.cond_arr.shape
         mask = self.cond_arr.remove_short_traces(0)
@@ -64,6 +61,8 @@ class ArrayTester():
         assert np.isclose(_cond._arr, self.cond_arr._arr, equal_nan=True).all()
 
     def test_saving_loading_arrays(self):
+        self._test_load_array()
+
         # Save to temporary files
         self.cond_arr.save(self._cond_temp_path)
         self.exp_arr.save(self._exp_temp_path)
@@ -99,7 +98,3 @@ class ArrayTester():
         with pytest.raises(FileNotFoundError):
             ConditionArray.load(self._cond_temp_path)
             ExperimentArray.load(self._exp_temp_path)
-
-
-if __name__ == '__main__':
-    ArrayTester()
