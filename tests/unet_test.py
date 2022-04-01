@@ -16,6 +16,7 @@ import celltk.utils.unet_model
 
 class TestUNet():
     weight_path = os.path.join(par, 'celltk/config/unet_example_cell_weights.hdf5')
+    misic_path = os.path.join(par, 'external/misic/MiSiCv2.h5')
     # TODO: Change later
     data_path = os.path.join(par, 'examples/D4-Site_2')
 
@@ -39,6 +40,15 @@ class TestUNet():
         arrs = np.array_split(img, img.shape[0] // batch, axis=0)
         output = np.concatenate([unet.predict(a, roi=2)
                                  for a in arrs], axis=0)
+
+    def test_misic_model(self):
+        self.model = celltk.utils.unet_model.MisicModel(self.misic_path)
+        arrs = []
+        for im in glob(os.path.join(self.data_path, '*l000*tif')):
+            arrs.append(iio.imread(os.path.join(self.data_path, im)))
+        img = np.stack(arrs, axis=0)
+        output = self.model.predict(img[:, :, :], )
+
 
 if __name__ == '__main__':
     TestUNet().test_unet_model_creation()
