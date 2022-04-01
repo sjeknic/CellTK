@@ -24,19 +24,19 @@ class Orchestrator():
     """
     Orchestrator organizes running multiple Pipelines on a set of folders
 
-    :param yaml_folder: Path to location of Pipeline yamls
-    :param parent_folder: Location of the folders with raw images
-    :param output_folder: Location to store outputs.
+    :param yaml_folder: Absolute path to location of Pipeline yamls
+    :param parent_folder: Absolute path of the folders with raw images
+    :param output_folder: Absolute path to folder to store outputs.
         Defaults to 'parent_folder/outputs'
     :param match_str: If provided, folders that do not contain
         match_str are excluded from analysis
-    :param image_folder: Location of images
+    :param image_folder: Absolute path to folder with images
         if different from parent_folder or output_folder
-    :param mask_folder: Location of masks
+    :param mask_folder: Absolute path to folder with masks
         if different from parent_folder or output_folder
-    :param track_folder: Location of tracks
+    :param track_folder: Absolute path to folder with tracks
         if different from parent_folder or output_folder
-    :param array_folder: Location of arrays
+    :param array_folder: Absolute path to folder with arrays
         if different from parent_folder or output_folder
     :param condition_map: Dictionoary that maps folder names too
         the condition in the experiment. i.e {A1-Site_0: control}

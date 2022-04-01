@@ -5,7 +5,7 @@ from skimage.util import random_noise
 from skimage.io import imread,imsave
 from skimage.filters import gaussian
 from skimage.feature import shape_index
-from misic.utils import *
+from external.misic.utils import *
 ########## Suggested Pre and post processing functions here   #########
 from skimage.segmentation import watershed
 from scipy.ndimage import label

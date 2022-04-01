@@ -5,12 +5,12 @@ import numpy as np
 import pandas as pd
 
 from celltk.utils._types import Image, Mask
-from kit_sch_ge.tracker.tracking import (TrackingConfig, MultiCellTracker,
+from external.kit_sch_ge.tracker.tracking import (TrackingConfig, MultiCellTracker,
                                          Tracklet)
-from kit_sch_ge.tracker.export import (ExportResults, catch_tra_issues,
+from external.kit_sch_ge.tracker.export import (ExportResults, catch_tra_issues,
                                        create_tracking_mask_image)
-from kit_sch_ge.tracker.extract_data import get_indices_pandas
-from kit_sch_ge.tracker.postprocessing import (add_dummy_masks, untangle_tracks,
+from external.kit_sch_ge.tracker.extract_data import get_indices_pandas
+from external.kit_sch_ge.tracker.postprocessing import (add_dummy_masks, untangle_tracks,
                                                no_fn_correction, no_untangling)
 
 """
