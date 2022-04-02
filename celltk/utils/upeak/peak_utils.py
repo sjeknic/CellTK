@@ -42,7 +42,6 @@ def segment_peaks_agglomeration(traces: np.ndarray,
 
     # Extract individual probabilities
     slope, plateau = (probabilities[..., 0], probabilities[..., 1])
-
     # Apply to each trace
     out = np.zeros(traces.shape, dtype=np.uint8)
     for n, (t, s, p) in enumerate(zip(traces, slope, plateau)):
@@ -98,14 +97,13 @@ def _agglom_watershed_peaks(trace: np.ndarray,
     watershed is based on trace value, not peak probability
     """
     out = np.zeros_like(seeds)
-
-    if seeds.sum():
+    if seeds.any():
         # Global mask for all steps
         cand_mask = probability >= min_probability
 
         # Iterate through all of the steps
         perclist = np.linspace(np.nanmax(trace), np.nanmin(trace), steps)
-        _old_perc = perclist[-1]
+        _old_perc = perclist[0]
         for _perc in perclist:
             # Get the mask for this step
             mask = np.logical_and(trace > _perc, trace <= _old_perc)
