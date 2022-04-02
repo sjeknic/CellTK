@@ -345,7 +345,10 @@ class Orchestrator():
         self.logger.info(f"Saving Operations at {path}")
         save_operation_yaml(path, self.operations)
 
-    def save_condition_map_as_yaml(self, path: str = None) -> None:
+    def save_condition_map_as_yaml(self,
+                                   path: str = None,
+                                   fname: str = 'conditions.yaml'
+                                   ) -> None:
         """
         Saves the conditions in Orchestrator as a YAML file
 
@@ -357,6 +360,7 @@ class Orchestrator():
         path = self.output_folder if path is None else path
         if not os.path.exists(path):
             os.makedirs(path)
+        path = os.path.join(path, fname)
 
         # Save using file_utils
         self.logger.info(f"Saving condition_map at {path}")

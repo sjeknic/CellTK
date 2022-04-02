@@ -113,15 +113,16 @@ class Segmenter(BaseSegmenter):
                                 mask: Mask,
                                 properties: List[str],
                                 limits: Collection[Tuple[float]],
+                                image: Image = None,
                                 ) -> Mask:
         """
         Image has to already be labeled
 
         :param mask:
+        :param image:
         :param properties:
+        :param limits:
 
-        TODO:
-            - Add option to utilize an intensity image
         """
         # User must provide both low and high bound
         assert all([len(l) == 2 for l in limits])
@@ -130,12 +131,12 @@ class Segmenter(BaseSegmenter):
         if 'label' not in properties:
             properties.append('label')
 
-        rp = meas.regionprops_table(mask, properties=properties)
+        rp = meas.regionprops_table(mask, image, properties=properties)
 
         # True in these masks are the indices for the cells to remove
         failed = [~np.logical_and(rp[prop] > lim[0], rp[prop] <= lim[1])
                   for (lim, prop) in zip(limits, properties)]
-        to_remove = np.sum(failed).astype(bool)
+        to_remove = functools.reduce(np.add, failed).astype(bool)
         to_remove = rp['label'][to_remove]
 
         # Get the values and again mark indices as True
@@ -425,7 +426,7 @@ class Segmenter(BaseSegmenter):
                                    watershed_line=True, compactness=compact)
             _old_perc = _perc
 
-        return util.img_as_uint(meas.label(seeds, connectivity=connectivity))
+        return util.img_as_uint(seeds)
 
     @ImageHelper(by_frame=True)
     def watershed_ift_segmentation(self,
@@ -564,6 +565,17 @@ class Segmenter(BaseSegmenter):
         return segm.morphological_geodesic_active_contour(image, iterations,
                                                           seeds, smoothing,
                                                           threshold, balloon)
+
+    @ImageHelper(by_frame=True)
+    def convex_hull_object(self,
+                           mask: Mask,
+                           connectivity: int = 2,
+                           ) -> Mask:
+        """"""
+        # Binarize image
+        if mask.max() > 1: mask = mask.astype(bool)
+
+        return morph.convex_hull_object(mask)
 
     @ImageHelper(by_frame=True)
     def canny_edge_segmentation(self,
