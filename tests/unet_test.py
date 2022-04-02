@@ -17,8 +17,8 @@ import celltk.utils.unet_model
 class TestUNet():
     weight_path = os.path.join(par, 'celltk/config/unet_example_cell_weights.hdf5')
     misic_path = os.path.join(par, 'external/misic/MiSiCv2.h5')
-    # TODO: Change later
-    data_path = os.path.join(par, 'examples/D4-Site_2')
+    # TODO: Add bacterial test images
+    data_path = os.path.join(par, 'examples/live_cell_example')
 
     def _unet_model_creation(self, dims):
         unet = celltk.utils.unet_model.FluorUNetModel(dims, self.weight_path)
