@@ -358,7 +358,7 @@ class UPeakModel(_UNetStructure):
     _norm_methods = ['amplitude', 'cwt']
     _norm_kwargs = [{}, {}]
     _norm_inplace = [True, False]
-    _model_kws = dict(classes=3, kernel=8, steps=3, layers=2,
+    _model_kws = dict(classes=3, kernel=4, steps=3, layers=2,
                       init_filters=64, transfer=True, activation='leaky',
                       padding='same', mode=0, momentum=0.9)
 
@@ -582,15 +582,15 @@ class UPeakModel(_UNetStructure):
 
         return array.reshape(input_shape)
 
-    def create_cwt(self, traces: np.ndarray,
-                    widths: np.ndarray = None,
-                     wavelet = signal.ricker
-                    ) -> np.ndarray:
+    def create_cwt(self,
+                   traces: np.ndarray,
+                   widths: np.ndarray = None,
+                   wavelet = signal.ricker
+                   ) -> np.ndarray:
         """"""
         # Get sizes of the wavelets
         splits = np.array_split(traces, 64, axis=1)
         widths = get_split_idxs(splits, axis=1)
-
 
         out = np.zeros((traces.shape[0], traces.shape[1], len(widths)), dtype=float)
         for idx, tr in enumerate(traces):
