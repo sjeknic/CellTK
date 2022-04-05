@@ -1,3 +1,4 @@
+from itertools import zip_longest
 from typing import List, Collection
 
 import numpy as np
@@ -195,19 +196,37 @@ class PeakMetrics():
                      traces: np.ndarray,
                      labels: np.ndarray,
                      metrics: Collection[str],
-                     thresholds: Collection[float]
+                     thresholds: Collection[float],
+                     kwargs: Collection[dict]
                      ) -> np.ndarray:
-        """"""
+        """
+        TODO:
+            - Add both high and low thresholds
+        """
         mask = np.ones(labels.shape, dtype=bool)
-        for metric, thres in zip(metrics, thresholds):
-            data = getattr(self, metric)(traces, labels)
+        for metric, thres, kws in zip_longest(metrics,
+                                              thresholds,
+                                              kwargs,
+                                              fillvalue={}):
+            data = getattr(self, metric)(traces, labels, **kws)
             data_array = self._results_to_array(traces, labels, data)
             # outside returns array where points "to keep" are True
-            # So use inverse of the mask
+            # So use inverse of the mask to remove other points
             mask *= outside(data_array, lo=thres, propagate=False)
 
         # delete the peaks
+        labels = labels.copy()
         labels[~mask] = 0
+
+        # # TODO: Test that this actually works
+        # # Relabel peaks to be sequential
+        for i, lab in enumerate(labels):
+            _lab = np.unique(lab[lab > 0])
+            if len(_lab) > 0 and (np.diff(_lab) > 1).any():
+                for n, l in enumerate(_lab):
+                    n += 1  # peaks are 1-indexed
+                    labels[i, lab == l] = n
+
         return labels
 
     @staticmethod
