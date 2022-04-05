@@ -141,7 +141,7 @@ def _labels_to_idxs(labels: np.ndarray) -> List[np.ndarray]:
     return out
 
 
-class PeakMetrics():
+class PeakMetrics:
     """Helper class for working with output peaks."""
 
     # Prominence/Height
@@ -224,7 +224,7 @@ class PeakMetrics():
                      labels: np.ndarray,
                      metrics: Collection[str],
                      thresholds: Collection[float],
-                     kwargs: Collection[dict]
+                     kwargs: Collection[dict] = [{}]
                      ) -> np.ndarray:
         """
         TODO:

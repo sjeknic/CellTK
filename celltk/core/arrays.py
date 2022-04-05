@@ -13,7 +13,8 @@ import celltk.utils.filter_utils as filtu
 from celltk.utils.plot_utils import plot_groups, plot_trace_predictions
 from celltk.utils.info_utils import nan_helper_2d, get_split_idxs, split_array
 from celltk.utils.unet_model import UPeakModel
-from celltk.utils.upeak.peak_utils import segment_peaks_agglomeration
+from celltk.utils.upeak.peak_utils import (segment_peaks_agglomeration,
+                                           PeakMetrics)
 from celltk.utils.metric_utils import active_cells, cumulative_active
 
 
@@ -837,10 +838,10 @@ class ConditionArray():
                       ) -> None:
         """Uses a UNet-based neural net to predict peaks in the traces defined
         by key. Adds two keys to ConditionArray, 'slope_prob' and
-        'plateau_prob'. If `segment` is True, also adds a 'peaks' key. 'slope_prob'
-        is the probability that a point is on the upward or downward slope of
-        a peak. 'plateau_prob' is the probability that a point is at the top of a
-        peak.
+        'plateau_prob'. If `segment` is True, also adds a 'peaks' key.
+        'slope_prob' is the probability that a point is on the upward or
+        downward slope of a peak. 'plateau_prob' is the probability that a
+        point is at the top of a peak.
 
         :param key: Key to the traces to predict peaks with. Must return a
             2D array.
@@ -887,6 +888,50 @@ class ConditionArray():
             peaks = segment_peaks_agglomeration(data, predictions, **kwargs)
             self[k] = peaks
             if propagate: self.propagate_values(k, prop_to=propagate)
+
+    def filter_peaks(self,
+                     value_key: Tuple[int, str],
+                     metrics: Collection[str],
+                     thresholds: Collection[str],
+                     kwargs: Collection[dict] = [{}],
+                     peak_key: Tuple[int, str] = None,
+                     propagate: bool = True
+                     ) -> None:
+        """Removes segmented peaks based on arbitrary peak criteria.
+        See celltk.utils.peak_utils for more information about possible
+        metrics to use
+
+        :param value_key: Key to the traces used to calculate the peak
+            metrics.
+        :param metrics: Names of the metrics to use for segmentation. See
+            PeakMetrics in celltk.utils.peak_utils.
+        :param thresholds: Lower threshold for the metrics given. If a peak
+            metric is less than the threshold, it will be removed. Must be the
+            same length as metrics.
+        :param kwargs: Collection of dictionaries containing kwargs for the
+            metrics given. If given, should be same length as metrics.
+        :param peak_key: Key to the peak labels. If not given, will attempt
+            to find peak labels based on the value key
+        :param propagate: If True, propagates filtered peak labels to the other
+            keys in ConditionArray
+
+        :return: None
+        """
+        # Guess at peak key if not provided
+        if not peak_key:
+            comps = self._get_key_components(value_key, 'metrics')
+            peak_key = comps + ('peaks',)
+
+        traces = self[value_key]
+        labels = self[peak_key]
+
+        # Filter the peaks with PeakMetrics
+        filtered = PeakMetrics().filter_peaks(traces, labels, metrics,
+                                              thresholds, kwargs)
+
+        # Apply the values
+        self[peak_key] = filtered
+        if propagate: self.propagate_values(peak_key, prop_to=propagate)
 
     def mark_active_cells(self,
                           key: Tuple[int, str],
@@ -1585,7 +1630,6 @@ class ExperimentArray():
                 name = f'{condition}_{nidx}_{save}'
                 plt.savefig(name)
                 plt.close()
-
 
     @classmethod
     def _build_from_file(cls, f: h5py.File) -> 'ExperimentArray':
