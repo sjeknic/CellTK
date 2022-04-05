@@ -239,6 +239,29 @@ class PeakMetrics():
     # Differentials
 
 
+    # Integrals
+    def area_under_curve(self,
+                         traces: np.ndarray,
+                         labels: np.ndarray
+                         ) -> List[List[float]]:
+        """"""
+        out = []
+        for trace, label in zip(traces, labels):
+            out.append(self._area_under_curve(trace, label))
+        return out
+
+    @staticmethod
+    def _area_under_curve(trace: np.ndarray,
+                          label: np.ndarray
+                          ) -> List[float]:
+        """"""
+        out = []
+        for l in np.unique(label[label > 0]):
+            out.append(integrate.simps(trace[label == l]))
+
+        return out
+
+
     # Miscellaneous
     def detect_peak_tracts(self,
                            traces: np.ndarray,  # Not used in this function
@@ -289,7 +312,6 @@ class PeakMetrics():
         labels = labels.copy()
         labels[~mask] = 0
 
-        # # TODO: Test that this actually works
         # # Relabel peaks to be sequential
         for i, lab in enumerate(labels):
             _lab = np.unique(lab[lab > 0])
@@ -314,8 +336,3 @@ class PeakMetrics():
                 peak += 1  # peaks are 1-indexed
                 out[n, label == peak] = r
         return out
-
-
-
-
-
