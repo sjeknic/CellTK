@@ -155,18 +155,6 @@ class PeakMetrics():
             out.append(self._amplitude(trace, label))
         return out
 
-    @staticmethod
-    def _amplitude(trace: np.ndarray,
-                   label: np.ndarray,
-                   ) -> List[float]:
-        """"""
-        out = []
-        for l in np.unique(label[label > 0]):
-            mask = np.where(label == l, trace, 0)
-            out.append(np.max(mask))
-
-        return out
-
     def prominence(self,
                    traces: np.ndarray,
                    labels: np.ndarray,
@@ -182,39 +170,6 @@ class PeakMetrics():
             out.append(self._prominence(trace, idx, amp, tract))
         return out
 
-    @staticmethod
-    def _prominence(trace: np.ndarray,
-                    index: np.ndarray,
-                    amplitude: List[float],
-                    tract: List[List[int]]
-                    ) -> List[float]:
-        """"""
-        out = []
-        for t in tract:
-            # Peaks are 1-indexed
-            frst_pk = t[0] - 1
-            last_pk = t[-1] - 1
-
-            # Get first and last point in tract
-            x = [index[frst_pk][0], index[last_pk][-1]]
-            y = [trace[x[0]], trace[x[-1]]]
-
-            # Adjust heights if close to edge
-            _edge_dist = 4
-            if abs(x[0] - 0) <= _edge_dist:
-                y[0] = y[-1]
-            if abs(x[1] - len(trace) - 1) <= _edge_dist:
-                y[-1] = y[0]
-
-            _base = np.mean(y)
-
-            # For each peak in the tract, take amp - base
-            for pk in t:
-                pk -= 1  # peaks are 1-indexed
-                out.append(amplitude[pk] - _base)
-
-        return out
-
     # Width
     def length(self,
                traces: np.ndarray,
@@ -227,17 +182,7 @@ class PeakMetrics():
 
         return out
 
-    @staticmethod
-    def _length(label: np.ndarray) -> List[int]:
-        """"""
-        peak, counts = np.unique(label[label > 0], return_counts=True)
-        return list(counts)
-
-    # Symmetry
-
-
     # Differentials
-
 
     # Integrals
     def area_under_curve(self,
@@ -249,18 +194,6 @@ class PeakMetrics():
         for trace, label in zip(traces, labels):
             out.append(self._area_under_curve(trace, label))
         return out
-
-    @staticmethod
-    def _area_under_curve(trace: np.ndarray,
-                          label: np.ndarray
-                          ) -> List[float]:
-        """"""
-        out = []
-        for l in np.unique(label[label > 0]):
-            out.append(integrate.simps(trace[label == l]))
-
-        return out
-
 
     # Miscellaneous
     def detect_peak_tracts(self,
@@ -335,4 +268,65 @@ class PeakMetrics():
             for peak, r in enumerate(result):
                 peak += 1  # peaks are 1-indexed
                 out[n, label == peak] = r
+        return out
+
+    @staticmethod
+    def _amplitude(trace: np.ndarray,
+                   label: np.ndarray,
+                   ) -> List[float]:
+        """"""
+        out = []
+        for l in np.unique(label[label > 0]):
+            mask = np.where(label == l, trace, 0)
+            out.append(np.max(mask))
+
+        return out
+
+    @staticmethod
+    def _prominence(trace: np.ndarray,
+                    index: np.ndarray,
+                    amplitude: List[float],
+                    tract: List[List[int]]
+                    ) -> List[float]:
+        """"""
+        out = []
+        for t in tract:
+            # Peaks are 1-indexed
+            frst_pk = t[0] - 1
+            last_pk = t[-1] - 1
+
+            # Get first and last point in tract
+            x = [index[frst_pk][0], index[last_pk][-1]]
+            y = [trace[x[0]], trace[x[-1]]]
+
+            # Adjust heights if close to edge
+            _edge_dist = 4
+            if abs(x[0] - 0) <= _edge_dist:
+                y[0] = y[-1]
+            if abs(x[1] - len(trace) - 1) <= _edge_dist:
+                y[-1] = y[0]
+
+            _base = np.mean(y)
+
+            # For each peak in the tract, take amp - base
+            for pk in t:
+                pk -= 1  # peaks are 1-indexed
+                out.append(amplitude[pk] - _base)
+
+        return out
+
+    @staticmethod
+    def _length(label: np.ndarray) -> List[int]:
+        """"""
+        peak, counts = np.unique(label[label > 0], return_counts=True)
+        return list(counts)
+
+    @staticmethod
+    def _area_under_curve(trace: np.ndarray,
+                          label: np.ndarray
+                          ) -> List[float]:
+        """"""
+        out = []
+        for l in np.unique(label[label > 0]):
+            out.append(integrate.simps(trace[label == l]))
         return out
