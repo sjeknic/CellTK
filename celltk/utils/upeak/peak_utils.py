@@ -1,12 +1,10 @@
-from typing import List
+from typing import List, Collection
 
 import numpy as np
 import skimage.segmentation as segm
+import scipy.integrate as integrate
 
-
-def predict_peaks() -> np.ndarray:
-    pass
-
+from celltk.utils.filter_utils import outside, inside
 
 def segment_peaks_agglomeration(traces: np.ndarray,
                                 probabilities: np.ndarray,
@@ -126,3 +124,103 @@ def _idxs_to_labels(trace: np.ndarray, indexes: List[np.ndarray]) -> np.ndarray:
         out[pts] = label + 1
 
     return out
+
+
+def _labels_to_idxs(labels: np.ndarray) -> List[np.ndarray]:
+    """"""
+    if labels.ndim == 1: labels = labels[None, :]
+    out = []
+    for lab in labels:
+        lab = np.unique(lab[lab > 0])
+        out.append([np.where(labels == l)[0] for l in lab])
+
+    return out
+class PeakMetrics():
+    """Helper class for working with output peaks"""
+
+    # Prominence/Height
+    def amplitude(self,
+                  traces: np.ndarray,
+                  labels: np.ndarray
+                  ) -> np.ndarray:
+        """"""
+        # TODO: Rewrite to be like the old one
+        out = np.zeros_like(traces)
+        out = []
+        for trace, label in zip(traces, labels):
+            _temp = []
+            for l in np.unique(label[label > 0]):
+                mask = np.where(label == l, trace, 0)
+                _temp.append(np.max(mask))
+            out.append(_temp)
+        return out
+
+    # Width
+    def length(self,
+               traces: np.ndarray,
+               labels: np.ndarray
+               ) -> List[List[int]]:
+        """Total peak length"""
+        out = []
+        for lab in labels:
+            peak, counts = np.unique(lab[lab > 0], return_counts=True)
+            out.append(list(counts))
+
+        return out
+    # Miscellaneous
+    def detect_peak_tracts(self,
+                           traces: np.ndarray,  # Not used in this function
+                           labels: np.ndarray,
+                           max_gap: int = 8
+                           ) -> np.ndarray:
+        """Connects peaks that are close together into a single tract.
+        """
+        # out = np.zeros_like(labels)
+        out = []
+        for idx, lab in enumerate(labels):
+            if lab.any():
+                # Find labels separated by greater than max gap
+                p_idx = np.where(lab > 0)[0]
+                diffs = np.ediff1d(p_idx, to_begin=1)
+                bounds = np.where(diffs > max_gap)[0]
+                # Sort into unique tracts
+                out.append([np.unique(t)
+                            for t in np.split(lab[p_idx], bounds)])
+            else:
+                out.append([])
+
+        return out
+
+    def filter_peaks(self,
+                     traces: np.ndarray,
+                     labels: np.ndarray,
+                     metrics: Collection[str],
+                     thresholds: Collection[float]
+                     ) -> np.ndarray:
+        """"""
+        mask = np.ones(labels.shape, dtype=bool)
+        for metric, thres in zip(metrics, thresholds):
+            data = getattr(self, metric)(traces, labels)
+            data_array = self._results_to_array(traces, labels, data)
+            # outside returns array where points "to keep" are True
+            # So use inverse of the mask
+            mask *= outside(data_array, lo=thres, propagate=False)
+
+        # delete the peaks
+        labels[~mask] = 0
+        return labels
+
+    @staticmethod
+    def _results_to_array(traces: np.ndarray,
+                          labels: np.ndarray,
+                          results: List[List[float]]
+                          ) -> np.ndarray:
+        """This inputs the traces and results [[cell1]...[cellN]]
+        and returns array same shape as traces with the indices of the
+        peak overwritten with the results for that peak. All other indices are zero"""
+        out = np.zeros_like(traces)
+        for n, (label, result) in enumerate(zip(labels, results)):
+            for peak, r in enumerate(result):
+                peak += 1  # peaks are 1-indexed
+                out[n, label == peak] = r
+        return out
