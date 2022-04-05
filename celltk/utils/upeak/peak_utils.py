@@ -118,8 +118,11 @@ def _agglom_watershed_peaks(trace: np.ndarray,
     return out
 
 
-def _idxs_to_labels(trace: np.ndarray, indexes: List[np.ndarray]) -> np.ndarray:
+def _idxs_to_labels(trace: np.ndarray,
+                    indexes: List[np.ndarray]
+                    ) -> np.ndarray:
     """"""
+    # Takes points associated with peak and labels a 1D ndarray
     out = np.zeros(trace.shape, dtype=np.uint8)
     for label, pts in enumerate(indexes):
         out[pts] = label + 1
@@ -132,28 +135,84 @@ def _labels_to_idxs(labels: np.ndarray) -> List[np.ndarray]:
     if labels.ndim == 1: labels = labels[None, :]
     out = []
     for lab in labels:
-        lab = np.unique(lab[lab > 0])
-        out.append([np.where(labels == l)[0] for l in lab])
+        peaks = np.unique(lab[lab > 0])
+        out.append([np.unique(np.where(lab == p)[0]) for p in peaks])
 
     return out
+
+
 class PeakMetrics():
-    """Helper class for working with output peaks"""
+    """Helper class for working with output peaks."""
 
     # Prominence/Height
     def amplitude(self,
                   traces: np.ndarray,
                   labels: np.ndarray
-                  ) -> np.ndarray:
+                  ) -> List[List[float]]:
         """"""
-        # TODO: Rewrite to be like the old one
-        out = np.zeros_like(traces)
         out = []
         for trace, label in zip(traces, labels):
-            _temp = []
-            for l in np.unique(label[label > 0]):
-                mask = np.where(label == l, trace, 0)
-                _temp.append(np.max(mask))
-            out.append(_temp)
+            out.append(self._amplitude(trace, label))
+        return out
+
+    @staticmethod
+    def _amplitude(trace: np.ndarray,
+                   label: np.ndarray,
+                   ) -> List[float]:
+        """"""
+        out = []
+        for l in np.unique(label[label > 0]):
+            mask = np.where(label == l, trace, 0)
+            out.append(np.max(mask))
+
+        return out
+
+    def prominence(self,
+                   traces: np.ndarray,
+                   labels: np.ndarray,
+                   tracts: List[List[int]] = []
+                   ) -> List[List[float]]:
+        """"""
+        idxs = _labels_to_idxs(labels)
+        amps = self.amplitude(traces, labels)
+
+        out = []
+        long_zip = zip_longest(traces, idxs, amps, tracts, fillvalue=[])
+        for trace, idx, amp, tract in long_zip:
+            out.append(self._prominence(trace, idx, amp, tract))
+        return out
+
+    @staticmethod
+    def _prominence(trace: np.ndarray,
+                    index: np.ndarray,
+                    amplitude: List[float],
+                    tract: List[List[int]]
+                    ) -> List[float]:
+        """"""
+        out = []
+        for t in tract:
+            # Peaks are 1-indexed
+            frst_pk = t[0] - 1
+            last_pk = t[-1] - 1
+
+            # Get first and last point in tract
+            x = [index[frst_pk][0], index[last_pk][-1]]
+            y = [trace[x[0]], trace[x[-1]]]
+
+            # Adjust heights if close to edge
+            _edge_dist = 4
+            if abs(x[0] - 0) <= _edge_dist:
+                y[0] = y[-1]
+            if abs(x[1] - len(trace) - 1) <= _edge_dist:
+                y[-1] = y[0]
+
+            _base = np.mean(y)
+
+            # For each peak in the tract, take amp - base
+            for pk in t:
+                pk -= 1  # peaks are 1-indexed
+                out.append(amplitude[pk] - _base)
+
         return out
 
     # Width
@@ -164,10 +223,22 @@ class PeakMetrics():
         """Total peak length"""
         out = []
         for lab in labels:
-            peak, counts = np.unique(lab[lab > 0], return_counts=True)
-            out.append(list(counts))
+            out.append(self._length(lab))
 
         return out
+
+    @staticmethod
+    def _length(label: np.ndarray) -> List[int]:
+        """"""
+        peak, counts = np.unique(label[label > 0], return_counts=True)
+        return list(counts)
+
+    # Symmetry
+
+
+    # Differentials
+
+
     # Miscellaneous
     def detect_peak_tracts(self,
                            traces: np.ndarray,  # Not used in this function
@@ -185,7 +256,7 @@ class PeakMetrics():
                 diffs = np.ediff1d(p_idx, to_begin=1)
                 bounds = np.where(diffs > max_gap)[0]
                 # Sort into unique tracts
-                out.append([np.unique(t)
+                out.append([np.unique(t).astype(np.uint8)
                             for t in np.split(lab[p_idx], bounds)])
             else:
                 out.append([])
@@ -243,3 +314,8 @@ class PeakMetrics():
                 peak += 1  # peaks are 1-indexed
                 out[n, label == peak] = r
         return out
+
+
+
+
+
