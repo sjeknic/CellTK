@@ -196,7 +196,8 @@ class Processor(BaseProcessor):
                                         num_points: Collection[int] = 4,
                                         histogram_bins: int = 200,
                                         spline_order: int = 3,
-                                        subsample_factor: int = 2
+                                        subsample_factor: int = 1,
+                                        save_bias_field: bool = False
                                         ) -> Image:
         """
         Downsampling image first decreases computation time.
@@ -259,8 +260,11 @@ class Processor(BaseProcessor):
         _ = fil.Execute(temp_img, temp_mask)
         log_bias_field = fil.GetLogBiasFieldAsImage(img)  # Use full-res here
 
-        out = img / sitk.Exp(log_bias_field)
-        out = cast_sitk(out, 'sitkFloat32')
+        if save_bias_field:
+            out = cast_sitk(log_bias_field, 'sitkFloat32')
+        else:
+            out = img / sitk.Exp(log_bias_field)
+            out = cast_sitk(out, 'sitkFloat32')
 
         return sitk.GetArrayFromImage(out)
 
