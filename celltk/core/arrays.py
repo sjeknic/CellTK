@@ -13,8 +13,8 @@ import celltk.utils.filter_utils as filtu
 from celltk.utils.plot_utils import plot_groups, plot_trace_predictions
 from celltk.utils.info_utils import nan_helper_2d, get_split_idxs, split_array
 from celltk.utils.unet_model import UPeakModel
-from celltk.utils.upeak.peak_utils import (segment_peaks_agglomeration,
-                                           PeakMetrics)
+from celltk.utils.peak_utils import (segment_peaks_agglomeration,
+                                     PeakMetrics)
 from celltk.utils.metric_utils import active_cells, cumulative_active
 
 

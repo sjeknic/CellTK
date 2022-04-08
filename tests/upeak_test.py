@@ -11,7 +11,7 @@ import pytest
 
 import celltk
 import celltk.utils.unet_model
-from celltk.utils.upeak.peak_utils import segment_peaks_agglomeration
+from celltk.utils.peak_utils import segment_peaks_agglomeration
 from celltk.utils.plot_utils import plot_trace_predictions
 
 class TestUPeak():
