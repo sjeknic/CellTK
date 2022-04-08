@@ -188,7 +188,7 @@ class Processor(BaseProcessor):
                                kernel=kernel, nansafe=nansafe)
         return image - bg
 
-    @ImageHelper(by_frame=True)
+    @ImageHelper(by_frame=False)
     def n4_illumination_bias_correction(self,
                                         image: Image,
                                         mask: Mask = None,
@@ -196,8 +196,11 @@ class Processor(BaseProcessor):
                                         num_points: Collection[int] = 4,
                                         histogram_bins: int = 200,
                                         spline_order: int = 3,
+                                        subsample_factor: int = 1,
+                                        save_bias_field: bool = False
                                         ) -> Image:
         """
+        Downsampling image first decreases computation time.
 
         TODO:
             - Add subsampling of the image
@@ -206,6 +209,9 @@ class Processor(BaseProcessor):
         if (image < 1).any():
             warnings.warn('N4 correction of images with small '
                           'values can produce poor results.')
+        if subsample_factor <= 1:
+            warnings.warn('Faster computation can be achieved '
+                          'by subsampling the original image.')
 
         if isinstance(iterations, int):
             iterations = [iterations] * 4  # 4 levels of correction
@@ -213,9 +219,9 @@ class Processor(BaseProcessor):
             assert len(iterations) == 4
 
         if isinstance(num_points, int):
-            num_points = [num_points] * 2  # 2D image
+            num_points = [num_points] * 3  # 3D Stack
         else:
-            assert len(num_points) == 2
+            assert len(num_points) == 3
 
         # Set up the filter
         fil = sitk.N4BiasFieldCorrectionImageFilter()
@@ -224,17 +230,42 @@ class Processor(BaseProcessor):
         fil.SetNumberOfHistogramBins(histogram_bins)
         fil.SetSplineOrder(spline_order)
 
-        # Execute
+        # Load images
         img = sitk.GetImageFromArray(image)
         img = cast_sitk(img, 'sitkFloat32', cast_up=True)
         if mask is not None:
             mask = sitk.GetImageFromArray(mask)
             mask = cast_sitk(img, 'sitkUInt8')
-            out = fil.Execute(img, mask)
         else:
-            out = fil.Execute(img)
+            mask = sitk.GetImageFromArray(np.ones_like(image))
+            mask = cast_sitk(mask, 'sitkUInt8')
 
-        out = cast_sitk(out, 'sitkFloat32')
+        # Downsample images
+        if subsample_factor > 1:
+            shrink = sitk.ShrinkImageFilter()
+
+            # NOTE: Image shape gets transposed, that's why the last axis
+            #       factor is set to 1 instead of the first.
+            factor_vector = [1 * subsample_factor for _ in image.shape]
+            factor_vector[-1] = 1
+            shrink.SetShrinkFactors(factor_vector)
+
+            temp_img = shrink.Execute(img)
+            temp_mask = shrink.Execute(mask)
+        else:
+            temp_img = img
+            temp_mask = mask
+
+        # Calculate the bias field
+        _ = fil.Execute(temp_img, temp_mask)
+        log_bias_field = fil.GetLogBiasFieldAsImage(img)  # Use full-res here
+
+        if save_bias_field:
+            out = cast_sitk(log_bias_field, 'sitkFloat32')
+        else:
+            out = img / sitk.Exp(log_bias_field)
+            out = cast_sitk(out, 'sitkFloat32')
+
         return sitk.GetArrayFromImage(out)
 
     @ImageHelper(by_frame=True)

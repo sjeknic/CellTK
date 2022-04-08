@@ -251,7 +251,7 @@ class Pipeline():
                     self._image_container.update(dict(oper_result))
                     # Write to disk if needed
                     self._save_images(oper.save_arrays,
-                                     oper._output_type.__name__)
+                                      oper._output_type.__name__)
 
                 self.completed_ops += 1
 
