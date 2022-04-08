@@ -40,26 +40,28 @@ class PlotHelper:
     _ax_col = '#444'
     _black = '#000000'
     _default_axis_layout = {
-            'layer': 'above traces',
-            'linewidth': 3,
-            'linecolor': _ax_col,
-            'showline': True,
-            'tickfont': dict(color=_ax_col, size=12, family=_font_families),
-            'ticklen': 7,
-            'ticks': 'outside',
-            'tickwidth': 2,
-            'title': dict(font=dict(color='#242424', size=20)),
-            'zeroline': False,
-        }
+        'layer': 'above traces',
+        'linewidth': 3,
+        'linecolor': _ax_col,
+        'showline': True,
+        'tickfont': dict(color=_ax_col, size=12, family=_font_families),
+        'ticklen': 7,
+        'ticks': 'outside',
+        'tickwidth': 2,
+        'title': dict(font=dict(color='#242424', size=20)),
+        'zeroline': False,
+    }
+    _no_line_axis = _default_axis_layout.copy()
+    _no_line_axis['showline'] = False
     _default_legend_layout = {
-            'borderwidth': 0,
-            'font': dict(color=_ax_col, size=12, family=_font_families),
-            'itemsizing': 'constant',
-            'itemwidth': 30,  # must be >= 30
-            'title': {'font': dict(color=_ax_col, size=12,
-                                   family=_font_families)},
-            'tracegroupgap': 10,  # must be >= 0
-        }
+        'borderwidth': 0,
+        'font': dict(color=_ax_col, size=12, family=_font_families),
+        'itemsizing': 'constant',
+        'itemwidth': 30,  # must be >= 30
+        'title': {'font': dict(color=_ax_col, size=12,
+                               family=_font_families)},
+        'tracegroupgap': 10,  # must be >= 0
+    }
 
     # kwarg keys
     _line_kwargs = ('color', 'dash', 'shape', 'simplify', 'smoothing', 'width')
@@ -294,16 +296,12 @@ class PlotHelper:
                 if neg_arrays:
                     neg_y = neg_arrays[idx]
                     neg_x = None
-                    # y0 = key
-                    # x0 = None
             elif orientation in ('h', 'horizontal'):
                 y = None
                 x = arr
                 if neg_arrays:
                     neg_y = [key]
                     neg_x = neg_arrays[idx]
-                    # y0 = None
-                    # x0 = key
 
             # Set up the colors
             _c = next(colors)
@@ -317,6 +315,7 @@ class PlotHelper:
                               line=line, *args, **violin_kwargs)
             fig.add_trace(trace)
 
+            # Add the other half of the distributions if needed
             if neg_arrays:
                 # Set up the colors
                 _nc = next(neg_colors)
@@ -326,17 +325,54 @@ class PlotHelper:
                 neg_side = 'negative' if side == 'positive' else 'positive'
                 nkey = neg_keys[idx] if neg_keys else key
                 neg_trace = go.Violin(x=neg_x, y=neg_y, side=neg_side,
-                                      name=nkey, legendgroup=key,
+                                      name=key, legendgroup=nkey,
                                       spanmode=spanmode, box_visible=show_box,
                                       points=show_points, hoverinfo='skip',
                                       line=line, *args, **violin_kwargs)
                 fig.add_trace(neg_trace)
 
-
+        # Format plot on the way out
         fig.update_traces(**kwargs)
         fig.update_layout(template=self._template, violinmode=violinmode)
         fig.update_xaxes(**self._default_axis_layout)
+        fig.update_xaxes(title=x_label, range=x_limit)
         fig.update_yaxes(**self._default_axis_layout)
+        fig.update_yaxes(title=y_label, range=y_limit)
+
+        return fig
+
+    def heatmap_plot(self,
+                     array: np.ndarray,
+                     colorscale: str = 'viridis',
+                     zmin: float = None,
+                     zmid: float = None,
+                     zmax: float = None,
+                     reverse: bool = False,
+                     figure: go.Figure = None,
+                     title: str = None,
+                     x_label: str = None,
+                     y_label: str = None,
+                     x_limit: Tuple[float] = None,
+                     y_limit: Tuple[float] = None,
+                     *args, **kwargs
+                     ) -> Union[go.Figure, go.FigureWidget]:
+        """
+        TODO:
+            - Add setting the xscale here
+        """
+        assert array.ndim == 2
+        fig = figure if figure else go.Figure()
+        trace = go.Heatmap(z=array, zmin=zmin, zmax=zmax,
+                           zmid=zmid, colorscale=colorscale,
+                           reversescale=reverse,
+                           *args, **kwargs)
+        fig.add_trace(trace)
+
+        fig.update_layout(template=self._template)
+        fig.update_xaxes(**self._no_line_axis)
+        fig.update_xaxes(title=x_label, range=x_limit)
+        fig.update_yaxes(**self._no_line_axis)
+        fig.update_yaxes(title=y_label, range=y_limit)
 
         return fig
 
