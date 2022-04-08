@@ -62,11 +62,20 @@ class PlotHelper:
                                family=_font_families)},
         'tracegroupgap': 10,  # must be >= 0
     }
+    _default_error_bar_layout = {
+        'color': _ax_col,
+        'thickness': 2,
+        'visible': True,
+        'width': 0
+    }
 
     # kwarg keys
-    _line_kwargs = ('color', 'dash', 'shape', 'simplify', 'smoothing', 'width')
-    _violin_kwargs = ('bandwidth', 'fillcolor', 'hoverinfo', 'jitter', 'marker',
-                      'line', 'opacity', 'pointpos', 'points', 'span', 'width')
+    _line_kwargs = ('color', 'dash', 'shape', 'simplify', 'smoothing', 'width',
+                    'hoverinfo')
+    _violin_kwargs = ('bandwidth', 'fillcolor', 'hoverinfo', 'jitter', 'line',
+                      'marker', 'opacity', 'pointpos', 'points', 'span',
+                      'width', 'hoverinfo')
+    _bar_kwargs = ('hoverinfo', 'marker', 'width')
 
     def _build_colormap(self,
                         colors: Union[str, Collection[str]],
@@ -239,6 +248,113 @@ class PlotHelper:
         fig.update_yaxes(**self._default_axis_layout)
         return fig
 
+    def bar_plot(self,
+                 arrays: Collection[np.ndarray],
+                 keys: Collection[str] = [],
+                 estimator: Union[Callable, str, functools.partial] = None,
+                 err_estimator: Union[Callable, str, functools.partial] = None,
+                 ax_labels: Collection[str] = None,
+                 colors: Union[str, Collection[str]] = None,
+                 orientation: str = 'v',
+                 barmode: str = 'group',
+                 legend: bool = True,
+                 figure: go.Figure = None,
+                 title: str = None,
+                 x_label: str = None,
+                 y_label: str = None,
+                 x_limit: Tuple[float] = None,
+                 y_limit: Tuple[float] = None,
+                 *args, **kwargs
+                 ) -> Union[go.Figure, go.FigureWidget]:
+        """"""
+        # Format data
+        assert all([isinstance(a, np.ndarray) for a in arrays])
+        assert orientation in ('v', 'h', 'horizontal', 'vertical')
+
+        # Convert any inputs that need converting
+        colors = self._build_colormap(colors, len(arrays))
+        if estimator: estimator = self._build_estimator_func(estimator)
+        if err_estimator: err_estimator = self._build_estimator_func(err_estimator)
+        bar_kwargs = {k: v for k, v in kwargs.items()
+                      if k in self._bar_kwargs}
+        kwargs = {k: v for k, v in kwargs.items()
+                  if k not in self._bar_kwargs}
+
+        fig = figure if figure else go.Figure()
+        for idx, (arr, key) in enumerate(itertools.zip_longest(arrays, keys)):
+            # Get the key
+            if not key:
+                key = f'bar_{idx}'
+            key += f' | n={arr.shape[0]}'
+
+            # err_estimator is used to calculate errorbars
+            if err_estimator:
+                err_arr = err_estimator(arr)
+
+                # If one dimensional, it's the error relative to the mean
+                # that's how plotly wants it
+                # if if it is 2D, need to subtract from the mean
+            else:
+                err_arr = None
+
+            # estimator is used to condense all the lines to a single line
+            if estimator:
+                arr = np.squeeze(estimator(arr))
+
+            # Set the data key based on orientation
+            error_x = None
+            error_y = None
+            if orientation in ('v', 'vertical'):
+                y = arr
+                x = ax_labels if ax_labels else None
+                if err_arr is not None:
+                    error_x = None
+                    error_y = self._default_error_bar_layout.copy()
+                    error_y.update({'type': 'data'})
+                    if err_arr.ndim == 1:
+                        # Assume symmetric
+                        error_y.update({'array': err_arr, 'symmetric': True})
+                    elif err_arr.ndim == 2:
+                        # Assume that they are already set based on the mean value, so that needs
+                        # to be subtracted
+                        err_plus = arr - err_arr[0, :]
+                        err_minus = err_arr[-1, :] - arr
+                        error_y.update({'array': err_plus, 'arrayminus': err_minus})
+            elif orientation in ('h', 'horizontal'):
+                y = ax_labels if ax_labels else None
+                x = arr
+                if err_arr is not None:
+                    error_y = None
+                    error_x = self._default_error_bar_layout.copy()
+                    error_x.update({'type': 'data'})
+                    if err_arr.ndim == 1:
+                        # Assume symmetric
+                        error_x.update({'array': err_arr, 'symmetric': True})
+                    elif err_arr.ndim == 2:
+                        # Assume that they are already set based on the mean value, so that needs
+                        # to be subtracted
+                        err_plus = arr - err_arr[0, :]
+                        err_minus = err_arr[-1, :] - arr
+                        error_x.update({'array': err_plus, 'arrayminus': err_minus})
+
+            # Set up the colors
+            _c = next(colors)
+            bar_kwargs.update({'marker_color': _c})
+
+            trace = go.Bar(x=x, y=y, error_x=error_x, error_y=error_y,
+                           name=key, **bar_kwargs)
+            fig.add_trace(trace)
+
+        # Format plot on the way out
+        fig.update_traces(**kwargs)
+        fig.update_layout(template=self._template, barmode=barmode)
+        fig.update_xaxes(**self._default_axis_layout)
+        fig.update_xaxes(title=x_label, range=x_limit)
+        fig.update_yaxes(**self._default_axis_layout)
+        fig.update_yaxes(title=y_label, range=y_limit)
+
+        return fig
+
     def violin_plot(self,
                     arrays: Collection[np.ndarray],
                     neg_arrays: Collection[np.ndarray] = [],
@@ -300,7 +416,7 @@ class PlotHelper:
                 y = None
                 x = arr
                 if neg_arrays:
-                    neg_y = [key]
+                    neg_y = None
                     neg_x = neg_arrays[idx]
 
             # Set up the colors
