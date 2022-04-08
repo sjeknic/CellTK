@@ -35,6 +35,31 @@ def fraction_of_total(arr: np.ndarray,
                       ) -> np.ndarray:
     """"""
     if ignore_nans:
-        return np.nansum(arr, axis=ax, keepdims=True) / arr.shape[0]
+        return np.nansum(arr, axis=ax, keepdims=True) / arr.shape[ax]
     else:
-        return np.sum(arr, axis=ax, keepdims=True) / arr.shape[0]
+        return np.sum(arr, axis=ax, keepdims=True) / arr.shape[ax]
+
+
+def wilson_score(arr: np.ndarray,
+                 ci: float = 0.95,
+                 ax: int = 0
+                 ) -> np.ndarray:
+    """"""
+    # Do two-tailed by default, so divide by 2
+    z = stats.norm.ppf(1 - (1 - ci) / 2)
+
+    # Get proportion of population that is positive
+    prob = np.squeeze(fraction_of_total(arr, ax=ax))
+
+    # Get cell counts for each column
+    n = (~np.isnan(arr)).sum(0)
+
+    # Calculate the wilson score
+    denom = 1 + z ** 2 / n
+    adj_prob = prob + z ** 2 / (2 * n)
+    adj_sd = np.sqrt((prob * (1 - prob) + z ** 2 / (4 * n)) / n)
+
+    hi = (adj_prob + z * adj_sd) / denom
+    lo = (adj_prob - z * adj_sd) / denom
+
+    return np.vstack([hi, lo])
