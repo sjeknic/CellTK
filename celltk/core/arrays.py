@@ -1480,6 +1480,38 @@ class ExperimentArray():
         for v in self.sites.values():
             v.predict_peaks(key, model, propagate=propagate)
 
+    def filter_peaks(self,
+                     value_key: Tuple[int, str],
+                     metrics: Collection[str],
+                     thresholds: Collection[str],
+                     kwargs: Collection[dict] = [{}],
+                     peak_key: Tuple[int, str] = None,
+                     propagate: bool = True
+                     ) -> None:
+        """Removes segmented peaks based on arbitrary peak criteria.
+        See celltk.utils.peak_utils for more information about possible
+        metrics to use
+
+        :param value_key: Key to the traces used to calculate the peak
+            metrics.
+        :param metrics: Names of the metrics to use for segmentation. See
+            PeakMetrics in celltk.utils.peak_utils.
+        :param thresholds: Lower threshold for the metrics given. If a peak
+            metric is less than the threshold, it will be removed. Must be the
+            same length as metrics.
+        :param kwargs: Collection of dictionaries containing kwargs for the
+            metrics given. If given, should be same length as metrics.
+        :param peak_key: Key to the peak labels. If not given, will attempt
+            to find peak labels based on the value key
+        :param propagate: If True, propagates filtered peak labels to the other
+            keys in ConditionArray
+
+        :return: None
+        """
+        for v in self.sites.values():
+            v.filter_peaks(value_key, metrics, thresholds, kwargs,
+                           peak_key, propagate)
+
     def mark_active_cells(self,
                           key: Tuple[int, str],
                           thres: float = 1,
@@ -1500,7 +1532,7 @@ class ExperimentArray():
 
     def plot_by_condition(self,
                           keys: List[Tuple[str]],
-                          conditions: Collection[str] = None,
+                          conditions: Collection[str],
                           estimator: Union[Callable, str, functools.partial] = None,
                           err_estimator: Union[Callable, str, functools.partial] = None,
                           colors: Union[Callable, Collection] = None,
@@ -1567,7 +1599,7 @@ class ExperimentArray():
         """
         # Get the data to plot
         keys = tuple(keys) if not isinstance(keys, tuple) else keys
-        conditions = conditions if conditions else self.conditions
+        if not conditions: return go.Figure()
         arrs = self[conditions][keys]
         time = self.time[0]
 
