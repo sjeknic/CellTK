@@ -142,9 +142,7 @@ def _labels_to_idxs(labels: np.ndarray) -> List[np.ndarray]:
 
 
 class PeakMetrics:
-    """Helper class for working with output peaks."""
-
-    # Prominence/Height
+    """Helper class for getting data from peak labels"""
     def amplitude(self,
                   traces: np.ndarray,
                   labels: np.ndarray
@@ -170,7 +168,6 @@ class PeakMetrics:
             out.append(self._prominence(trace, idx, amp, tract))
         return out
 
-    # Width
     def length(self,
                traces: np.ndarray,
                labels: np.ndarray
@@ -182,9 +179,25 @@ class PeakMetrics:
 
         return out
 
-    # Differentials
+    def width(self,
+              traces: np.ndarray,
+              labels: np.ndarray,
+              tracts: List[List[int]] = [],
+              relative: float = 0.5,
+              absolute: float = None
+              ) -> List[List[float]]:
+        """"""
+        raise NotImplementedError
+        idxs = _labels_to_idxs(labels)
+        amps = self.amplitude(traces, labels)
 
-    # Integrals
+        out = []
+        long_zip = zip_longest(traces, idxs, tracts, amps, fillvalue=[])
+        for trace, idx, tract, amp in long_zip:
+            out.append(self._width(trace, idx, tract, amp,
+                                   relative, absolute))
+        return out
+
     def area_under_curve(self,
                          traces: np.ndarray,
                          labels: np.ndarray
@@ -195,7 +208,6 @@ class PeakMetrics:
             out.append(self._area_under_curve(trace, label))
         return out
 
-    # Miscellaneous
     def detect_peak_tracts(self,
                            traces: np.ndarray,  # Not used in this function
                            labels: np.ndarray,
@@ -320,6 +332,30 @@ class PeakMetrics:
         """"""
         peak, counts = np.unique(label[label > 0], return_counts=True)
         return list(counts)
+
+    @staticmethod
+    def _width(trace: np.ndarray,
+               label: np.ndarray,
+               tract: List[List[int]],
+               amplitudes: List[float],
+               relative: float,
+               absolute: float = None
+               ) -> List[float]:
+        """"""
+        # Get the target height
+        if absolute:
+            target = [absolute] * len(peaks)
+        else:
+            target = [a * relative for a in amplitudes]
+
+        out = []
+        for p, t, a in zip(peaks, targets, amplitudes):
+            if t >= a:
+                out.append(np.nan)
+            else:
+                # Calculate crossing points
+                pass
+
 
     @staticmethod
     def _area_under_curve(trace: np.ndarray,
