@@ -338,7 +338,7 @@ class Pipeline():
             save_folder = os.path.join(self.output_folder, name)
 
             # Save CellArray separately
-            if oper_output == 'array':
+            if otpt_type == 'array':
                 name = os.path.join(self.output_folder, f"{name}.hdf5")
                 arr.save(name)
 
