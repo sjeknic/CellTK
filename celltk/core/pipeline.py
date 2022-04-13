@@ -11,6 +11,7 @@ import tifffile as tiff
 import imageio as iio
 
 from celltk.core.operation import Operation
+from celltk.core.arrays import ConditionArray, ExperimentArray
 from celltk.extract import Extractor
 from celltk.utils._types import Image, Mask, Track, Arr, ImageContainer, INPT_NAMES
 from celltk.utils.process_utils import condense_operations, extract_operations
@@ -435,7 +436,9 @@ class Pipeline():
         # Function to check if img should be loaded
         def _confirm_im_match(im: str, match_str: str, path: str) -> bool:
             name = True if match_str is None else match_str in im
-            ext = self.file_extension in im
+            ext = self.file_extension in im.split('.')[-1]
+            ext2 = 'hdf5' in im.split('.')[-1]
+            ext = ext or ext2
             fil = os.path.isfile(os.path.join(path, im))
 
             return name * ext * fil
@@ -474,7 +477,7 @@ class Pipeline():
                     im_names = [i for n, i in enumerate(im_names)
                                 if n not in self.skip_frames]
 
-                self.logger.info(f'Expecting to load {len(im_names)} images.')
+                self.logger.info(f'Expecting to load {len(im_names)} images/array.')
 
         return im_names
 
@@ -589,30 +592,45 @@ class Pipeline():
 
             # TODO: This check is redundant, simplify later
             if pths:
-                # Load the images
-                '''NOTE: Using mimread instead of imread to add the option of limiting
-                the memory of the loaded image. However, mimread still only loads one
-                file at a time, so it is unlikely to ever hit the memory limit.
-                Could be worth tracking the memory and deleting large arrays or
-                temporarily storing them in a file (if low-mem mode is true)
-                Slightly faster than imread.'''
-                # Pre-allocate numpy array for speed
-                for n, p in enumerate(pths):
-                    img = iio.mimread(p)[0]
+                if key[1] == 'array':
+                    # Load either a condition or experiment array
+                    try:
+                        arr = ConditionArray.load(pths[0])
+                        self.logger.info(f'Loaded Condition {arr.name}, {arr.shape} '
+                                         f'type: {arr.dtype}, key: {key}')
+                    except TypeError:
+                        arr = ExperimentArray.load(pths[0])
+                        self.logger.info('Loaded Experiment with '
+                                         f'{len(arr.conditions)} conditions.'
+                                         f'type: {arr.dtype}, key: {key}')
 
-                    if n == 0:
-                        # Initialize img_stack if it doesn't exist
-                        img_stack = np.empty(tuple([len(pths), img.shape[0], img.shape[1]]),
-                                             dtype=img.dtype)
+                    container[key] = arr
+                else:
+                    # Load the images
+                    '''NOTE: Using mimread instead of imread to add the option of limiting
+                    the memory of the loaded image. However, mimread still only loads one
+                    file at a time, so it is unlikely to ever hit the memory limit.
+                    Could be worth tracking the memory and deleting large arrays or
+                    temporarily storing them in a file (if low-mem mode is true)
+                    Slightly faster than imread.'''
+                    # Pre-allocate numpy array for speed
+                    for n, p in enumerate(pths):
+                        img = iio.mimread(p)[0]
 
-                    img_stack[n, ...] = img
+                        if n == 0:
+                            # Initialize img_stack if it doesn't exist
+                            img_stack = np.empty(tuple([len(pths), img.shape[0], img.shape[1]]),
+                                                 dtype=img.dtype)
 
-                # Make img_stack read-only. To change image stack, overwrite container[key]
-                img_stack.flags.writeable = False
-                container[key] = img_stack
+                        img_stack[n, ...] = img
 
-                self.logger.info(f'Images loaded. shape: {img_stack.shape}, '
-                                 f'type: {img_stack.dtype}, key: {key}.')
+                    # Make img_stack read-only. To change image stack, overwrite container[key]
+                    img_stack.flags.writeable = False
+                    container[key] = img_stack
+
+                    self.logger.info(f'Images loaded. shape: {img_stack.shape}, '
+                                     f'type: {img_stack.dtype}, key: {key}.')
+
 
         self.logger.info(f'Images loaed: {[list(container.keys())]}.')
 
