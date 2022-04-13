@@ -575,7 +575,8 @@ class Tracker(BaseTracker):
             lineage = np.vstack(tracker.lbep)[:, :4]
 
             # Convert mask labels before writing lineage
-            new_mask = bayes_extract_tracker_data(bayes_id_mask, tracker)
+            tracks = [t['ID'] for t in tracker.tracks]
+            new_mask = bayes_extract_tracker_data(bayes_id_mask, tracks, tracker.refs)
 
         return lineage_to_track(new_mask, lineage)
 

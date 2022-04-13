@@ -9,6 +9,7 @@ from .process import Processor
 from .segment import Segmenter
 from .track import Tracker
 from .extract import Extractor
+from .evaluate import Evaluator
 
 # Import important types
 from .utils.utils import ImageHelper
