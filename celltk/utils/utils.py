@@ -191,6 +191,8 @@ class ImageHelper():
             except (AttributeError, AssertionError):
                 # Indicates not CellTK type
                 continue
+            except KeyError as e:
+                raise KeyError(f'Invalid keyword arg for {self.func}: {e}')
 
             if self.as_tuple:
                 # No trimming of inputs is done if as_tuple
@@ -265,7 +267,8 @@ class ImageHelper():
                    self.expected_optional)
         for exp_name, exp_typ, opt in _zip:
             if (not opt) * (exp_typ in INPT_NAMES) * (exp_name not in kwargs):
-                kwargs[exp_name] = img_lists[exp_typ]
+                if img_lists[exp_typ]:
+                    kwargs[exp_name] = img_lists[exp_typ]
 
         return kwargs
 
