@@ -15,7 +15,6 @@ import celltk.utils.estimator_utils
 
 
 class PlotHelper:
-
     '''
     Okay, I don't know what the fuck I'm doing anymore. I have to do something, but
     don't want to do anything and have no fucking clue how to structure this. I know
@@ -44,21 +43,21 @@ class PlotHelper:
         'linewidth': 3,
         'linecolor': _ax_col,
         'showline': True,
-        'tickfont': dict(color=_ax_col, size=12, family=_font_families),
+        'tickfont': dict(color=_ax_col, size=18, family=_font_families),
         'ticklen': 7,
         'ticks': 'outside',
         'tickwidth': 2,
-        'title': dict(font=dict(color='#242424', size=20)),
+        'title': dict(font=dict(color='#242424', size=24)),
         'zeroline': False,
     }
     _no_line_axis = _default_axis_layout.copy()
     _no_line_axis['showline'] = False
     _default_legend_layout = {
         'borderwidth': 0,
-        'font': dict(color=_ax_col, size=12, family=_font_families),
+        'font': dict(color=_ax_col, size=18, family=_font_families),
         'itemsizing': 'constant',
         'itemwidth': 30,  # must be >= 30
-        'title': {'font': dict(color=_ax_col, size=12,
+        'title': {'font': dict(color=_ax_col, size=24,
                                family=_font_families)},
         'tracegroupgap': 10,  # must be >= 0
     }
@@ -178,7 +177,54 @@ class PlotHelper:
                   y_limit: Tuple[float] = None,
                   *args, **kwargs
                   ) -> Union[go.Figure, go.FigureWidget]:
-        """"""
+        """
+        Builds a plotly Figure object plotting lines of the given arrays. Each
+        array is interpreted as a separate condition and is plotted in a
+        different color.
+
+        :param arrays: List of arrays to plot. Assumed structure is n_cells x
+            n_features. Arrays must be two-dimensional, so if only one sample,
+            use np.newaxis or np.expand_dims.
+        :param keys: Names corresponding to the data arrays. If not provided,
+            the keys will be integers.
+        :param estimator: Function for aggregating observations from multiple
+            cells. For example, if estimator is np.mean, the mean of all of the
+            cells will be plotted instead of a trace for each cell. Can be
+            a function, name of numpy function, name of function in
+            estimator_utils, or a functools.partial object. If a function or
+            functools.partial object, should input a 2D array and return a
+            1D array.
+        :param err_estimator: Function for estimating error bars from multiple
+            cells. Can be
+            a function, name of numpy function, name of function in
+            estimator_utils, or a functools.partial object. If a function or
+            functools.partial object, should input a 2D array and return a
+            1D or 2D array. If output is 1D, errors will be symmetric
+            If output is 2D, the first dimension is used for the high
+            error and second dimension is used for the low error.
+        :param colors: Name of a color palette or map to use. Searches first
+            in seaborn/matplotlib, then in plotly to find the color map. If
+            not provided, the color map will be glasbey.
+        :param time: Time axis for the plot. Must be the same size as the
+            second dimension of arrays.
+        :param legend: If False, no legend is made on the plot.
+        :param figure: If a go.Figure object is given, will be used to make
+            the plot instead of a blank figure.
+        :param title: Title to add to the plot
+        :param x_label: Label of the x-axis
+        :param y_label: Label of the y-axis
+        :param x_limit: Initial limits for the x-axis. Can be changed if
+            the plot is saved as an HTML object.
+        :param y_limit: Initial limits for the y-axis. Can be changed if
+            the plot is saved as an HTML object.
+        :param *args:
+        :param **kwargs: Depending on name, passed to the "line" keyword
+            argument of go.Scatter or as keyword arguments for go.Scatter.
+            The following kwargs are passed to "line": 'color', 'dash',
+            'shape', 'simplify', 'smoothing', 'width', 'hoverinfo'
+
+        :return: Figure object
+        """
         # Format inputs
         assert all([isinstance(a, np.ndarray) for a in arrays])
         assert all([a.ndim == 2 for a in arrays])
@@ -244,7 +290,9 @@ class PlotHelper:
 
             fig.add_traces(lines)
         fig.update_layout(template=self._template)
+        self._default_axis_layout['title'].update({'text': x_label})
         fig.update_xaxes(**self._default_axis_layout)
+        self._default_axis_layout['title'].update({'text': y_label})
         fig.update_yaxes(**self._default_axis_layout)
         return fig
 
@@ -266,7 +314,56 @@ class PlotHelper:
                  y_limit: Tuple[float] = None,
                  *args, **kwargs
                  ) -> Union[go.Figure, go.FigureWidget]:
-        """"""
+        """Builds a plotly Figure object plotting bars from the given arrays. Each
+        array is interpreted as a separate condition and is plotted in a
+        different color.
+
+        :param arrays: List of arrays to plot. Assumed structure is n_cells x
+            n_features. Arrays must be two-dimensional, so if only one sample,
+            use np.newaxis or np.expand_dims.
+        :param keys: Names corresponding to the data arrays. If not provided,
+            the keys will be integers.
+        :param estimator: Function for aggregating observations from multiple
+            cells. For example, if estimator is np.mean, the mean of all of the
+            cells will be plotted instead of a bar for each cell. Can be
+            a function, name of numpy function, name of function in
+            estimator_utils, or a functools.partial object. If a function or
+            functools.partial object, should input a 2D array and return a
+            1D array.
+        :param err_estimator: Function for estimating error bars from multiple
+            cells. Can be
+            a function, name of numpy function, name of function in
+            estimator_utils, or a functools.partial object. If a function or
+            functools.partial object, should input a 2D array and return a
+            1D or 2D array. If output is 1D, errors will be symmetric
+            If output is 2D, the first dimension is used for the high
+            error and second dimension is used for the low error.
+        :param colors: Name of a color palette or map to use. Searches first
+            in seaborn/matplotlib, then in plotly to find the color map. If
+            not provided, the color map will be glasbey.
+        :param orientation: Orientation of the bar plot.
+        :param barmode: Keyword argument describing how to group the bars.
+            Options are 'group', 'overlay', 'relative', and .... See plotly
+            documentation for more details.
+        :param legend: If False, no legend is made on the plot.
+        :param figure: If a go.Figure object is given, will be used to make
+            the plot instead of a blank figure.
+        :param title: Title to add to the plot
+        :param x_label: Label of the x-axis
+        :param y_label: Label of the y-axis
+        :param x_limit: Initial limits for the x-axis. Can be changed if
+            the plot is saved as an HTML object. Only applies if orientation
+            is horizontal.
+        :param y_limit: Initial limits for the y-axis. Can be changed if
+            the plot is saved as an HTML object. Only applies if orientation
+            is veritcal.
+        :param *args:
+        :param **kwargs: Depending on name, passed to go.Bar or to
+            go.Figure.update_traces(). The following kwargs are passed to
+            go.Bar: 'hoverinfo', 'marker', 'width'.
+
+        :return: Figure object
+        """
         # Format data
         assert all([isinstance(a, np.ndarray) for a in arrays])
         assert orientation in ('v', 'h', 'horizontal', 'vertical')
