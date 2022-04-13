@@ -1051,7 +1051,7 @@ class ExperimentArray():
     @property
     def ndim(self):
         """Returns list of the number of dimensoins of each ConditionArray."""
-        return [v.ndim for v in self.sites.values()]
+        return next(iter(self.sites.values())).ndim
 
     @property
     def dtype(self):
@@ -1066,22 +1066,22 @@ class ExperimentArray():
     @property
     def regions(self):
         """Returns list of the names of the regions in each ConditionArray."""
-        return [v.regions for v in self.sites.values()]
+        return next(iter(self.sites.values())).regions
 
     @property
     def channels(self):
         """Returns list of the names of the channels in each ConditionArray."""
-        return [v.channels for v in self.sites.values()]
+        return next(iter(self.sites.values())).channels
 
     @property
     def metrics(self):
         """Returns list of the names of the metrics in each ConditionArray."""
-        return [v.metrics for v in self.sites.values()]
+        return next(iter(self.sites.values())).metrics
 
     @property
     def time(self):
         """Returns list of the time axis of each ConditionArray."""
-        return [v.time for v in self.sites.values()]
+        return next(iter(self.sites.values())).time
 
     @property
     def coordinates(self):
