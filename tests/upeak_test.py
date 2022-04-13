@@ -12,7 +12,6 @@ import pytest
 import celltk
 import celltk.utils.unet_model
 from celltk.utils.peak_utils import segment_peaks_agglomeration
-from celltk.utils.plot_utils import plot_trace_predictions
 
 class TestUPeak():
     weight_path = "celltk/config/upeak_example_weights.tf"
@@ -34,7 +33,6 @@ class TestUPeak():
 
         # Predict and plot
         out = upeak.predict(arr, roi=(0, 1, 2))
-        plot_trace_predictions(arr, out[..., 1:])
 
 
 class TestPeakSegmentation():
