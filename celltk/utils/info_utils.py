@@ -1,24 +1,25 @@
+import functools
 import warnings
 from typing import Collection, Tuple, Union, Callable, List
 
 import numpy as np
+import scipy.stats as stats
 import sklearn.preprocessing as skpre
 import sklearn.neighbors as neigh
 import sklearn.decomposition as decomp
 import sklearn.cluster as clust
+import skimage.util as util
 import hdbscan
 import umap
+
+import matplotlib.pyplot as plt
+import matplotlib
 
 from celltk.utils._fastkde import FastLaplacianKDE
 
 
 SEED = 69420
 _RNG = np.random.default_rng(SEED)
-
-"""
-TODO:
-    - Function for down-sampling traces
-"""
 
 
 ### Functions for calculating information metrics ###
@@ -363,7 +364,7 @@ def randomize_array(arr: Union[Collection[np.ndarray], np.ndarray]
     return rand_samples
 
 
-def nan_helper(y: np.ndarray) -> np.ndarray:
+def _nan_helper(y: np.ndarray) -> np.ndarray:
     """Linear interpolation of nans in a 1D array."""
     return np.isnan(y), lambda z: z.nonzero()[0]
 
@@ -377,10 +378,17 @@ def nan_helper_2d(arr: np.ndarray) -> np.ndarray:
     temp = np.zeros(arr.shape)
     temp[:] = np.nan
     for n, y in enumerate(arr.copy()):
-        nans, z = nan_helper(y)
+        nans, z = _nan_helper(y)
         y[nans] = np.interp(z(nans), z(~nans), y[~nans])
         temp[n, :] = y
 
+    return temp
+
+
+def nan_helper_1d(arr: np.ndarray) -> np.ndarray:
+    temp = arr.copy()
+    nans, z = _nan_helper(arr)
+    temp[nans] = np.interp(z(nans), z(~nans), arr[~nans])
     return temp
 
 
