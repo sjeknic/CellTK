@@ -2,10 +2,10 @@ from typing import Union, Tuple
 
 import numpy as np
 import scipy.stats as stats
+import scipy.integrate as integrate
 import matplotlib.pyplot as plt
 
 from celltk.utils.unet_model import UPeakModel
-from celltk.utils.plot_utils import plot_trace_predictions
 
 
 def median_intensity(mask: np.ndarray, image: np.ndarray) -> float:
@@ -52,8 +52,6 @@ def predict_peaks(array: np.ndarray,
                   segment: bool = True,
                   roi: Union[int, Tuple[int]] = (1, 2),
                   save_path: str = None,
-                  save_plot: str = None,
-                  show_plot: bool = False
                   ) -> None:
     """Predicts peaks in arbitrary data using UPeak.
 
@@ -69,7 +67,11 @@ def predict_peaks(array: np.ndarray,
     :param save_plot: If a string is provided, saves output figures using the given
         figure name. Do not provided extension in file name, figures can currently
         only be saved as png.
-    :param show_plot:
+    :param show_plot: If True, plot will be shown to the user.
+
+
+    TODO:
+        - Add ability to specify an arbitrary model structure.
     """
     # Get model
     model = UPeakModel(weight_path)
@@ -82,11 +84,5 @@ def predict_peaks(array: np.ndarray,
     # Save the outputs
     if save_path:
         np.save(save_path, predictions)
-
-    if save_plot or show_plot:
-        for fidx, fig in enumerate(plot_trace_predictions(array, predictions)):
-            if save_plot: plt.savefig(fig, f'{save_plot}_{fidx}.png')
-            if show_plot: plt.show()
-            plt.close(fig)
 
     return predictions
