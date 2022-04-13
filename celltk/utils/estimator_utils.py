@@ -52,7 +52,7 @@ def wilson_score(arr: np.ndarray,
     prob = np.squeeze(fraction_of_total(arr, ax=ax))
 
     # Get cell counts for each column
-    n = (~np.isnan(arr)).sum(0)
+    n = (~np.isnan(arr)).sum(ax)
 
     # Calculate the wilson score
     denom = 1 + z ** 2 / n
@@ -63,3 +63,19 @@ def wilson_score(arr: np.ndarray,
     lo = (adj_prob - z * adj_sd) / denom
 
     return np.vstack([hi, lo])
+
+
+def normal_approx(arr: np.ndarray,
+                  ci: float = 0.95,
+                  ax: int = 0
+                  ) -> np.ndarray:
+    """"""
+    # Do two-tailed by default, so divide by 2
+    z = stats.norm.ppf(1 - (1 - ci) / 2)
+
+    # Get proportion of population that is positive
+    prob = np.squeeze(fraction_of_total(arr, ax=ax))
+    # Get cell counts
+    n = (~np.isnan(arr)).sum(ax)
+
+    return z * np.sqrt((prob * (1 - prob)) / n)
