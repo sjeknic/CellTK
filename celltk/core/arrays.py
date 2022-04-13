@@ -10,7 +10,6 @@ import plotly.graph_objects as go
 import matplotlib.pyplot as plt
 
 import celltk.utils.filter_utils as filtu
-from celltk.utils.plot_utils import plot_groups, plot_trace_predictions
 from celltk.utils.info_utils import nan_helper_2d, get_split_idxs, split_array
 from celltk.utils.unet_model import UPeakModel
 from celltk.utils.peak_utils import (segment_peaks_agglomeration,
@@ -1552,6 +1551,9 @@ class ExperimentArray():
         conditions passed.
 
         NOTE:
+            - As of version 0.3.0, this function is not implemented
+
+        NOTE:
             - Plotting should still be considered in the beta-stage.
               Bugs may exist. The API of this function will likely
               change and/or be replaced in the near future.
@@ -1597,6 +1599,7 @@ class ExperimentArray():
         TODO:
             - More generic way to group conditions
         """
+        raise NotImplementedError('Please use plot_utils.PlotHelper for plotting.')
         # Get the data to plot
         keys = tuple(keys) if not isinstance(keys, tuple) else keys
         if not conditions: return go.Figure()
@@ -1629,39 +1632,6 @@ class ExperimentArray():
                 fig.write_image(save)
 
         return fig
-
-    def plot_peak_predictions(self,
-                              keys: Tuple[str],
-                              conditions: Collection[str] = None,
-                              estimator: Union[Callable, str, functools.partial] = None,
-                              title: str = None,
-                              x_label: str = None,
-                              y_label: str = None,
-                              x_limit: Tuple[float] = None,
-                              y_limit: Tuple[float] = None,
-                              layout_spec: dict = {},
-                              show: bool = False,
-                              save: str = None
-                              ) -> plt.Figure:
-        """Use celltk.utils.plot_utils.plot_trace_predictions() instead.
-        Not currently well implemented.
-        """
-        # Get the data to plot
-        keys = tuple(keys) if not isinstance(keys, tuple) else keys
-        conditions = conditions if conditions else self.conditions
-        arrs = self[conditions][keys]
-        # TODO: This needs to use get key components
-        slope = self[conditions]['slope_prob', 'fitc']
-        plate = self[conditions]['plateau_prob', 'fitc']
-        preds = [s + p for s, p in zip(slope, plate)]
-        time = self.time[0]
-
-        for cidx, (arr, pred) in enumerate(zip(arrs, preds)):
-            condition = conditions[cidx]
-            for nidx, fig in enumerate(plot_trace_predictions(arr, pred, y_limit=(1000, 5000))):
-                name = f'{condition}_{nidx}_{save}'
-                plt.savefig(name)
-                plt.close()
 
     @classmethod
     def _build_from_file(cls, f: h5py.File) -> 'ExperimentArray':
