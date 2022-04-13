@@ -1,4 +1,4 @@
-[![Documentation Status](https://readthedocs.org/projects/celltk/badge/?version=docs2)](https://celltk.readthedocs.io/en/docs2/?badge=docs2)
+[![Documentation Status](https://readthedocs.org/projects/celltk/badge/?version=latest)](https://celltk.readthedocs.io/en/latest/?badge=latest)
 [![pytest](https://github.com/sjeknic/CellTK/actions/workflows/main.yml/badge.svg)](https://github.com/sjeknic/CellTK/actions/workflows/main.yml)
 
 
