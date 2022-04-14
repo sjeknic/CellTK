@@ -121,7 +121,15 @@ class PlotHelper:
         elif isinstance(color, str):
             # Convert hex to rgba
             if color[0] == '#':
-                color = pcol.hex_to_rgb(color)
+                # Check if alpha channel exists
+                if len(color.split('#')[-1]) == 8:
+                    # overwrites existing alpha
+                    # convert hexademical to int, divide by max
+                    alpha = int(color[1:3], 16) / 255.
+                    color = pcol.hex_to_rgb('#' + color[3:])
+                else:
+                    color = pcol.hex_to_rgb(color)
+
                 if alpha:
                     color += (alpha,)
                 color_str = str(tuple([c for c in color]))
