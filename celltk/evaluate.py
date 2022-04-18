@@ -84,9 +84,24 @@ class Evaluator(BaseEvaluator):
         x_min = np.floor(np.clip(x - x_adj, a_min=0, a_max=None)).astype(int)
         x_max = np.floor(np.clip(x + x_adj, a_min=None, a_max=x_img)).astype(int)
 
+        # Crop the orig array and save in out array - shape must always match
         out = np.empty((frames, y_win, x_win), dtype=image.dtype)
         for fr in range(frames):
             fr = int(fr)
             out[fr, ...] = image[fr, y_min[fr]:y_max[fr], x_min[fr]:x_max[fr]]
 
         return out
+
+    @ImageHelper(by_frame=True)
+    def overlay_tracks(self,
+                       image: Image,
+                       track: Track,
+                       boundaries: bool = False,
+                       mode: str = 'inner'
+                       ) -> Image:
+        """"""
+        if (track < 0).any():
+            track = track_to_mask(track)
+        if boundaries:
+            track = segm.find_boundaries(track, mode=mode)
+        return np.where(track > 0, track, image).astype(np.uint16)
