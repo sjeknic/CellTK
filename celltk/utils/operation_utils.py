@@ -1,3 +1,4 @@
+import warnings
 from typing import Dict, Generator, Tuple, List, Iterable, Union
 
 import numpy as np
@@ -399,6 +400,9 @@ def lineage_to_track(mask: Mask,
 
 def label_by_parent(mask: Mask, lineage: np.ndarray) -> Mask:
     """Replaces daughter cell labels with their parent label
+
+    TODO:
+        - This could be substantially sped up using a 1D search
     """
     out = mask.copy().astype(np.int16)
     for (lab, app, dis, par) in lineage:
@@ -406,6 +410,33 @@ def label_by_parent(mask: Mask, lineage: np.ndarray) -> Mask:
             out[mask == lab] = par
 
     return out
+
+
+def get_cell_index(cell_id: int,
+                   label_array: np.ndarray,
+                   position_id: int = None,
+                   position_array: np.ndarray = None
+                   ) -> int:
+    """"""
+    cell_index = np.where(label_array == cell_id)[0]
+    if len(np.unique(cell_index)) > 1:
+        # Greater than one instance found
+        if position_id:
+            assert position_array is not None
+            # Get only the index corresponding to the position_id
+            mask = position_array == position_id
+            cell_index = np.where(
+                np.logical_and(label_array == cell_id, mask)
+            )[0]
+            cell_index = cell_index[0]
+        else:
+            warnings.warn('Found more than one matching cell. Using '
+                          f'first instance found at {cell_index[0]}.')
+            cell_index = cell_index[0]
+    else:
+        cell_index = cell_index[0]
+
+    return int(cell_index)
 
 
 def sliding_window_generator(arr: np.ndarray, overlap: int = 0) -> Generator:
@@ -582,7 +613,6 @@ def crop_array(array: np.ndarray,
     TODO:
         - There must be a much neater way to write this function
         - Incorporate crop_area
-        - Possible numba.njit
     """
     if crop_vals is None:
         # TODO: calculate crop coordinates for area

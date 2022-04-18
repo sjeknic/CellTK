@@ -2,11 +2,12 @@ import warnings
 from typing import Tuple
 
 import numpy as np
+import skimage.segmentation as segm
 
 from celltk.utils._types import Track, Mask, Image, Arr
 from celltk.core.operation import BaseEvaluator
 from celltk.utils.utils import ImageHelper
-from celltk.utils.operation_utils import track_to_mask
+from celltk.utils.operation_utils import track_to_mask, get_cell_index
 from celltk.utils.info_utils import nan_helper_1d
 
 
@@ -53,21 +54,13 @@ class Evaluator(BaseEvaluator):
         # Simpler if it's limited to even numbers only
         assert all([not (w % 2) for w in window_size])
 
-        # Find the centroid for the cell in question
+        # Find the row that contains the cell data
         region = array.regions[0] if not region else region
         channel = array.channels[0] if not channel else channel
-        cell_index = np.where(array[region, channel, 'label'] == cell_id)[0]
-        if len(np.unique(cell_index)) > 1:
-            # Greater than one instance found
-            if position_id:
-                # Get it based on the position
-                pass
-            else:
-                warnings.warn('Found more than one matching cell. Using '
-                              f'first instance found at {cell_index[0]}.')
-                cell_index = int(cell_index[0])
-        else:
-            cell_index = int(cell_index[0])
+        label_array = array[region, channel, 'label']
+        position_array = array[region, channel, 'position_id']
+        cell_index = get_cell_index(cell_id, label_array,
+                                    position_id, position_array)
 
         # Get the centroid, window for the cell, and img size
         y, x = array[region, channel, ('y', 'x'), cell_index, :]
