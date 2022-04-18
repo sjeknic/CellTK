@@ -17,22 +17,22 @@ class Evaluator(BaseEvaluator):
                         array: Arr
                         ) -> Track:
         """"""
-        # Figure out all the cells that were missing
-        all_cells = np.unique(track)
+        # Figure out all the cells that were kept
         kept_cells = np.unique(array[:, :, 'label']).astype(int)
-        missing_cells = set(all_cells).difference(kept_cells)
 
         # Change to mask to also blank negatives
-        out = track_to_mask(track)
-        for cell in missing_cells:
-            out[track == cell] = 0
+        ravel = track_to_mask(track).ravel()
+
+        # Remove the missing cells by excluding from mapping
+        mapping = {c: c for c in kept_cells}
+        ravel = np.asarray([mapping.get(c, 0) for c in ravel])
 
         # Add back the parent labels
-        parents = np.unique(track[track < 0])
-        for par in parents:
-            np.where(np.logical_and(track == par, track > 0), par, out)
+        parent_ravel = track.ravel()  # Includes negative values
+        mask = (parent_ravel < 0) * (ravel > 0)
+        np.copyto(ravel, parent_ravel, where=mask)
 
-        return out
+        return ravel.reshape(track.shape)
 
     @ImageHelper(by_frame=False, as_tuple=False)
     def make_single_cell_stack(self,
