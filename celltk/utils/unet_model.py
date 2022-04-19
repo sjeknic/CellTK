@@ -7,7 +7,6 @@ import scipy.stats as stats
 import scipy.signal as signal
 import skimage.filters as filt
 import skimage.feature as feat
-import skimage.transform as trans
 import skimage.util as util
 import sklearn.preprocessing as preproc
 from sklearn.preprocessing import MinMaxScaler, MaxAbsScaler
@@ -18,7 +17,6 @@ from tensorflow.keras.layers import (Conv1D, MaxPooling1D, UpSampling1D,
 from tensorflow.keras import backend as K
 from keras.layers.advanced_activations import LeakyReLU
 import tensorflow.keras.models
-import external.misic.misic as misic
 import external.misic.extras as miext
 import external.misic.utils as miutil
 
@@ -232,12 +230,9 @@ class _UNetStructure():
 class FluorUNetModel(_UNetStructure):
     """
     TODO:
-        - Rename
         - Add option to save and load models from JSON
         - Add option to pass custom models
         - Add custom load weights function
-        - Expand to work with multiple types of models (UNet, UPeak, etc.)
-        - Should there be a base model class and then subclasses for UNet v UPeak?
     """
     _model_kws = dict(classes=3, kernel=(3, 3), steps=3, layers=2,
                       init_filters=64, transfer=True, activation='relu',
@@ -286,7 +281,9 @@ class FluorUNetModel(_UNetStructure):
         pads[0] = (0, 0)
         pads[-1] = (0, 0)
 
-        return np.pad(image, pads, mode=mode, constant_values=constant_values), pads
+        return (np.pad(image, pads, mode=mode,
+                       constant_values=constant_values),
+                pads)
 
     def undo_padding(self,
                      image: Image,
@@ -295,9 +292,13 @@ class FluorUNetModel(_UNetStructure):
         """
         Trim image back down to the original size
         """
-        pads = [slice(p[0], -p[1]) if (p[0] != 0) and (p[1] != 0) else slice(None)
-                for p in pads]
-        return image[tuple(pads)]
+        slices = [slice(None)] * len(pads)
+        for n, p in enumerate(pads):
+            st = p[0] if p[0] else 0
+            en = -1 * p[1] if p[1] else 0
+            if st or en: slices[n] = slice(st, en)
+
+        return image[tuple(slices)]
 
     def normalize_image(self,
                         image: Image,
