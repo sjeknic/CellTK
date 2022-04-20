@@ -1,12 +1,13 @@
 import itertools
 import functools
 import inspect
+import warnings
 from typing import Collection, Union, Callable, Generator, Tuple
 
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib.colors as mcolors
 import seaborn as sns
-import matplotlib.collections as pltcol
 import plotly.graph_objects as go
 import plotly.colors as pcol
 import colorcet as cc
@@ -137,17 +138,24 @@ class PlotHelper:
                     return f'rgba{color_str}'
                 else:
                     return f'rgb{color_str}'
-
-            else:
-                assert color[:3] in ('rgb')  # only rgb for now I think
+            elif color[:3] in ('rgb'):
                 if alpha:
                     # extract the rgb values
                     vals = pcol.unlabel_rgb(color)
                     vals += (alpha, )
                     color_str = str(tuple([v for v in vals]))
                     color = f'rgba{color_str}'
-
-                return color
+                    return color
+            else:
+                try:
+                    vals = mcolors.to_rgba(color)
+                    if alpha:
+                        vals = (*vals[:-1], alpha)
+                    color_str = str(tuple([v for v in vals]))
+                    color = f'rgba{color_str}'
+                    return color
+                except ValueError:
+                    raise ValueError(f'Did not understand color {color}')
 
     def _build_estimator_func(self,
                               func: Union[Callable, str, functools.partial],
