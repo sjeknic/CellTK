@@ -10,30 +10,13 @@ import matplotlib.colors as mcolors
 import seaborn as sns
 import plotly.graph_objects as go
 import plotly.colors as pcol
+import plotly.subplots as psubplt
 import colorcet as cc
 
 import celltk.utils.estimator_utils
 
 
 class PlotHelper:
-    '''
-    Okay, I don't know what the fuck I'm doing anymore. I have to do something, but
-    don't want to do anything and have no fucking clue how to structure this. I know
-    as soon as I start, I'll fuck it up and realize I should have done it differently.
-
-    Anyways, the general steps are:
-    1) User provides the data arrays to plot
-    2) User provides the type of plot
-    3) User provides colors, labels, and other figure params
-
-    3.9) Plotter saves information about input data (e.g. cell nums)
-    4) Plotter formats data arrays as needed
-        - Applies estimator
-        - Applies error estimator
-        - Collects cells, etc.
-    5) Plotter starts figure and applies lines
-    6) Plotter returns figures
-    '''
     # Establishing the default format
     _template = 'simple_white'
     _font_families = "Graphik,Roboto,Helvetica Neue,Helvetica,Arial"
@@ -72,6 +55,7 @@ class PlotHelper:
     # kwarg keys
     _line_kwargs = ('color', 'dash', 'shape', 'simplify', 'smoothing', 'width',
                     'hoverinfo')
+    _marker_kwargs = ('color', 'line', 'opacity', 'size', 'symbol')
     _violin_kwargs = ('bandwidth', 'fillcolor', 'hoverinfo', 'jitter', 'line',
                       'marker', 'opacity', 'pointpos', 'points', 'span',
                       'width', 'hoverinfo')
@@ -79,7 +63,8 @@ class PlotHelper:
 
     def _build_colormap(self,
                         colors: Union[str, Collection[str]],
-                        number: int
+                        number: int,
+                        alpha: float = 1.0
                         ) -> Generator:
         """Returns an infinite color generator for an arbitrary
         colormap or colorscale."""
@@ -99,8 +84,20 @@ class PlotHelper:
                 except Exception:  # This will be PlotlyError, find it
                     raise ValueError(f'Could not get colorscale for {colors}')
 
-        _col = [self._format_colors(c) for c in _col]
+        _col = [self._format_colors(c, alpha) for c in _col]
         return itertools.cycle(_col)
+
+    def _build_symbolmap(self,
+                         symbols: Union[str, Collection[str]]
+                         ) -> Generator:
+        """
+        TODO:
+            - Add check that symbols are valid
+        """
+        if isinstance(symbols, (str, int, float, type(None))):
+            symbols = [symbols]
+
+        return itertools.cycle(symbols)
 
     @staticmethod
     def _format_colors(color: str, alpha: float = None) -> str:
@@ -191,7 +188,7 @@ class PlotHelper:
                   y_label: str = None,
                   x_limit: Tuple[float] = None,
                   y_limit: Tuple[float] = None,
-                  *args, **kwargs
+                  **kwargs
                   ) -> Union[go.Figure, go.FigureWidget]:
         """
         Builds a plotly Figure object plotting lines of the given arrays. Each
@@ -240,6 +237,9 @@ class PlotHelper:
             'shape', 'simplify', 'smoothing', 'width', 'hoverinfo'
 
         :return: Figure object
+
+        :raises AssertionError: If not all items in arrays are np.ndarray.
+        :raises AssertionError: If any item in arrays is not two dimensional.
         """
         # Format inputs
         assert all([isinstance(a, np.ndarray) for a in arrays])
@@ -305,11 +305,163 @@ class PlotHelper:
                         )
 
             fig.add_traces(lines)
-        fig.update_layout(template=self._template)
+
         self._default_axis_layout['title'].update({'text': x_label})
         fig.update_xaxes(**self._default_axis_layout)
         self._default_axis_layout['title'].update({'text': y_label})
         fig.update_yaxes(**self._default_axis_layout)
+        fig.update_layout(template=self._template,
+                          title=title,
+                          xaxis_range=x_limit,
+                          yaxis_range=y_limit)
+        return fig
+
+    def scatter_plot(self,
+                     arrays: Collection[np.ndarray],
+                     keys: Collection[str] = [],
+                     estimator: Union[Callable, str, functools.partial] = None,
+                     err_estimator: Union[Callable, str, functools.partial] = None,
+                     colors: Union[str, Collection[str]] = None,
+                     symbols: Union[str, Collection[str]] = None,
+                     legend: bool = True,
+                     figure: go.Figure = None,
+                     title: str = None,
+                     x_label: str = None,
+                     y_label: str = None,
+                     x_limit: Tuple[float] = None,
+                     y_limit: Tuple[float] = None,
+                     **kwargs
+                     ) -> Union[go.Figure, go.FigureWidget]:
+        """
+        Builds a plotly Figure object containing a scatter plot of the given
+        arrays. Each array is interpreted as a separate condition and is
+        plotted in a different color or with a different marker.
+
+        :param arrays: List of arrays to plot. Assumed structure is n_cells x
+            n_features. If two features, first feature is plotted on the x-axis
+            and second feature on the y-axis. If one feature, data are plotted
+            on the y-axis and the x-axis is categorical. More than two features
+            is not currently supported.
+        :param keys: Names corresponding to the data arrays. If not provided,
+            the keys will be integers.
+        :param estimator: Function for aggregating observations from multiple
+            cells. For example, if estimator is np.mean, the mean of all of the
+            cells will be plotted instead of a point for each cell. Can be
+            a function, name of numpy function, name of function in
+            estimator_utils, or a functools.partial object. If a function or
+            functools.partial object, should input a 2D array and return a
+            1D array.
+        :param err_estimator: Function for estimating vertical error bars.
+            Can be a function, name of numpy function, name of
+            function in estimator_utils, or a functools.partial object. If a
+            function or functools.partial object, should input a 2D array and
+            return a 1D or 2D array. If output is 1D, errors will be symmetric.
+            If output is 2D, the first dimension is used for the high
+            error and second dimension is used for the low error. Only
+            applies to the y-dimension. Horizontal error bars not currrently
+            implemented.
+        :param colors: Name of a color palette or map to use. Searches first
+            in seaborn/matplotlib, then in plotly to find the color map. If
+            not provided, the color map will be glasbey. Can also be list
+            of named CSS colors or hexadecimal or RGBA strings.
+        :param legend: If False, no legend is made on the plot.
+        :param figure: If a go.Figure object is given, will be used to make
+            the plot instead of a blank figure.
+        :param title: Title to add to the plot
+        :param x_label: Label of the x-axis
+        :param y_label: Label of the y-axis
+        :param x_limit: Initial limits for the x-axis. Can be changed if
+            the plot is saved as an HTML object.
+        :param y_limit: Initial limits for the y-axis. Can be changed if
+            the plot is saved as an HTML object.
+        :param **kwargs: Depending on name, passed to the "marker" keyword
+            argument of go.Scatter or as keyword arguments for go.Scatter.
+            The following kwargs are passed to "marker": 'color', 'line',
+            'opacity', 'size', 'symbol'.
+
+        :return: Figure object
+
+        :raises AssertionError: If not all items in arrays are np.ndarray.
+        :raises AssertionError: If not all items in arrays have the same
+            number of columns.
+        :raises AssertionError: If any item in arrays has more than 3 columns.
+        """
+        # Format inputs - should be cells x features
+        assert all(isinstance(a, np.ndarray) for a in arrays)
+        assert all(a.shape[1] == arrays[0].shape[1] for a in arrays)
+        assert arrays[0].shape[1] < 3
+
+        # Convert any inputs that need converting
+        colors = self._build_colormap(colors, len(arrays))
+        symbols = self._build_symbolmap(symbols)
+        if estimator: estimator = self._build_estimator_func(estimator)
+        if err_estimator: err_estimator = self._build_estimator_func(err_estimator)
+        marker_kwargs = {k: v for k, v in kwargs.items()
+                         if k in self._marker_kwargs}
+        kwargs = {k: v for k, v in kwargs.items()
+                  if k not in self._marker_kwargs}
+
+        # Build the figure and start plotting
+        fig = figure if figure else go.Figure()
+        traces = []
+        for idx, (arr, key) in enumerate(itertools.zip_longest(arrays, keys)):
+            # Get the key
+            if not key:
+                key = f'group_{idx}'
+            key += f' | n={arr.shape[0]}'
+
+            # err_estimator is used to set error bars
+            if err_estimator:
+                err_arr = err_estimator(arr)
+            else:
+                err_arr = None
+
+            # estimator is used to condense all the cells to a single point
+            if estimator:
+                arr = estimator(arr)
+                if arr.ndim == 1: arr = arr[None, :]
+
+            # Assign to x and y:
+            if arr.ndim in (0, 1):
+                x = None
+                y = arr
+            if arr.ndim == 2:
+                x = arr[:, 0]
+                y = arr[:, 1]
+
+            error_x = None
+            error_y = None
+            if err_arr is not None:
+                error_y = self._default_error_bar_layout.copy()
+                error_y.update({'type': 'data'})
+                if err_arr.ndim == 1:
+                    # Assume symmetric
+                    error_y.update({'array': err_arr, 'symmetric': True})
+                elif err_arr.ndim == 2:
+                    err_plus = arr - err_arr[0, :]
+                    err_minus = err_arr[-1, :] - arr
+                    error_y.update({'array': err_plus,
+                                    'arrayminus': err_minus})
+
+            marker_kwargs.update(dict(color=next(colors),
+                                      symbol=next(symbols)))
+            traces.append(
+                go.Scatter(x=x, y=y, legendgroup=key, name=key,
+                           showlegend=legend, mode='markers',
+                           error_x=error_x, error_y=error_y,
+                           marker=marker_kwargs, **kwargs)
+            )
+
+        fig.add_traces(traces)
+
+        self._default_axis_layout['title'].update({'text': x_label})
+        fig.update_xaxes(**self._default_axis_layout)
+        self._default_axis_layout['title'].update({'text': y_label})
+        fig.update_yaxes(**self._default_axis_layout)
+        fig.update_layout(template=self._template,
+                          xaxis_range=x_limit,
+                          yaxis_range=y_limit)
+
         return fig
 
     def bar_plot(self,
