@@ -268,6 +268,14 @@ class Processor(BaseProcessor):
 
         return sitk.GetArrayFromImage(out)
 
+    @ImageHelper(by_frame=False)
+    def apply_log_bias_field(self,
+                             image: Image,
+                             bias_field: Image
+                             ) -> Image:
+        """Basically N4 without the calculation"""
+        return image / np.exp(bias_field)
+
     @ImageHelper(by_frame=True)
     def curvature_anisotropic_diffusion(self,
                                         image: Image,
@@ -334,7 +342,7 @@ class Processor(BaseProcessor):
         else:
             sobel = filt.sobel(image)
 
-        return util.img_as_uint(sobel)
+        return util.img_as_float32(sobel)
 
     @ImageHelper(by_frame=True)
     def sobel_edge_magnitude(self,
@@ -480,7 +488,6 @@ class Processor(BaseProcessor):
                            ref_frame: int = 0,
                            ) -> Image:
         """
-        Histogram matching from CellTK
         """
         # Get frame that will set the histogram
         reference_frame = image[ref_frame]
@@ -596,7 +603,7 @@ class Processor(BaseProcessor):
                                         weight_path=weight_path)
 
         # Pre-allocate output memory
-        if batch is None:
+        if batch is None or batch <= image.shape[0]:
             output = self.model.predict(image[:, :, :], roi=roi)
         else:
             arrs = np.array_split(image, image.shape[0] // batch, axis=0)
