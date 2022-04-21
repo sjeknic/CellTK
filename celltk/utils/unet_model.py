@@ -43,7 +43,7 @@ class _UNetStructure():
         for n, l in enumerate(self.model.layers):
             self.model.layers[n].trainable = False
 
-        self.model.load_weights(weight_path)
+        self.model.load_weights(weight_path).expect_partial()
 
     @classmethod
     def _build_model(cls,
