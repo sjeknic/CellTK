@@ -709,12 +709,95 @@ class PlotHelper:
                                       name=key, legendgroup=nkey,
                                       spanmode=spanmode, box_visible=show_box,
                                       points=show_points, hoverinfo='skip',
-                                      line=line, *args, **violin_kwargs)
+                                      line=line, **violin_kwargs)
                 fig.add_trace(neg_trace)
 
         # Format plot on the way out
         fig.update_traces(**kwargs)
-        fig.update_layout(template=self._template, violinmode=violinmode)
+        fig.update_layout(template=self._template,
+                          violinmode=violinmode,
+                          title=title)
+        fig.update_xaxes(**self._default_axis_layout)
+        fig.update_xaxes(title=x_label, range=x_limit)
+        fig.update_yaxes(**self._default_axis_layout)
+        fig.update_yaxes(title=y_label, range=y_limit)
+
+        return fig
+
+    def ridgeline_plot(self,
+                       arrays: Collection[np.ndarray],
+                       keys: Collection[str] = [],
+                       colors: Union[str, Collection[str]] = None,
+                       spanmode: str = 'hard',
+                       spacing: float = 3,
+                       show_box: bool = False,
+                       show_points: Union[str, bool] = False,
+                       legend: bool = True,
+                       figure: go.Figure = None,
+                       title: str = None,
+                       x_label: str = None,
+                       y_label: str = None,
+                       x_limit: Tuple[float] = None,
+                       y_limit: Tuple[float] = None,
+                       **kwargs
+                       ) -> Union[go.Figure, go.FigureWidget]:
+        """
+        Builds a plotly go.Figure object with partially overlapping
+        distributions for each of the arrays given. Similar to a violin
+        plot. See the section on ridgeline plots here for more information.
+
+        :param arrays: List of arrays to create distributions from. Arrays
+            are assumed to be one dimensional.
+        :param keys: Names corresponding to the data arrays. If not provided,
+            the keys will be integers.
+        :param colors: Name of a color palette or map to use. Searches first
+            in seaborn/matplotlib, then in plotly to find the color map. If
+            not provided, the color map will be glasbey. Can also be list
+            of named CSS colors or hexadecimal or RGBA strings.
+        :param spanmode: Determines how far the tails of the violin plot are
+            extended. If 'hard', the plot spans as far as the data. If 'soft',
+            the tails are extended.
+        :param spacing: Sets the amount of overlap between adjacent
+            distributions. Larger values means less overlap.
+        :param show_box: If True, a box plot is made and overlaid over the
+            distribution.
+        :param show_points: If True, individual data points are overlaid over
+            the distribution.
+        :param side: Side to plot the distribution. By default, the
+            distribution is plotted on both sides, but can be 'positive'
+            or 'negative' to plot on only one side.
+        :param legend: If False, no legend is made on the plot.
+        :param figure: If a go.Figure object is given, will be used to make
+            the plot instead of a blank figure.
+        :param title: Title to add to the plot
+        :param x_label: Label of the x-axis
+        :param y_label: Label of the y-axis
+        :param x_limit: Initial limits for the x-axis. Can be changed if
+            the plot is saved as an HTML object. Only applies if orientation
+            is horizontal.
+        :param y_limit: Initial limits for the y-axis. Can be changed if
+            the plot is saved as an HTML object. Only applies if orientation
+            is veritcal.
+        :param **kwargs: Depending on name, passed to go.Violin or to
+            go.Figure.update_traces(). The following kwargs are passed to
+            go.Violin: 'bandwidth', 'fillcolor', 'hoverinfo', 'jitter', 'line',
+            'marker', 'opacity', 'pointpos', 'points', 'span',
+            'width', 'hoverinfo'
+
+        :return: Figure object
+        """
+        # Plot the violin plots
+        fig = self.violin_plot(arrays, keys=keys, colors=colors,
+                               spanmode=spanmode, legend=legend,
+                               show_box=show_box, show_points=show_points,
+                               figure=figure, side='positive',
+                               orientation='h', **kwargs)
+
+        # Some settings for making a ridgeline out of the violin plot
+        fig.update_traces(width=spacing)
+        fig.update_layout(template=self._template,
+                          title=title, xaxis_showgrid=False,
+                          xaxis_zeroline=False)
         fig.update_xaxes(**self._default_axis_layout)
         fig.update_xaxes(title=x_label, range=x_limit)
         fig.update_yaxes(**self._default_axis_layout)
