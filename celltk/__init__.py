@@ -1,5 +1,5 @@
 __all__ = ['core.orchestrator', 'core.pipeline', 'process', 'segment',
-           'track', 'extract']
+           'track', 'extract', 'evaluate']
 
 # Import user-facing classes
 from .core.orchestrator import Orchestrator
@@ -12,6 +12,10 @@ from .extract import Extractor
 from .evaluate import Evaluator
 
 # Import important types
-from .utils.utils import ImageHelper
 from .utils._types import Image, Mask, Track, Arr, Same
 from .utils.slurm_utils import SlurmController
+
+# Import helper classes
+from .utils.utils import ImageHelper
+from .utils.plot_utils import PlotHelper
+from .utils.peak_utils import PeakMetrics
