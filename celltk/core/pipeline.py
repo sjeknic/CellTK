@@ -377,7 +377,7 @@ class Pipeline():
                 for idx in range(arr.shape[0]):
                     name = os.path.join(save_folder,
                                         f"{otpt_type}{idx:0{zrs}}.tiff")
-                    tiff.imsave(name, arr[idx, ...].astype(save_dtype))
+                    tiff.imwrite(name, arr[idx, ...].astype(save_dtype))
 
                 self.logger.info(f'Saved {arr.shape[0]} images in {save_folder}.')
 
