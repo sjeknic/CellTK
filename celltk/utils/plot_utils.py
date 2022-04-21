@@ -840,10 +840,199 @@ class PlotHelper:
 
         return fig
 
+    def heatmap2d_plot(self,
+                       x_array: np.ndarray,
+                       y_array: np.ndarray,
+                       colorscale: str = 'viridis',
+                       zmin: float = None,
+                       zmid: float = None,
+                       zmax: float = None,
+                       xbinsize: float = None,
+                       ybinsize: float = None,
+                       histfunc: str = 'count',
+                       histnorm: str = "",
+                       figure: go.Figure = None,
+                       title: str = None,
+                       x_label: str = None,
+                       y_label: str = None,
+                       x_limit: Tuple[float] = None,
+                       y_limit: Tuple[float] = None,
+                       **kwargs
+                       ) -> Union[go.Figure, go.FigureWidget]:
+        """
+        Builds a plotly go.Figure object with a two dimensional density
+        heatmap of the provided arrays. This function is just a very
+        thin wrapper around go.Heatmap2d.
 
+        :param x_array: Array containing observations for the data on the
+            x-axis. Expected to be one dimensional.
+        :param y_array: Array containing observations for the data on the
+            y-axis. Expected to be one dimensional.
+        :param colorscale: The colorscale to make the heatmap in. Options are
+            more limited than the options for colors. Options include:
+            "Blackbody", "Bluered", "Blues", "Cividis", "Earth", "Electric",
+            "Greens", "Greys", "Hot", "Jet", "Picnic", "Portland", "Rainbow",
+            "RdBu", "Reds", "Viridis", "YlGnBu", and "YlOrRd".
+        :param zmin: Sets the lower bound of the color domain. If given, zmax
+            must also be given.
+        :param zmid: Sets the midpoint of the color domain by setting zmin and
+            zmax to be equidistant from this point.
+        :param zmax: Sets the upper bound of the color domain. If given, zmin
+            must also be given.
+        :param xbinsize: Size of the bins along the x-axis.
+        :param ybinsize: Size of the bins along the y-axis.
+        :param histfunc: Specifies the binning function used for
+            this histogram trace. If “count”, the histogram values
+            are computed by counting the number of values lying
+            inside each bin. Can also be “sum”, “avg”, “min”, “max”.
+        :param histnorm: Specifies the type of normalization used
+            for this histogram trace. If “”, the span of each bar
+            corresponds to the number of occurrences  If “percent” /
+            “probability”, the span of each bar corresponds to the
+            percentage / fraction of occurrences with respect to
+            the total number of sample points (here, the sum of
+            all bin HEIGHTS equals 100% / 1). If “density”, the
+            span of each bar corresponds to the number of
+            occurrences in a bin divided by the size of the bin
+            interval. If probability density, the area of each
+            bar corresponds to the probability that an event will
+            fall into the corresponding bin (here, the sum of all
+            bin AREAS equals 1).
+        :param figure: If a go.Figure object is given, will be used to make
+            the plot instead of a blank figure.
+        :param title: Title to add to the plot
+        :param x_label: Label of the x-axis
+        :param y_label: Label of the y-axis
+        :param x_limit: Initial limits for the x-axis. Can be changed if
+            the plot is saved as an HTML object. Only applies if orientation
+            is horizontal.
+        :param y_limit: Initial limits for the y-axis. Can be changed if
+            the plot is saved as an HTML object. Only applies if orientation
+            is veritcal.
+        :param **kwargs: Passed to go.Histogram2d.
 
+        :return: Figure object
 
+        :raises AssertionError: If x_array or y_array are more than one
+            dimensional.
+        """
+        assert np.squeeze(x_array).ndim in (1, 0)
+        assert np.squeeze(y_array).ndim in (1, 0)
 
+        fig = figure if figure else go.Figure()
+        trace = go.Histogram2d(x=x_array, y=y_array,
+                               colorscale=colorscale,
+                               histfunc=histfunc,
+                               histnorm=histnorm,
+                               xbins=dict(size=xbinsize),
+                               ybins=dict(size=ybinsize),
+                               **kwargs)
+        fig.add_trace(trace)
+
+        fig.update_layout(template=self._template, title=title)
+        fig.update_xaxes(**self._no_line_axis)
+        fig.update_xaxes(title=x_label, range=x_limit)
+        fig.update_yaxes(**self._no_line_axis)
+        fig.update_yaxes(title=y_label, range=y_limit)
+
+        return fig
+
+    def contour2d_plot(self,
+                       x_array: np.ndarray,
+                       y_array: np.ndarray,
+                       colorscale: str = 'viridis',
+                       zmin: float = None,
+                       zmid: float = None,
+                       zmax: float = None,
+                       xbinsize: float = None,
+                       ybinsize: float = None,
+                       histfunc: str = 'count',
+                       histnorm: str = "",
+                       figure: go.Figure = None,
+                       title: str = None,
+                       x_label: str = None,
+                       y_label: str = None,
+                       x_limit: Tuple[float] = None,
+                       y_limit: Tuple[float] = None,
+                       **kwargs
+                       ) -> Union[go.Figure, go.FigureWidget]:
+        """
+        Builds a plotly go.Figure object with a two dimensional density
+        contour heatmap of the provided arrays. This function is just a very
+        thin wrapper around go.Heatmap2dContour.
+
+        :param x_array: Array containing observations for the data on the
+            x-axis. Expected to be one dimensional.
+        :param y_array: Array containing observations for the data on the
+            y-axis. Expected to be one dimensional.
+        :param colorscale: The colorscale to make the heatmap in. Options are
+            more limited than the options for colors. Options include:
+            "Blackbody", "Bluered", "Blues", "Cividis", "Earth", "Electric",
+            "Greens", "Greys", "Hot", "Jet", "Picnic", "Portland", "Rainbow",
+            "RdBu", "Reds", "Viridis", "YlGnBu", and "YlOrRd".
+        :param zmin: Sets the lower bound of the color domain. If given, zmax
+            must also be given.
+        :param zmid: Sets the midpoint of the color domain by setting zmin and
+            zmax to be equidistant from this point.
+        :param zmax: Sets the upper bound of the color domain. If given, zmin
+            must also be given.
+        :param xbinsize: Size of the bins along the x-axis.
+        :param ybinsize: Size of the bins along the y-axis.
+        :param histfunc: Specifies the binning function used for
+            this histogram trace. If “count”, the histogram values
+            are computed by counting the number of values lying
+            inside each bin. Can also be “sum”, “avg”, “min”, “max”.
+        :param histnorm: Specifies the type of normalization used
+            for this histogram trace. If “”, the span of each bar
+            corresponds to the number of occurrences  If “percent” /
+            “probability”, the span of each bar corresponds to the
+            percentage / fraction of occurrences with respect to
+            the total number of sample points (here, the sum of
+            all bin HEIGHTS equals 100% / 1). If “density”, the
+            span of each bar corresponds to the number of
+            occurrences in a bin divided by the size of the bin
+            interval. If probability density, the area of each
+            bar corresponds to the probability that an event will
+            fall into the corresponding bin (here, the sum of all
+            bin AREAS equals 1).
+        :param figure: If a go.Figure object is given, will be used to make
+            the plot instead of a blank figure.
+        :param title: Title to add to the plot
+        :param x_label: Label of the x-axis
+        :param y_label: Label of the y-axis
+        :param x_limit: Initial limits for the x-axis. Can be changed if
+            the plot is saved as an HTML object. Only applies if orientation
+            is horizontal.
+        :param y_limit: Initial limits for the y-axis. Can be changed if
+            the plot is saved as an HTML object. Only applies if orientation
+            is veritcal.
+        :param **kwargs: Passed to go.Heatmap2dContour
+
+        :return: Figure object
+
+        :raises AssertionError: If x_array or y_array are more than one
+            dimensional.
+        """
+        assert np.squeeze(x_array).ndim in (1, 0)
+        assert np.squeeze(y_array).ndim in (1, 0)
+
+        fig = figure if figure else go.Figure()
+        trace = go.Histogram2dContour(x=x_array, y=y_array,
+                                      colorscale=colorscale,
+                                      histfunc=histfunc,
+                                      histnorm=histnorm,
+                                      xbins=dict(size=xbinsize),
+                                      ybins=dict(size=ybinsize),
+                                      **kwargs)
+        fig.add_trace(trace)
+
+        fig.update_layout(template=self._template, title=title)
+        fig.update_xaxes(**self._no_line_axis)
+        fig.update_xaxes(title=x_label, range=x_limit)
+        fig.update_yaxes(**self._no_line_axis)
+        fig.update_yaxes(title=y_label, range=y_limit)
+
+        return fig
 
 
 
