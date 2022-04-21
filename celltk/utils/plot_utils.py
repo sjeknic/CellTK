@@ -480,14 +480,15 @@ class PlotHelper:
                  y_label: str = None,
                  x_limit: Tuple[float] = None,
                  y_limit: Tuple[float] = None,
-                 *args, **kwargs
+                 **kwargs
                  ) -> Union[go.Figure, go.FigureWidget]:
         """Builds a plotly Figure object plotting bars from the given arrays. Each
         array is interpreted as a separate condition and is plotted in a
         different color.
 
         :param arrays: List of arrays to plot. Assumed structure is n_cells x
-            n_features. Arrays must be two-dimensional, so if only one sample,
+            n_features. Each feature is plotted as a separate bar group.
+            Arrays must be two-dimensional, so if only one sample,
             use np.newaxis or np.expand_dims.
         :param keys: Names corresponding to the data arrays. If not provided,
             the keys will be integers.
@@ -498,8 +499,7 @@ class PlotHelper:
             estimator_utils, or a functools.partial object. If a function or
             functools.partial object, should input a 2D array and return a
             1D array.
-        :param err_estimator: Function for estimating error bars from multiple
-            cells. Can be
+        :param err_estimator: Function for estimating error bars. Can be
             a function, name of numpy function, name of function in
             estimator_utils, or a functools.partial object. If a function or
             functools.partial object, should input a 2D array and return a
@@ -508,7 +508,8 @@ class PlotHelper:
             error and second dimension is used for the low error.
         :param colors: Name of a color palette or map to use. Searches first
             in seaborn/matplotlib, then in plotly to find the color map. If
-            not provided, the color map will be glasbey.
+            not provided, the color map will be glasbey. Can also be list
+            of named CSS colors or hexadecimal or RGBA strings.
         :param orientation: Orientation of the bar plot.
         :param barmode: Keyword argument describing how to group the bars.
             Options are 'group', 'overlay', 'relative', and .... See plotly
@@ -524,13 +525,15 @@ class PlotHelper:
             is horizontal.
         :param y_limit: Initial limits for the y-axis. Can be changed if
             the plot is saved as an HTML object. Only applies if orientation
-            is veritcal.
-        :param *args:
+            is vertical.
         :param **kwargs: Depending on name, passed to go.Bar or to
             go.Figure.update_traces(). The following kwargs are passed to
             go.Bar: 'hoverinfo', 'marker', 'width'.
 
         :return: Figure object
+
+        :raises AssertionError: If not all items in arrays are np.ndarray.
+        :raises AssertionError: If orientation is a disallowed value.
         """
         # Format data
         assert all([isinstance(a, np.ndarray) for a in arrays])
@@ -580,11 +583,12 @@ class PlotHelper:
                         # Assume symmetric
                         error_y.update({'array': err_arr, 'symmetric': True})
                     elif err_arr.ndim == 2:
-                        # Assume that they are already set based on the mean value, so that needs
-                        # to be subtracted
+                        # Assume that they are already set based on the mean
+                        # value, so that needs to be subtracted
                         err_plus = arr - err_arr[0, :]
                         err_minus = err_arr[-1, :] - arr
-                        error_y.update({'array': err_plus, 'arrayminus': err_minus})
+                        error_y.update({'array': err_plus,
+                                        'arrayminus': err_minus})
             elif orientation in ('h', 'horizontal'):
                 y = ax_labels if ax_labels else None
                 x = arr
@@ -596,11 +600,12 @@ class PlotHelper:
                         # Assume symmetric
                         error_x.update({'array': err_arr, 'symmetric': True})
                     elif err_arr.ndim == 2:
-                        # Assume that they are already set based on the mean value, so that needs
-                        # to be subtracted
+                        # Assume that they are already set based on the mean
+                        # value, so that needs to be subtracted
                         err_plus = arr - err_arr[0, :]
                         err_minus = err_arr[-1, :] - arr
-                        error_x.update({'array': err_plus, 'arrayminus': err_minus})
+                        error_x.update({'array': err_plus,
+                                        'arrayminus': err_minus})
 
             # Set up the colors
             _c = next(colors)
@@ -627,10 +632,12 @@ class PlotHelper:
                     neg_keys: Collection[str] = [],
                     colors: Union[str, Collection[str]] = None,
                     neg_colors: Union[str, Collection[str]] = None,
+                    alpha: float = 1.0,
                     orientation: str = 'v',
                     show_box: bool = False,
                     show_points: Union[str, bool] = False,
-                    spanmode: str = 'hard',
+                    spanmode: str = 'soft',
+                    side: str = None,
                     legend: bool = True,
                     figure: go.Figure = None,
                     title: str = None,
@@ -638,25 +645,87 @@ class PlotHelper:
                     y_label: str = None,
                     x_limit: Tuple[float] = None,
                     y_limit: Tuple[float] = None,
-                    *args, **kwargs
+                    **kwargs
                     ) -> Union[go.Figure, go.FigureWidget]:
-        """"""
+        """
+        Builds a plotly go.Figure object with violin distributions
+        for each of the arrays given. If negative arrays are given,
+        matches them with arrays and plots two distributions side
+        by side.
+
+        :param arrays: List of arrays to plot. Arrays are assumed to be
+            one dimensional. If neg_arrays is given, arrays are plotted on
+            the positive side.
+        :param keys: Names corresponding to the data arrays. If not provided,
+            the keys will be integers.
+        :param neg_arrays: List of arrays to plot. Arrays are assumed to be
+            1-dimensional. If neg_arrays is given, arrays are plotted on
+            the positive side.
+        :param neg_keys: Names corresponding to the neative data arrays. If not
+            provided, the keys will be integers.
+        :param colors: Name of a color palette or map to use. Searches first
+            in seaborn/matplotlib, then in plotly to find the color map. If
+            not provided, the color map will be glasbey. Can also be list
+            of named CSS colors or hexadecimal or RGBA strings.
+        :param neg_colors: Name of a color palette or map to use. Searches
+            in seaborn/matplotlib first, then in plotly to find the color map.
+            If not provided, the color map will be glasbey. Can also be list
+            of named CSS colors or hexadecimal or RGBA strings.
+        :param alpha: Opacity of the fill color of the violin plots as a float
+            in the range [0, 1].
+        :param orientation: Orientation of the violin plot.
+        :param show_box: If True, a box plot is made and overlaid over the
+            violin plot.
+        :param show_points: If True, individual data points are overlaid over
+            the violin plot.
+        :param spanmode: Determines how far the tails of the violin plot are
+            extended. If 'hard', the plot spans as far as the data. If 'soft',
+            the tails are extended.
+        :param side: Side to plot the distribution. By default, the
+            distribution is plotted on both sides, but can be 'positive'
+            or 'negative' to plot on only one side.
+        :param legend: If False, no legend is made on the plot.
+        :param figure: If a go.Figure object is given, will be used to make
+            the plot instead of a blank figure.
+        :param title: Title to add to the plot
+        :param x_label: Label of the x-axis
+        :param y_label: Label of the y-axis
+        :param x_limit: Initial limits for the x-axis. Can be changed if
+            the plot is saved as an HTML object. Only applies if orientation
+            is horizontal.
+        :param y_limit: Initial limits for the y-axis. Can be changed if
+            the plot is saved as an HTML object. Only applies if orientation
+            is veritcal.
+        :param **kwargs: Depending on name, passed to go.Violin or to
+            go.Figure.update_traces(). The following kwargs are passed to
+            go.Violin: 'bandwidth', 'fillcolor', 'hoverinfo', 'jitter', 'line',
+            'marker', 'opacity', 'pointpos', 'points', 'span',
+            'width', 'hoverinfo'
+
+        :return: Figure object
+
+        :raises AssertionError: If not all entries in arrays or neg_arrays are
+            np.ndarray
+        :raises AssertionError: If any entry in arrays or neg_arrays have more
+            than one dimension.
+        :raises AssertionError: If neg_arrays is given, and
+            len(arrays) != len(neg_arrays)
+        """
         # Format inputs
         violinmode = None
-        side = None
         assert all([isinstance(a, np.ndarray) for a in arrays])
         arrays = [np.squeeze(a) for a in arrays]
-        assert all([a.ndim == 1 for a in arrays])
+        assert all([a.ndim in (1, 0) for a in arrays])
         if neg_arrays:
             assert len(arrays) == len(neg_arrays)
             neg_arrays = [np.squeeze(a) for a in neg_arrays]
-            assert all([a.ndim == 1 for a in neg_arrays])
+            assert all([a.ndim in (1, 0) for a in neg_arrays])
             violinmode = 'overlay'
             side = 'positive'
         assert orientation in ('v', 'h', 'horizontal', 'vertical')
 
         # Convert any inputs that need converting
-        colors = self._build_colormap(colors, len(arrays))
+        colors = self._build_colormap(colors, len(arrays), alpha)
         neg_colors = self._build_colormap(neg_colors, len(neg_arrays))
         violin_kwargs = {k: v for k, v in kwargs.items()
                          if k in self._violin_kwargs}
@@ -693,7 +762,7 @@ class PlotHelper:
             trace = go.Violin(x=x, y=y, name=key, legendgroup=key, side=side,
                               spanmode=spanmode, box_visible=show_box,
                               points=show_points, hoverinfo='skip',
-                              line=line, *args, **violin_kwargs)
+                              line=line, **violin_kwargs)
             fig.add_trace(trace)
 
             # Add the other half of the distributions if needed
@@ -818,21 +887,50 @@ class PlotHelper:
                      y_label: str = None,
                      x_limit: Tuple[float] = None,
                      y_limit: Tuple[float] = None,
-                     *args, **kwargs
+                     **kwargs
                      ) -> Union[go.Figure, go.FigureWidget]:
         """
-        TODO:
-            - Add setting the xscale here
+        Builds a plotly go.Figure object with a heatmap of the provided
+        array. This function is just a very thin wrapper around go.Heatmap.
+
+        :param array: Array from which to make the heatmap.
+        :param colorscale: The colorscale to make the heatmap in. Options are
+            more limited than the options for colors. Options include:
+            "Blackbody", "Bluered", "Blues", "Cividis", "Earth", "Electric",
+            "Greens", "Greys", "Hot", "Jet", "Picnic", "Portland", "Rainbow",
+            "RdBu", "Reds", "Viridis", "YlGnBu", and "YlOrRd".
+        :param zmin: Sets the lower bound of the color domain. If given, zmax
+            must also be given.
+        :param zmid: Sets the midpoint of the color domain by setting zmin and
+            zmax to be equidistant from this point.
+        :param zmax: Sets the upper bound of the color domain. If given, zmin
+            must also be given.
+        :param reverse: If True, the color mapping is reversed.
+        :param figure: If a go.Figure object is given, will be used to make
+            the plot instead of a blank figure.
+        :param title: Title to add to the plot
+        :param x_label: Label of the x-axis
+        :param y_label: Label of the y-axis
+        :param x_limit: Initial limits for the x-axis. Can be changed if
+            the plot is saved as an HTML object. Only applies if orientation
+            is horizontal.
+        :param y_limit: Initial limits for the y-axis. Can be changed if
+            the plot is saved as an HTML object. Only applies if orientation
+            is veritcal.
+        :param **kwargs: Passed to go.Heatmap.
+
+        :return: Figure object.
+
+        :raises AssertionError: If array is not two-dimensional.
         """
         assert array.ndim == 2
         fig = figure if figure else go.Figure()
         trace = go.Heatmap(z=array, zmin=zmin, zmax=zmax,
                            zmid=zmid, colorscale=colorscale,
-                           reversescale=reverse,
-                           *args, **kwargs)
+                           reversescale=reverse, **kwargs)
         fig.add_trace(trace)
 
-        fig.update_layout(template=self._template)
+        fig.update_layout(template=self._template, title=title)
         fig.update_xaxes(**self._no_line_axis)
         fig.update_xaxes(title=x_label, range=x_limit)
         fig.update_yaxes(**self._no_line_axis)
