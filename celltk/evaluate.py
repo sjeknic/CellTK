@@ -33,7 +33,7 @@ class Evaluator(BaseEvaluator):
         mask = (parent_ravel < 0) * (ravel > 0)
         np.copyto(ravel, parent_ravel, where=mask)
 
-        return ravel.reshape(track.shape)
+        return ravel.reshape(track.shape).astype(np.int16)
 
     @ImageHelper(by_frame=False, as_tuple=False)
     def make_single_cell_stack(self,
