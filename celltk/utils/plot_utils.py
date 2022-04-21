@@ -1034,6 +1034,108 @@ class PlotHelper:
 
         return fig
 
+    def trace_color_plot(self,
+                         trace_array: np.ndarray,
+                         color_arrays: Collection[np.ndarray] = [],
+                         color_thres: Collection[float] = [],
+                         colors: Union[str, Collection[str]] = None,
+                         rows: int = 6,
+                         cols: int = 4,
+                         time: np.ndarray = None,
+                         title: str = None,
+                         x_label: str = None,
+                         y_label: str = None,
+                         x_limit: Tuple[float] = None,
+                         y_limit: Tuple[float] = None,
+                         **kwargs
+                         ) -> Generator:
+        """
+        Generates plotly go.Figure objects with subplots for each individual
+        trace in trace_array. Traces can be colored with discrete colors based
+        on arbitrary criteria in color_arrays. For example, this function can
+        be used to evaluate the success of peak segmentation by passing the
+        traces to trace_array, and the peak segmentation to color_arrays.
 
+        :param trace_array: Array containing the values to be plotted. Assumed
+            structure is two-dimensional of shape n_cells x n_features.
+        :param color_arrays: Collection of arrays of the same shape as
+            trace_array. Used with color_thres to determine what sections
+            of the trace should be colored. There is no limit on the number
+            of arrays passed, but color_thres must be the same length.
+        :param color_thres: Collection of thresholds associated with
+            color_arrays. For each array and threshold, the trace will be
+            colored wherever color_array >= color_thres.
+        :param colors: Name of a color palette or map to use. Will use the
+            first color as the base color of trace, and subsequent colors
+            for each color_array. Searches first in seaborn/matplotlib,
+            then in plotly to find the color map. If
+            not provided, the color map will be glasbey. Can also be list
+            of named CSS colors or hexadecimal or RGBA strings.
+        :param rows: Number of rows of subplots to make for each figure.
+        :param cols: Number of columns of subplots to make for each figure.
+        :param time: Time axis for the plot. Must be the same size as the
+            second dimension of arrays.
+        :param title: Title to add to the plot
+        :param x_label: Label of the x-axis
+        :param y_label: Label of the y-axis
+        :param x_limit: Initial limits for the x-axis. Can be changed if
+            the plot is saved as an HTML object.
+        :param y_limit: Initial limits for the y-axis. Can be changed if
+            the plot is saved as an HTML object.
+        :param **kwargs: Depending on name, passed to the "line" keyword
+            argument of go.Scatter or as keyword arguments for go.Scatter.
+            The following kwargs are passed to "line": 'color', 'dash',
+            'shape', 'simplify', 'smoothing', 'width', 'hoverinfo'
 
+        :return: Figure object
 
+        """
+        # Check inputs
+        assert all([trace_array.shape == c.shape for c in color_arrays])
+        assert len(color_arrays) == len(color_thres)
+        colors = self._build_colormap(colors, len(color_arrays) + 1)
+        time = time if time else np.arange(trace_array.shape[1])
+        line_kwargs = {k: v for k, v in kwargs.items()
+                       if k in self._line_kwargs}
+        kwargs = {k: v for k, v in kwargs.items()
+                  if k not in self._line_kwargs}
+
+        # Set up the figure layout
+        num_traces = trace_array.shape[0]
+        num_subplts = int(np.ceil(num_traces / (rows * cols)))
+
+        # Iterate through all of the traces
+        trace_idx = 0
+        for _ in range(num_subplts):
+            fig = psubplt.make_subplots(rows=rows, cols=cols)
+            for fidx in range(rows * cols):
+                try:
+                    trace = trace_array[trace_idx]
+                    r = fidx // cols + 1
+                    c = fidx % cols + 1
+
+                    # Plot the trace first and plot the others on top
+                    line_kwargs.update({'color': next(colors)})
+                    background = go.Scatter(x=time, y=trace, line=line_kwargs,
+                                            showlegend=False, mode='lines',
+                                            **kwargs)
+                    fig.add_trace(background, row=r, col=c)
+
+                    # Plot regions of the traces that will be different colors
+                    for carr, thres in zip(color_arrays, color_thres):
+                        carr = carr[trace_idx]
+                        color_trace = np.where(carr >= thres, trace, np.nan)
+
+                        line_kwargs.update({'color': next(colors)})
+                        ctrace = go.Scatter(x=time, y=color_trace,
+                                            line=line_kwargs,
+                                            showlegend=False, mode='lines',
+                                            **kwargs)
+                        fig.add_trace(ctrace, row=r, col=c)
+
+                    trace_idx += 1
+                except IndexError:
+                    # Reached the end of the traces
+                    break
+
+            yield fig
