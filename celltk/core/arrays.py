@@ -111,7 +111,8 @@ class ConditionArray():
 
     @property
     def coordinate_dimensions(self):
-        """Dictionary of coordinate_name : coordinate_length"""
+        """Dictionary of with coordinate names as keys
+        and coordinate length as values"""
         return {k: len(v) for k, v in self.coords.items()}
 
     @property
@@ -485,7 +486,8 @@ class ConditionArray():
 
         NOTE:
             - This method must be used before attempting to add new
-            metrics to the ConditionArray.
+              metrics to the ConditionArray.
+
 
         :param name: List of names of the metrics to add
 
@@ -539,6 +541,7 @@ class ConditionArray():
         TODO:
             - Add option to return a new Condition instead of
               an np.ndarray
+
         """
         # If key is provided, look for saved mask
         if key and mask is None:
@@ -621,6 +624,7 @@ class ConditionArray():
 
         TODO:
             - Add option to create cell_index from track
+            - Should check that daughter cells are present
         """
         # Find indices of all parents along cell axis
         parents = np.unique(tuple(parent_daughter.values()))
@@ -677,10 +681,9 @@ class ConditionArray():
             frames.
         :param key: If given, saves the mask in ConditionArray as key.
         :param *args: passed to function
-        :param **kwargs: passed to function
+        :param kwargs: passed to function
 
         :return: 2D boolean array that masks cells outside filter
-        :rtype: np.ndarray
         """
         # Format inputs to the correct type
         if isinstance(region, int):
@@ -851,7 +854,7 @@ class ConditionArray():
             keys in ConditionArray
         :param segment: If True, uses a watershed-based segmentation to label
             peaks based on the predictions.
-        :param **kwargs: Passed to segmentation function
+        :param kwargs: Passed to segmentation function
 
         :return: None
         """
@@ -1265,8 +1268,8 @@ class ExperimentArray():
         :param individual: If true, the filter is calculated for each
             ConditionArray independently. Otherwise, calculated on
             the whole data set, then applied to ConditionArrays.
-        :param *args: passed to function
-        :param **kwargs: passed to function
+        :param args: passed to function
+        :param kwargs: passed to function
 
         :return: List of 2D boolean array to masks cells outside filter
         """
@@ -1315,8 +1318,8 @@ class ExperimentArray():
             msak if provided.
         :param delete: If True, cells are removed in the base array. Otherwise
             they are only removed in the array that is returned.
-        :param *args: Passed to filtering function.
-        :param **kwargs: Passed to filtering function.
+        :param args: Passed to filtering function.
+        :param kwargs: Passed to filtering function.
 
         :return: array with cells designated by maks or key removed.
         :rtype: np.ndarray
@@ -1466,7 +1469,7 @@ class ExperimentArray():
             keys in ConditionArray
         :param segment: If True, uses a watershed-based segmentation to label
             peaks based on the predictions.
-        :param **kwargs: Passed to segmentation function,
+        :param kwargs: Passed to segmentation function.
 
         :return: None
         """
