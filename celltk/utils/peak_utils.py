@@ -198,11 +198,28 @@ class PeakMetrics:
                                    relative, absolute))
         return out
 
+    def nonlinearity(self,
+                     traces: np.ndarray,
+                     labels: np.ndarray,
+                     ) -> List[List[float]]:
+        """
+        Inverse of the absolute value of the Pearson's correlation
+        coefficient.
+        """
+        out = []
+        for trace, label in zip(traces, labels):
+            out.append(self._linearity(trace, label))
+
+        return out
+
     def area_under_curve(self,
                          traces: np.ndarray,
                          labels: np.ndarray
                          ) -> List[List[float]]:
-        """"""
+        """
+        TODO:
+            - Add a way to specify t or dt
+        """
         out = []
         for trace, label in zip(traces, labels):
             out.append(self._area_under_curve(trace, label))
@@ -365,4 +382,18 @@ class PeakMetrics:
         out = []
         for l in np.unique(label[label > 0]):
             out.append(integrate.simps(trace[label == l]))
+
+    @staticmethod
+    def _linearity(trace: np.ndarray,
+                   label: np.ndarray
+                   ) -> List[float]:
+        """"""
+        out = []
+        for l in np.unique(label[label > 0]):
+            idx = label == l
+            x = np.arange(idx.sum())
+            y = trace[idx]
+
+            r, p = stats.pearsonr(x, y)
+            out.append(1 / np.abs(r))
         return out
