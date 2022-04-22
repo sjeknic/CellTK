@@ -17,6 +17,9 @@ import celltk.utils.estimator_utils
 
 
 class PlotHelper:
+    """
+    Helper class for making plots.
+    """
     # Establishing the default format
     _template = 'simple_white'
     _font_families = "Graphik,Roboto,Helvetica Neue,Helvetica,Arial"
@@ -230,8 +233,7 @@ class PlotHelper:
             the plot is saved as an HTML object.
         :param y_limit: Initial limits for the y-axis. Can be changed if
             the plot is saved as an HTML object.
-        :param *args:
-        :param **kwargs: Depending on name, passed to the "line" keyword
+        :param kwargs: Depending on name, passed to the "line" keyword
             argument of go.Scatter or as keyword arguments for go.Scatter.
             The following kwargs are passed to "line": 'color', 'dash',
             'shape', 'simplify', 'smoothing', 'width', 'hoverinfo'
@@ -283,7 +285,7 @@ class PlotHelper:
                 lines.append(
                     go.Scatter(x=x, y=y, legendgroup=key, name=key,
                                showlegend=_legend, mode='lines',
-                               line=line_kwargs, *args, **kwargs)
+                               line=line_kwargs, **kwargs)
                 )
 
                 if err_arr is not None:
@@ -374,7 +376,7 @@ class PlotHelper:
             the plot is saved as an HTML object.
         :param y_limit: Initial limits for the y-axis. Can be changed if
             the plot is saved as an HTML object.
-        :param **kwargs: Depending on name, passed to the "marker" keyword
+        :param kwargs: Depending on name, passed to the "marker" keyword
             argument of go.Scatter or as keyword arguments for go.Scatter.
             The following kwargs are passed to "marker": 'color', 'line',
             'opacity', 'size', 'symbol'.
@@ -526,7 +528,7 @@ class PlotHelper:
         :param y_limit: Initial limits for the y-axis. Can be changed if
             the plot is saved as an HTML object. Only applies if orientation
             is vertical.
-        :param **kwargs: Depending on name, passed to go.Bar or to
+        :param kwargs: Depending on name, passed to go.Bar or to
             go.Figure.update_traces(). The following kwargs are passed to
             go.Bar: 'hoverinfo', 'marker', 'width'.
 
@@ -696,7 +698,7 @@ class PlotHelper:
         :param y_limit: Initial limits for the y-axis. Can be changed if
             the plot is saved as an HTML object. Only applies if orientation
             is veritcal.
-        :param **kwargs: Depending on name, passed to go.Violin or to
+        :param kwargs: Depending on name, passed to go.Violin or to
             go.Figure.update_traces(). The following kwargs are passed to
             go.Violin: 'bandwidth', 'fillcolor', 'hoverinfo', 'jitter', 'line',
             'marker', 'opacity', 'pointpos', 'points', 'span',
@@ -847,7 +849,7 @@ class PlotHelper:
         :param y_limit: Initial limits for the y-axis. Can be changed if
             the plot is saved as an HTML object. Only applies if orientation
             is veritcal.
-        :param **kwargs: Depending on name, passed to go.Violin or to
+        :param kwargs: Depending on name, passed to go.Violin or to
             go.Figure.update_traces(). The following kwargs are passed to
             go.Violin: 'bandwidth', 'fillcolor', 'hoverinfo', 'jitter', 'line',
             'marker', 'opacity', 'pointpos', 'points', 'span',
@@ -917,7 +919,7 @@ class PlotHelper:
         :param y_limit: Initial limits for the y-axis. Can be changed if
             the plot is saved as an HTML object. Only applies if orientation
             is veritcal.
-        :param **kwargs: Passed to go.Heatmap.
+        :param kwargs: Passed to go.Heatmap.
 
         :return: Figure object.
 
@@ -1007,7 +1009,7 @@ class PlotHelper:
         :param y_limit: Initial limits for the y-axis. Can be changed if
             the plot is saved as an HTML object. Only applies if orientation
             is veritcal.
-        :param **kwargs: Passed to go.Histogram2d.
+        :param kwargs: Passed to go.Histogram2d.
 
         :return: Figure object
 
@@ -1104,7 +1106,7 @@ class PlotHelper:
         :param y_limit: Initial limits for the y-axis. Can be changed if
             the plot is saved as an HTML object. Only applies if orientation
             is veritcal.
-        :param **kwargs: Passed to go.Heatmap2dContour
+        :param kwargs: Passed to go.Heatmap2dContour
 
         :return: Figure object
 
@@ -1180,7 +1182,7 @@ class PlotHelper:
             the plot is saved as an HTML object.
         :param y_limit: Initial limits for the y-axis. Can be changed if
             the plot is saved as an HTML object.
-        :param **kwargs: Depending on name, passed to the "line" keyword
+        :param kwargs: Depending on name, passed to the "line" keyword
             argument of go.Scatter or as keyword arguments for go.Scatter.
             The following kwargs are passed to "line": 'color', 'dash',
             'shape', 'simplify', 'smoothing', 'width', 'hoverinfo'
