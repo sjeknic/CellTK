@@ -356,11 +356,11 @@ class UPeakModel(_UNetStructure):
     Current model requires 64 different iterations of cwt to be added to the
     input
     """
-    _norm_methods = ['amplitude', 'cwt']
+    _norm_methods = ['amplitude', 'zscore']
     _norm_kwargs = [{}, {}]
     _norm_inplace = [True, False]
-    _model_kws = dict(classes=3, kernel=4, steps=3, layers=2,
-                      init_filters=64, transfer=True, activation='leaky',
+    _model_kws = dict(classes=3, kernel=4, steps=2, layers=2,
+                      init_filters=64, transfer=False, activation='leaky',
                       padding='same', mode=0, momentum=0.9)
 
     def __init__(self,
@@ -568,7 +568,7 @@ class UPeakModel(_UNetStructure):
         """TODO: Test applied to correct axis
         I don't think this works. Normalizes all features independently??
         """
-        assert array.ndim == 2  # Normalize before adding features
+        assert np.squeeze(array).ndim == 2  # Normalize before adding features
         input_shape = array.shape
         # Move all samples into same row
         if not by_row:
