@@ -1,11 +1,8 @@
 import itertools
 import functools
-import inspect
-import warnings
 from typing import Collection, Union, Callable, Generator, Tuple
 
 import numpy as np
-import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 import seaborn as sns
 import plotly.graph_objects as go
@@ -18,7 +15,8 @@ import celltk.utils.estimator_utils
 
 class PlotHelper:
     """
-    Helper class for making plots.
+    Helper class for making plots. Most functions are simple wrappers around
+    Plotly functions.
     """
     # Establishing the default format
     _template = 'simple_white'
@@ -81,7 +79,7 @@ class PlotHelper:
                 _col = sns.color_palette(colors, number)
             except ValueError:
                 try:
-                    # Try getting it from plotly
+                    # Try getting it from Plotly
                     _col = pcol.get_colorscale(colors)
                     _col = pcol.colorscale_to_colors(_col)
                 except Exception:  # This will be PlotlyError, find it
@@ -194,7 +192,7 @@ class PlotHelper:
                   **kwargs
                   ) -> Union[go.Figure, go.FigureWidget]:
         """
-        Builds a plotly Figure object plotting lines of the given arrays. Each
+        Builds a Plotly Figure object plotting lines of the given arrays. Each
         array is interpreted as a separate condition and is plotted in a
         different color.
 
@@ -219,7 +217,7 @@ class PlotHelper:
             If output is 2D, the first dimension is used for the high
             error and second dimension is used for the low error.
         :param colors: Name of a color palette or map to use. Searches first
-            in seaborn/matplotlib, then in plotly to find the color map. If
+            in seaborn/matplotlib, then in Plotly to find the color map. If
             not provided, the color map will be glasbey.
         :param time: Time axis for the plot. Must be the same size as the
             second dimension of arrays.
@@ -335,7 +333,7 @@ class PlotHelper:
                      **kwargs
                      ) -> Union[go.Figure, go.FigureWidget]:
         """
-        Builds a plotly Figure object containing a scatter plot of the given
+        Builds a Plotly Figure object containing a scatter plot of the given
         arrays. Each array is interpreted as a separate condition and is
         plotted in a different color or with a different marker.
 
@@ -363,7 +361,7 @@ class PlotHelper:
             applies to the y-dimension. Horizontal error bars not currrently
             implemented.
         :param colors: Name of a color palette or map to use. Searches first
-            in seaborn/matplotlib, then in plotly to find the color map. If
+            in seaborn/matplotlib, then in Plotly to find the color map. If
             not provided, the color map will be glasbey. Can also be list
             of named CSS colors or hexadecimal or RGBA strings.
         :param legend: If False, no legend is made on the plot.
@@ -484,7 +482,7 @@ class PlotHelper:
                  y_limit: Tuple[float] = None,
                  **kwargs
                  ) -> Union[go.Figure, go.FigureWidget]:
-        """Builds a plotly Figure object plotting bars from the given arrays. Each
+        """Builds a Plotly Figure object plotting bars from the given arrays. Each
         array is interpreted as a separate condition and is plotted in a
         different color.
 
@@ -509,12 +507,12 @@ class PlotHelper:
             If output is 2D, the first dimension is used for the high
             error and second dimension is used for the low error.
         :param colors: Name of a color palette or map to use. Searches first
-            in seaborn/matplotlib, then in plotly to find the color map. If
+            in seaborn/matplotlib, then in Plotly to find the color map. If
             not provided, the color map will be glasbey. Can also be list
             of named CSS colors or hexadecimal or RGBA strings.
         :param orientation: Orientation of the bar plot.
         :param barmode: Keyword argument describing how to group the bars.
-            Options are 'group', 'overlay', 'relative', and .... See plotly
+            Options are 'group', 'overlay', 'relative', and .... See Plotly
             documentation for more details.
         :param legend: If False, no legend is made on the plot.
         :param figure: If a go.Figure object is given, will be used to make
@@ -562,7 +560,7 @@ class PlotHelper:
                 err_arr = err_estimator(arr)
 
                 # If one dimensional, it's the error relative to the mean
-                # that's how plotly wants it
+                # that's how Plotly wants it
                 # if if it is 2D, need to subtract from the mean
             else:
                 err_arr = None
@@ -650,7 +648,7 @@ class PlotHelper:
                     **kwargs
                     ) -> Union[go.Figure, go.FigureWidget]:
         """
-        Builds a plotly go.Figure object with violin distributions
+        Builds a Plotly go.Figure object with violin distributions
         for each of the arrays given. If negative arrays are given,
         matches them with arrays and plots two distributions side
         by side.
@@ -666,11 +664,11 @@ class PlotHelper:
         :param neg_keys: Names corresponding to the neative data arrays. If not
             provided, the keys will be integers.
         :param colors: Name of a color palette or map to use. Searches first
-            in seaborn/matplotlib, then in plotly to find the color map. If
+            in seaborn/matplotlib, then in Plotly to find the color map. If
             not provided, the color map will be glasbey. Can also be list
             of named CSS colors or hexadecimal or RGBA strings.
         :param neg_colors: Name of a color palette or map to use. Searches
-            in seaborn/matplotlib first, then in plotly to find the color map.
+            in seaborn/matplotlib first, then in Plotly to find the color map.
             If not provided, the color map will be glasbey. Can also be list
             of named CSS colors or hexadecimal or RGBA strings.
         :param alpha: Opacity of the fill color of the violin plots as a float
@@ -800,7 +798,7 @@ class PlotHelper:
                        keys: Collection[str] = [],
                        colors: Union[str, Collection[str]] = None,
                        spanmode: str = 'hard',
-                       spacing: float = 3,
+                       overlap: float = 3,
                        show_box: bool = False,
                        show_points: Union[str, bool] = False,
                        legend: bool = True,
@@ -813,7 +811,7 @@ class PlotHelper:
                        **kwargs
                        ) -> Union[go.Figure, go.FigureWidget]:
         """
-        Builds a plotly go.Figure object with partially overlapping
+        Builds a Plotly go.Figure object with partially overlapping
         distributions for each of the arrays given. Similar to a violin
         plot. See the section on ridgeline plots here for more information.
 
@@ -822,14 +820,14 @@ class PlotHelper:
         :param keys: Names corresponding to the data arrays. If not provided,
             the keys will be integers.
         :param colors: Name of a color palette or map to use. Searches first
-            in seaborn/matplotlib, then in plotly to find the color map. If
+            in seaborn/matplotlib, then in Plotly to find the color map. If
             not provided, the color map will be glasbey. Can also be list
             of named CSS colors or hexadecimal or RGBA strings.
         :param spanmode: Determines how far the tails of the violin plot are
             extended. If 'hard', the plot spans as far as the data. If 'soft',
             the tails are extended.
-        :param spacing: Sets the amount of overlap between adjacent
-            distributions. Larger values means less overlap.
+        :param overlap: Sets the amount of overlap between adjacent
+            distributions. Larger values means more overlap.
         :param show_box: If True, a box plot is made and overlaid over the
             distribution.
         :param show_points: If True, individual data points are overlaid over
@@ -892,7 +890,7 @@ class PlotHelper:
                      **kwargs
                      ) -> Union[go.Figure, go.FigureWidget]:
         """
-        Builds a plotly go.Figure object with a heatmap of the provided
+        Builds a Plotly go.Figure object with a heatmap of the provided
         array. This function is just a very thin wrapper around go.Heatmap.
 
         :param array: Array from which to make the heatmap.
@@ -960,7 +958,7 @@ class PlotHelper:
                        **kwargs
                        ) -> Union[go.Figure, go.FigureWidget]:
         """
-        Builds a plotly go.Figure object with a two dimensional density
+        Builds a Plotly go.Figure object with a two dimensional density
         heatmap of the provided arrays. This function is just a very
         thin wrapper around go.Heatmap2d.
 
@@ -1057,7 +1055,7 @@ class PlotHelper:
                        **kwargs
                        ) -> Union[go.Figure, go.FigureWidget]:
         """
-        Builds a plotly go.Figure object with a two dimensional density
+        Builds a Plotly go.Figure object with a two dimensional density
         contour heatmap of the provided arrays. This function is just a very
         thin wrapper around go.Heatmap2dContour.
 
@@ -1150,7 +1148,7 @@ class PlotHelper:
                          **kwargs
                          ) -> Generator:
         """
-        Generates plotly go.Figure objects with subplots for each individual
+        Generates Plotly go.Figure objects with subplots for each individual
         trace in trace_array. Traces can be colored with discrete colors based
         on arbitrary criteria in color_arrays. For example, this function can
         be used to evaluate the success of peak segmentation by passing the
@@ -1168,7 +1166,7 @@ class PlotHelper:
         :param colors: Name of a color palette or map to use. Will use the
             first color as the base color of trace, and subsequent colors
             for each color_array. Searches first in seaborn/matplotlib,
-            then in plotly to find the color map. If
+            then in Plotly to find the color map. If
             not provided, the color map will be glasbey. Can also be list
             of named CSS colors or hexadecimal or RGBA strings.
         :param rows: Number of rows of subplots to make for each figure.
