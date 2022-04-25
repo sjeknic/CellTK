@@ -161,10 +161,7 @@ class Operation():
                     key = (f'{nm}_{i}', nm)
                     container[key] = st
 
-        # TODO: How to format the output?
-        # Output is a generator
-        out = self.run_operation(container)
-
+        out = self.run_operation(container, _return_inputs=False)
         if _return_keys:
             return tuple(dict(out).items())
         else:
@@ -237,24 +234,26 @@ class Operation():
             raise AttributeError(f"Function {func} not found in {self}.")
 
     def run_operation(self,
-                      inputs: ImageContainer
+                      inputs: ImageContainer,
+                      _return_inputs: bool = True
                       ) -> Generator:
         """Sets up a generator to run the operation and return
         results for each function in turn. This function also
         handles naming and typing the outputs of each function.
-        Typically used by Pipeline. To use an operation with
+        Typically used by ``Pipeline``. To use an ``Operation`` on
         arrays and get arrays in return, preferably use the
         __call__ method instead.
 
-        :param inputs: ImageContainer with all of the inputs
-            required by the Operation.
+        :param inputs: ``ImageContainer`` with all of the inputs
+            required by the ``Operation``.
 
         :return: A signle generator for the results of each function.
         """
         # By default, return all inputs of output type
         return_container = ImageContainer()
-        return_container.update({k: v for k, v in inputs.items()
-                                 if k[1] == self._output_type.__name__})
+        if _return_inputs:
+            return_container.update({k: v for k, v in inputs.items()
+                                     if k[1] == self._output_type.__name__})
 
         if not self.functions:
             warnings.warn(f'No functions found in {self}.', UserWarning)
@@ -389,7 +388,7 @@ class Operation():
 
         NOTE:
             - This function is expected to change soon in a new
-            version.
+              version.
 
         TODO:
             - This whole system should be handled differently.
@@ -742,7 +741,7 @@ class Operation():
 class BaseProcessor(Operation):
     """
     Base class for Processor operations. Typically used to apply image filters
-    such as gaussian blurring or edge detection.
+    such as blurring or edge detection.
     """
     __name__ = 'Processor'
     _input_type = (Image,)
@@ -753,18 +752,6 @@ class BaseProcessor(Operation):
                  **kwargs
                  ) -> None:
         super().__init__(output=output, **kwargs)
-
-    def __call__(self,
-                 images: Collection[Image] = [],
-                 ) -> Image:
-        """
-        Calls run_operation. This is intended to be
-        used independently of Pipeline.
-
-        TOOD:
-            - I don't think I need this here anymore.
-        """
-        return self.run_operation(images, [], [], [])
 
 
 class BaseSegmenter(Operation):
@@ -782,16 +769,6 @@ class BaseSegmenter(Operation):
                  ) -> None:
         super().__init__(output=output, **kwargs)
 
-    # def __call__(self,
-    #              images: Collection[Image] = [],
-    #              masks: Collection[Mask] = []
-    #              ) -> Mask:
-    #     """
-    #     Calls run_operation. This is intended to be
-    #     used independently of Pipeline.
-    #     """
-    #     return self.run_operation(images, masks, [], [])
-
 
 class BaseTracker(Operation):
     """
@@ -807,16 +784,6 @@ class BaseTracker(Operation):
                  **kwargs
                  ) -> None:
         super().__init__(output=output, **kwargs)
-
-    def __call__(self,
-                 images: Collection[Image] = [],
-                 masks: Collection[Mask] = []
-                 ) -> Track:
-        """
-        Calls run_operation. This is intended to be
-        used independently of Pipeline.
-        """
-        return self.run_operation(images, masks, [], [])
 
 
 class BaseExtractor(Operation):
@@ -1236,12 +1203,3 @@ class BaseEvaluator(Operation):
                  **kwargs
                  ) -> None:
         super().__init__(output=output, **kwargs)
-
-    def __call__(self,
-                 arrs: Collection[Arr]
-                 ) -> Arr:
-        """
-        Calls run_operation. This is intended to be
-        used independently of Pipeline.
-        """
-        return self.run_operation([], [], [], arrs)
