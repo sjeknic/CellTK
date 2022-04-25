@@ -1022,6 +1022,7 @@ class PlotHelper:
                                colorscale=colorscale,
                                histfunc=histfunc,
                                histnorm=histnorm,
+                               zmin=zmin, zmid=zmid, zmax=zmax,
                                xbins=dict(size=xbinsize),
                                ybins=dict(size=ybinsize),
                                **kwargs)
@@ -1119,6 +1120,7 @@ class PlotHelper:
                                       colorscale=colorscale,
                                       histfunc=histfunc,
                                       histnorm=histnorm,
+                                      zmin=zmin, zmid=zmid, zmax=zmax,
                                       xbins=dict(size=xbinsize),
                                       ybins=dict(size=ybinsize),
                                       **kwargs)
@@ -1139,6 +1141,7 @@ class PlotHelper:
                          colors: Union[str, Collection[str]] = None,
                          rows: int = 6,
                          cols: int = 4,
+                         max_figures: int = None,
                          time: np.ndarray = None,
                          title: str = None,
                          x_label: str = None,
@@ -1171,6 +1174,8 @@ class PlotHelper:
             of named CSS colors or hexadecimal or RGBA strings.
         :param rows: Number of rows of subplots to make for each figure.
         :param cols: Number of columns of subplots to make for each figure.
+        :param max_figures: Maximum number of figures to produce. If None,
+            makes enough figures to plot all of the traces.
         :param time: Time axis for the plot. Must be the same size as the
             second dimension of arrays.
         :param title: Title to add to the plot
@@ -1201,6 +1206,8 @@ class PlotHelper:
         # Set up the figure layout
         num_traces = trace_array.shape[0]
         num_subplts = int(np.ceil(num_traces / (rows * cols)))
+        if max_figures and max_figures < num_subplts:
+            num_subplts = max_figures
 
         # Iterate through all of the traces
         trace_idx = 0
