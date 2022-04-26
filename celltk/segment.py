@@ -926,7 +926,7 @@ class Segmenter(BaseSegmenter):
     @ImageHelper(by_frame=False)
     def unet_predict(self,
                      image: Image,
-                     weight_path: str = 'celltk/config/unet_example_cell_weights.hdf5',
+                     weight_path: str = 'celltk/config/unet_example_cell_weights.tf',
                      roi: Union[int, str] = 2,
                      batch: int = None,
                      classes: int = 3,

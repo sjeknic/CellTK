@@ -1,38 +1,23 @@
 import itertools
 import functools
-import inspect
 from typing import Collection, Union, Callable, Generator, Tuple
 
 import numpy as np
-import matplotlib.pyplot as plt
+import matplotlib.colors as mcolors
 import seaborn as sns
-import matplotlib.collections as pltcol
 import plotly.graph_objects as go
 import plotly.colors as pcol
+import plotly.subplots as psubplt
 import colorcet as cc
 
 import celltk.utils.estimator_utils
 
 
 class PlotHelper:
-    '''
-    Okay, I don't know what the fuck I'm doing anymore. I have to do something, but
-    don't want to do anything and have no fucking clue how to structure this. I know
-    as soon as I start, I'll fuck it up and realize I should have done it differently.
-
-    Anyways, the general steps are:
-    1) User provides the data arrays to plot
-    2) User provides the type of plot
-    3) User provides colors, labels, and other figure params
-
-    3.9) Plotter saves information about input data (e.g. cell nums)
-    4) Plotter formats data arrays as needed
-        - Applies estimator
-        - Applies error estimator
-        - Collects cells, etc.
-    5) Plotter starts figure and applies lines
-    6) Plotter returns figures
-    '''
+    """
+    Helper class for making plots. Most functions are simple wrappers around
+    Plotly functions.
+    """
     # Establishing the default format
     _template = 'simple_white'
     _font_families = "Graphik,Roboto,Helvetica Neue,Helvetica,Arial"
@@ -71,6 +56,7 @@ class PlotHelper:
     # kwarg keys
     _line_kwargs = ('color', 'dash', 'shape', 'simplify', 'smoothing', 'width',
                     'hoverinfo')
+    _marker_kwargs = ('color', 'line', 'opacity', 'size', 'symbol')
     _violin_kwargs = ('bandwidth', 'fillcolor', 'hoverinfo', 'jitter', 'line',
                       'marker', 'opacity', 'pointpos', 'points', 'span',
                       'width', 'hoverinfo')
@@ -78,7 +64,8 @@ class PlotHelper:
 
     def _build_colormap(self,
                         colors: Union[str, Collection[str]],
-                        number: int
+                        number: int,
+                        alpha: float = 1.0
                         ) -> Generator:
         """Returns an infinite color generator for an arbitrary
         colormap or colorscale."""
@@ -92,14 +79,26 @@ class PlotHelper:
                 _col = sns.color_palette(colors, number)
             except ValueError:
                 try:
-                    # Try getting it from plotly
+                    # Try getting it from Plotly
                     _col = pcol.get_colorscale(colors)
                     _col = pcol.colorscale_to_colors(_col)
                 except Exception:  # This will be PlotlyError, find it
                     raise ValueError(f'Could not get colorscale for {colors}')
 
-        _col = [self._format_colors(c) for c in _col]
+        _col = [self._format_colors(c, alpha) for c in _col]
         return itertools.cycle(_col)
+
+    def _build_symbolmap(self,
+                         symbols: Union[str, Collection[str]]
+                         ) -> Generator:
+        """
+        TODO:
+            - Add check that symbols are valid
+        """
+        if isinstance(symbols, (str, int, float, type(None))):
+            symbols = [symbols]
+
+        return itertools.cycle(symbols)
 
     @staticmethod
     def _format_colors(color: str, alpha: float = None) -> str:
@@ -121,7 +120,15 @@ class PlotHelper:
         elif isinstance(color, str):
             # Convert hex to rgba
             if color[0] == '#':
-                color = pcol.hex_to_rgb(color)
+                # Check if alpha channel exists
+                if len(color.split('#')[-1]) == 8:
+                    # overwrites existing alpha
+                    # convert hexademical to int, divide by max
+                    alpha = int(color[1:3], 16) / 255.
+                    color = pcol.hex_to_rgb('#' + color[3:])
+                else:
+                    color = pcol.hex_to_rgb(color)
+
                 if alpha:
                     color += (alpha,)
                 color_str = str(tuple([c for c in color]))
@@ -129,17 +136,24 @@ class PlotHelper:
                     return f'rgba{color_str}'
                 else:
                     return f'rgb{color_str}'
-
-            else:
-                assert color[:3] in ('rgb')  # only rgb for now I think
+            elif color[:3] in ('rgb'):
                 if alpha:
                     # extract the rgb values
                     vals = pcol.unlabel_rgb(color)
                     vals += (alpha, )
                     color_str = str(tuple([v for v in vals]))
                     color = f'rgba{color_str}'
-
-                return color
+                    return color
+            else:
+                try:
+                    vals = mcolors.to_rgba(color)
+                    if alpha:
+                        vals = (*vals[:-1], alpha)
+                    color_str = str(tuple([v for v in vals]))
+                    color = f'rgba{color_str}'
+                    return color
+                except ValueError:
+                    raise ValueError(f'Did not understand color {color}')
 
     def _build_estimator_func(self,
                               func: Union[Callable, str, functools.partial],
@@ -175,10 +189,10 @@ class PlotHelper:
                   y_label: str = None,
                   x_limit: Tuple[float] = None,
                   y_limit: Tuple[float] = None,
-                  *args, **kwargs
+                  **kwargs
                   ) -> Union[go.Figure, go.FigureWidget]:
         """
-        Builds a plotly Figure object plotting lines of the given arrays. Each
+        Builds a Plotly Figure object plotting lines of the given arrays. Each
         array is interpreted as a separate condition and is plotted in a
         different color.
 
@@ -203,7 +217,7 @@ class PlotHelper:
             If output is 2D, the first dimension is used for the high
             error and second dimension is used for the low error.
         :param colors: Name of a color palette or map to use. Searches first
-            in seaborn/matplotlib, then in plotly to find the color map. If
+            in seaborn/matplotlib, then in Plotly to find the color map. If
             not provided, the color map will be glasbey.
         :param time: Time axis for the plot. Must be the same size as the
             second dimension of arrays.
@@ -217,13 +231,15 @@ class PlotHelper:
             the plot is saved as an HTML object.
         :param y_limit: Initial limits for the y-axis. Can be changed if
             the plot is saved as an HTML object.
-        :param *args:
-        :param **kwargs: Depending on name, passed to the "line" keyword
+        :param kwargs: Depending on name, passed to the "line" keyword
             argument of go.Scatter or as keyword arguments for go.Scatter.
             The following kwargs are passed to "line": 'color', 'dash',
             'shape', 'simplify', 'smoothing', 'width', 'hoverinfo'
 
         :return: Figure object
+
+        :raises AssertionError: If not all items in arrays are np.ndarray.
+        :raises AssertionError: If any item in arrays is not two dimensional.
         """
         # Format inputs
         assert all([isinstance(a, np.ndarray) for a in arrays])
@@ -267,7 +283,7 @@ class PlotHelper:
                 lines.append(
                     go.Scatter(x=x, y=y, legendgroup=key, name=key,
                                showlegend=_legend, mode='lines',
-                               line=line_kwargs, *args, **kwargs)
+                               line=line_kwargs, **kwargs)
                 )
 
                 if err_arr is not None:
@@ -289,11 +305,163 @@ class PlotHelper:
                         )
 
             fig.add_traces(lines)
-        fig.update_layout(template=self._template)
+
         self._default_axis_layout['title'].update({'text': x_label})
         fig.update_xaxes(**self._default_axis_layout)
         self._default_axis_layout['title'].update({'text': y_label})
         fig.update_yaxes(**self._default_axis_layout)
+        fig.update_layout(template=self._template,
+                          title=title,
+                          xaxis_range=x_limit,
+                          yaxis_range=y_limit)
+        return fig
+
+    def scatter_plot(self,
+                     arrays: Collection[np.ndarray],
+                     keys: Collection[str] = [],
+                     estimator: Union[Callable, str, functools.partial] = None,
+                     err_estimator: Union[Callable, str, functools.partial] = None,
+                     colors: Union[str, Collection[str]] = None,
+                     symbols: Union[str, Collection[str]] = None,
+                     legend: bool = True,
+                     figure: go.Figure = None,
+                     title: str = None,
+                     x_label: str = None,
+                     y_label: str = None,
+                     x_limit: Tuple[float] = None,
+                     y_limit: Tuple[float] = None,
+                     **kwargs
+                     ) -> Union[go.Figure, go.FigureWidget]:
+        """
+        Builds a Plotly Figure object containing a scatter plot of the given
+        arrays. Each array is interpreted as a separate condition and is
+        plotted in a different color or with a different marker.
+
+        :param arrays: List of arrays to plot. Assumed structure is n_cells x
+            n_features. If two features, first feature is plotted on the x-axis
+            and second feature on the y-axis. If one feature, data are plotted
+            on the y-axis and the x-axis is categorical. More than two features
+            is not currently supported.
+        :param keys: Names corresponding to the data arrays. If not provided,
+            the keys will be integers.
+        :param estimator: Function for aggregating observations from multiple
+            cells. For example, if estimator is np.mean, the mean of all of the
+            cells will be plotted instead of a point for each cell. Can be
+            a function, name of numpy function, name of function in
+            estimator_utils, or a functools.partial object. If a function or
+            functools.partial object, should input a 2D array and return a
+            1D array.
+        :param err_estimator: Function for estimating vertical error bars.
+            Can be a function, name of numpy function, name of
+            function in estimator_utils, or a functools.partial object. If a
+            function or functools.partial object, should input a 2D array and
+            return a 1D or 2D array. If output is 1D, errors will be symmetric.
+            If output is 2D, the first dimension is used for the high
+            error and second dimension is used for the low error. Only
+            applies to the y-dimension. Horizontal error bars not currrently
+            implemented.
+        :param colors: Name of a color palette or map to use. Searches first
+            in seaborn/matplotlib, then in Plotly to find the color map. If
+            not provided, the color map will be glasbey. Can also be list
+            of named CSS colors or hexadecimal or RGBA strings.
+        :param legend: If False, no legend is made on the plot.
+        :param figure: If a go.Figure object is given, will be used to make
+            the plot instead of a blank figure.
+        :param title: Title to add to the plot
+        :param x_label: Label of the x-axis
+        :param y_label: Label of the y-axis
+        :param x_limit: Initial limits for the x-axis. Can be changed if
+            the plot is saved as an HTML object.
+        :param y_limit: Initial limits for the y-axis. Can be changed if
+            the plot is saved as an HTML object.
+        :param kwargs: Depending on name, passed to the "marker" keyword
+            argument of go.Scatter or as keyword arguments for go.Scatter.
+            The following kwargs are passed to "marker": 'color', 'line',
+            'opacity', 'size', 'symbol'.
+
+        :return: Figure object
+
+        :raises AssertionError: If not all items in arrays are np.ndarray.
+        :raises AssertionError: If not all items in arrays have the same
+            number of columns.
+        :raises AssertionError: If any item in arrays has more than 3 columns.
+        """
+        # Format inputs - should be cells x features
+        assert all(isinstance(a, np.ndarray) for a in arrays)
+        assert all(a.shape[1] == arrays[0].shape[1] for a in arrays)
+        assert arrays[0].shape[1] < 3
+
+        # Convert any inputs that need converting
+        colors = self._build_colormap(colors, len(arrays))
+        symbols = self._build_symbolmap(symbols)
+        if estimator: estimator = self._build_estimator_func(estimator)
+        if err_estimator: err_estimator = self._build_estimator_func(err_estimator)
+        marker_kwargs = {k: v for k, v in kwargs.items()
+                         if k in self._marker_kwargs}
+        kwargs = {k: v for k, v in kwargs.items()
+                  if k not in self._marker_kwargs}
+
+        # Build the figure and start plotting
+        fig = figure if figure else go.Figure()
+        traces = []
+        for idx, (arr, key) in enumerate(itertools.zip_longest(arrays, keys)):
+            # Get the key
+            if not key:
+                key = f'group_{idx}'
+            key += f' | n={arr.shape[0]}'
+
+            # err_estimator is used to set error bars
+            if err_estimator:
+                err_arr = err_estimator(arr)
+            else:
+                err_arr = None
+
+            # estimator is used to condense all the cells to a single point
+            if estimator:
+                arr = estimator(arr)
+                if arr.ndim == 1: arr = arr[None, :]
+
+            # Assign to x and y:
+            if arr.ndim in (0, 1):
+                x = None
+                y = arr
+            if arr.ndim == 2:
+                x = arr[:, 0]
+                y = arr[:, 1]
+
+            error_x = None
+            error_y = None
+            if err_arr is not None:
+                error_y = self._default_error_bar_layout.copy()
+                error_y.update({'type': 'data'})
+                if err_arr.ndim == 1:
+                    # Assume symmetric
+                    error_y.update({'array': err_arr, 'symmetric': True})
+                elif err_arr.ndim == 2:
+                    err_plus = arr - err_arr[0, :]
+                    err_minus = err_arr[-1, :] - arr
+                    error_y.update({'array': err_plus,
+                                    'arrayminus': err_minus})
+
+            marker_kwargs.update(dict(color=next(colors),
+                                      symbol=next(symbols)))
+            traces.append(
+                go.Scatter(x=x, y=y, legendgroup=key, name=key,
+                           showlegend=legend, mode='markers',
+                           error_x=error_x, error_y=error_y,
+                           marker=marker_kwargs, **kwargs)
+            )
+
+        fig.add_traces(traces)
+
+        self._default_axis_layout['title'].update({'text': x_label})
+        fig.update_xaxes(**self._default_axis_layout)
+        self._default_axis_layout['title'].update({'text': y_label})
+        fig.update_yaxes(**self._default_axis_layout)
+        fig.update_layout(template=self._template,
+                          xaxis_range=x_limit,
+                          yaxis_range=y_limit)
+
         return fig
 
     def bar_plot(self,
@@ -312,14 +480,15 @@ class PlotHelper:
                  y_label: str = None,
                  x_limit: Tuple[float] = None,
                  y_limit: Tuple[float] = None,
-                 *args, **kwargs
+                 **kwargs
                  ) -> Union[go.Figure, go.FigureWidget]:
-        """Builds a plotly Figure object plotting bars from the given arrays. Each
+        """Builds a Plotly Figure object plotting bars from the given arrays. Each
         array is interpreted as a separate condition and is plotted in a
         different color.
 
         :param arrays: List of arrays to plot. Assumed structure is n_cells x
-            n_features. Arrays must be two-dimensional, so if only one sample,
+            n_features. Each feature is plotted as a separate bar group.
+            Arrays must be two-dimensional, so if only one sample,
             use np.newaxis or np.expand_dims.
         :param keys: Names corresponding to the data arrays. If not provided,
             the keys will be integers.
@@ -330,8 +499,7 @@ class PlotHelper:
             estimator_utils, or a functools.partial object. If a function or
             functools.partial object, should input a 2D array and return a
             1D array.
-        :param err_estimator: Function for estimating error bars from multiple
-            cells. Can be
+        :param err_estimator: Function for estimating error bars. Can be
             a function, name of numpy function, name of function in
             estimator_utils, or a functools.partial object. If a function or
             functools.partial object, should input a 2D array and return a
@@ -339,11 +507,12 @@ class PlotHelper:
             If output is 2D, the first dimension is used for the high
             error and second dimension is used for the low error.
         :param colors: Name of a color palette or map to use. Searches first
-            in seaborn/matplotlib, then in plotly to find the color map. If
-            not provided, the color map will be glasbey.
+            in seaborn/matplotlib, then in Plotly to find the color map. If
+            not provided, the color map will be glasbey. Can also be list
+            of named CSS colors or hexadecimal or RGBA strings.
         :param orientation: Orientation of the bar plot.
         :param barmode: Keyword argument describing how to group the bars.
-            Options are 'group', 'overlay', 'relative', and .... See plotly
+            Options are 'group', 'overlay', 'relative', and .... See Plotly
             documentation for more details.
         :param legend: If False, no legend is made on the plot.
         :param figure: If a go.Figure object is given, will be used to make
@@ -356,13 +525,15 @@ class PlotHelper:
             is horizontal.
         :param y_limit: Initial limits for the y-axis. Can be changed if
             the plot is saved as an HTML object. Only applies if orientation
-            is veritcal.
-        :param *args:
-        :param **kwargs: Depending on name, passed to go.Bar or to
+            is vertical.
+        :param kwargs: Depending on name, passed to go.Bar or to
             go.Figure.update_traces(). The following kwargs are passed to
             go.Bar: 'hoverinfo', 'marker', 'width'.
 
         :return: Figure object
+
+        :raises AssertionError: If not all items in arrays are np.ndarray.
+        :raises AssertionError: If orientation is a disallowed value.
         """
         # Format data
         assert all([isinstance(a, np.ndarray) for a in arrays])
@@ -389,7 +560,7 @@ class PlotHelper:
                 err_arr = err_estimator(arr)
 
                 # If one dimensional, it's the error relative to the mean
-                # that's how plotly wants it
+                # that's how Plotly wants it
                 # if if it is 2D, need to subtract from the mean
             else:
                 err_arr = None
@@ -412,11 +583,12 @@ class PlotHelper:
                         # Assume symmetric
                         error_y.update({'array': err_arr, 'symmetric': True})
                     elif err_arr.ndim == 2:
-                        # Assume that they are already set based on the mean value, so that needs
-                        # to be subtracted
+                        # Assume that they are already set based on the mean
+                        # value, so that needs to be subtracted
                         err_plus = arr - err_arr[0, :]
                         err_minus = err_arr[-1, :] - arr
-                        error_y.update({'array': err_plus, 'arrayminus': err_minus})
+                        error_y.update({'array': err_plus,
+                                        'arrayminus': err_minus})
             elif orientation in ('h', 'horizontal'):
                 y = ax_labels if ax_labels else None
                 x = arr
@@ -428,11 +600,12 @@ class PlotHelper:
                         # Assume symmetric
                         error_x.update({'array': err_arr, 'symmetric': True})
                     elif err_arr.ndim == 2:
-                        # Assume that they are already set based on the mean value, so that needs
-                        # to be subtracted
+                        # Assume that they are already set based on the mean
+                        # value, so that needs to be subtracted
                         err_plus = arr - err_arr[0, :]
                         err_minus = err_arr[-1, :] - arr
-                        error_x.update({'array': err_plus, 'arrayminus': err_minus})
+                        error_x.update({'array': err_plus,
+                                        'arrayminus': err_minus})
 
             # Set up the colors
             _c = next(colors)
@@ -459,10 +632,12 @@ class PlotHelper:
                     neg_keys: Collection[str] = [],
                     colors: Union[str, Collection[str]] = None,
                     neg_colors: Union[str, Collection[str]] = None,
+                    alpha: float = 1.0,
                     orientation: str = 'v',
                     show_box: bool = False,
                     show_points: Union[str, bool] = False,
-                    spanmode: str = 'hard',
+                    spanmode: str = 'soft',
+                    side: str = None,
                     legend: bool = True,
                     figure: go.Figure = None,
                     title: str = None,
@@ -470,25 +645,87 @@ class PlotHelper:
                     y_label: str = None,
                     x_limit: Tuple[float] = None,
                     y_limit: Tuple[float] = None,
-                    *args, **kwargs
+                    **kwargs
                     ) -> Union[go.Figure, go.FigureWidget]:
-        """"""
+        """
+        Builds a Plotly go.Figure object with violin distributions
+        for each of the arrays given. If negative arrays are given,
+        matches them with arrays and plots two distributions side
+        by side.
+
+        :param arrays: List of arrays to plot. Arrays are assumed to be
+            one dimensional. If neg_arrays is given, arrays are plotted on
+            the positive side.
+        :param keys: Names corresponding to the data arrays. If not provided,
+            the keys will be integers.
+        :param neg_arrays: List of arrays to plot. Arrays are assumed to be
+            1-dimensional. If neg_arrays is given, arrays are plotted on
+            the positive side.
+        :param neg_keys: Names corresponding to the neative data arrays. If not
+            provided, the keys will be integers.
+        :param colors: Name of a color palette or map to use. Searches first
+            in seaborn/matplotlib, then in Plotly to find the color map. If
+            not provided, the color map will be glasbey. Can also be list
+            of named CSS colors or hexadecimal or RGBA strings.
+        :param neg_colors: Name of a color palette or map to use. Searches
+            in seaborn/matplotlib first, then in Plotly to find the color map.
+            If not provided, the color map will be glasbey. Can also be list
+            of named CSS colors or hexadecimal or RGBA strings.
+        :param alpha: Opacity of the fill color of the violin plots as a float
+            in the range [0, 1].
+        :param orientation: Orientation of the violin plot.
+        :param show_box: If True, a box plot is made and overlaid over the
+            violin plot.
+        :param show_points: If True, individual data points are overlaid over
+            the violin plot.
+        :param spanmode: Determines how far the tails of the violin plot are
+            extended. If 'hard', the plot spans as far as the data. If 'soft',
+            the tails are extended.
+        :param side: Side to plot the distribution. By default, the
+            distribution is plotted on both sides, but can be 'positive'
+            or 'negative' to plot on only one side.
+        :param legend: If False, no legend is made on the plot.
+        :param figure: If a go.Figure object is given, will be used to make
+            the plot instead of a blank figure.
+        :param title: Title to add to the plot
+        :param x_label: Label of the x-axis
+        :param y_label: Label of the y-axis
+        :param x_limit: Initial limits for the x-axis. Can be changed if
+            the plot is saved as an HTML object. Only applies if orientation
+            is horizontal.
+        :param y_limit: Initial limits for the y-axis. Can be changed if
+            the plot is saved as an HTML object. Only applies if orientation
+            is veritcal.
+        :param kwargs: Depending on name, passed to go.Violin or to
+            go.Figure.update_traces(). The following kwargs are passed to
+            go.Violin: 'bandwidth', 'fillcolor', 'hoverinfo', 'jitter', 'line',
+            'marker', 'opacity', 'pointpos', 'points', 'span',
+            'width', 'hoverinfo'
+
+        :return: Figure object
+
+        :raises AssertionError: If not all entries in arrays or neg_arrays are
+            np.ndarray
+        :raises AssertionError: If any entry in arrays or neg_arrays have more
+            than one dimension.
+        :raises AssertionError: If neg_arrays is given, and
+            len(arrays) != len(neg_arrays)
+        """
         # Format inputs
         violinmode = None
-        side = None
         assert all([isinstance(a, np.ndarray) for a in arrays])
         arrays = [np.squeeze(a) for a in arrays]
-        assert all([a.ndim == 1 for a in arrays])
+        assert all([a.ndim in (1, 0) for a in arrays])
         if neg_arrays:
             assert len(arrays) == len(neg_arrays)
             neg_arrays = [np.squeeze(a) for a in neg_arrays]
-            assert all([a.ndim == 1 for a in neg_arrays])
+            assert all([a.ndim in (1, 0) for a in neg_arrays])
             violinmode = 'overlay'
             side = 'positive'
         assert orientation in ('v', 'h', 'horizontal', 'vertical')
 
         # Convert any inputs that need converting
-        colors = self._build_colormap(colors, len(arrays))
+        colors = self._build_colormap(colors, len(arrays), alpha)
         neg_colors = self._build_colormap(neg_colors, len(neg_arrays))
         violin_kwargs = {k: v for k, v in kwargs.items()
                          if k in self._violin_kwargs}
@@ -525,7 +762,7 @@ class PlotHelper:
             trace = go.Violin(x=x, y=y, name=key, legendgroup=key, side=side,
                               spanmode=spanmode, box_visible=show_box,
                               points=show_points, hoverinfo='skip',
-                              line=line, *args, **violin_kwargs)
+                              line=line, **violin_kwargs)
             fig.add_trace(trace)
 
             # Add the other half of the distributions if needed
@@ -541,12 +778,95 @@ class PlotHelper:
                                       name=key, legendgroup=nkey,
                                       spanmode=spanmode, box_visible=show_box,
                                       points=show_points, hoverinfo='skip',
-                                      line=line, *args, **violin_kwargs)
+                                      line=line, **violin_kwargs)
                 fig.add_trace(neg_trace)
 
         # Format plot on the way out
         fig.update_traces(**kwargs)
-        fig.update_layout(template=self._template, violinmode=violinmode)
+        fig.update_layout(template=self._template,
+                          violinmode=violinmode,
+                          title=title)
+        fig.update_xaxes(**self._default_axis_layout)
+        fig.update_xaxes(title=x_label, range=x_limit)
+        fig.update_yaxes(**self._default_axis_layout)
+        fig.update_yaxes(title=y_label, range=y_limit)
+
+        return fig
+
+    def ridgeline_plot(self,
+                       arrays: Collection[np.ndarray],
+                       keys: Collection[str] = [],
+                       colors: Union[str, Collection[str]] = None,
+                       spanmode: str = 'hard',
+                       overlap: float = 3,
+                       show_box: bool = False,
+                       show_points: Union[str, bool] = False,
+                       legend: bool = True,
+                       figure: go.Figure = None,
+                       title: str = None,
+                       x_label: str = None,
+                       y_label: str = None,
+                       x_limit: Tuple[float] = None,
+                       y_limit: Tuple[float] = None,
+                       **kwargs
+                       ) -> Union[go.Figure, go.FigureWidget]:
+        """
+        Builds a Plotly go.Figure object with partially overlapping
+        distributions for each of the arrays given. Similar to a violin
+        plot. See the section on ridgeline plots here for more information.
+
+        :param arrays: List of arrays to create distributions from. Arrays
+            are assumed to be one dimensional.
+        :param keys: Names corresponding to the data arrays. If not provided,
+            the keys will be integers.
+        :param colors: Name of a color palette or map to use. Searches first
+            in seaborn/matplotlib, then in Plotly to find the color map. If
+            not provided, the color map will be glasbey. Can also be list
+            of named CSS colors or hexadecimal or RGBA strings.
+        :param spanmode: Determines how far the tails of the violin plot are
+            extended. If 'hard', the plot spans as far as the data. If 'soft',
+            the tails are extended.
+        :param overlap: Sets the amount of overlap between adjacent
+            distributions. Larger values means more overlap.
+        :param show_box: If True, a box plot is made and overlaid over the
+            distribution.
+        :param show_points: If True, individual data points are overlaid over
+            the distribution.
+        :param side: Side to plot the distribution. By default, the
+            distribution is plotted on both sides, but can be 'positive'
+            or 'negative' to plot on only one side.
+        :param legend: If False, no legend is made on the plot.
+        :param figure: If a go.Figure object is given, will be used to make
+            the plot instead of a blank figure.
+        :param title: Title to add to the plot
+        :param x_label: Label of the x-axis
+        :param y_label: Label of the y-axis
+        :param x_limit: Initial limits for the x-axis. Can be changed if
+            the plot is saved as an HTML object. Only applies if orientation
+            is horizontal.
+        :param y_limit: Initial limits for the y-axis. Can be changed if
+            the plot is saved as an HTML object. Only applies if orientation
+            is veritcal.
+        :param kwargs: Depending on name, passed to go.Violin or to
+            go.Figure.update_traces(). The following kwargs are passed to
+            go.Violin: 'bandwidth', 'fillcolor', 'hoverinfo', 'jitter', 'line',
+            'marker', 'opacity', 'pointpos', 'points', 'span',
+            'width', 'hoverinfo'
+
+        :return: Figure object
+        """
+        # Plot the violin plots
+        fig = self.violin_plot(arrays, keys=keys, colors=colors,
+                               spanmode=spanmode, legend=legend,
+                               show_box=show_box, show_points=show_points,
+                               figure=figure, side='positive',
+                               orientation='h', **kwargs)
+
+        # Some settings for making a ridgeline out of the violin plot
+        fig.update_traces(width=spacing)
+        fig.update_layout(template=self._template,
+                          title=title, xaxis_showgrid=False,
+                          xaxis_zeroline=False)
         fig.update_xaxes(**self._default_axis_layout)
         fig.update_xaxes(title=x_label, range=x_limit)
         fig.update_yaxes(**self._default_axis_layout)
@@ -567,21 +887,50 @@ class PlotHelper:
                      y_label: str = None,
                      x_limit: Tuple[float] = None,
                      y_limit: Tuple[float] = None,
-                     *args, **kwargs
+                     **kwargs
                      ) -> Union[go.Figure, go.FigureWidget]:
         """
-        TODO:
-            - Add setting the xscale here
+        Builds a Plotly go.Figure object with a heatmap of the provided
+        array. This function is just a very thin wrapper around go.Heatmap.
+
+        :param array: Array from which to make the heatmap.
+        :param colorscale: The colorscale to make the heatmap in. Options are
+            more limited than the options for colors. Options include:
+            "Blackbody", "Bluered", "Blues", "Cividis", "Earth", "Electric",
+            "Greens", "Greys", "Hot", "Jet", "Picnic", "Portland", "Rainbow",
+            "RdBu", "Reds", "Viridis", "YlGnBu", and "YlOrRd".
+        :param zmin: Sets the lower bound of the color domain. If given, zmax
+            must also be given.
+        :param zmid: Sets the midpoint of the color domain by setting zmin and
+            zmax to be equidistant from this point.
+        :param zmax: Sets the upper bound of the color domain. If given, zmin
+            must also be given.
+        :param reverse: If True, the color mapping is reversed.
+        :param figure: If a go.Figure object is given, will be used to make
+            the plot instead of a blank figure.
+        :param title: Title to add to the plot
+        :param x_label: Label of the x-axis
+        :param y_label: Label of the y-axis
+        :param x_limit: Initial limits for the x-axis. Can be changed if
+            the plot is saved as an HTML object. Only applies if orientation
+            is horizontal.
+        :param y_limit: Initial limits for the y-axis. Can be changed if
+            the plot is saved as an HTML object. Only applies if orientation
+            is veritcal.
+        :param kwargs: Passed to go.Heatmap.
+
+        :return: Figure object.
+
+        :raises AssertionError: If array is not two-dimensional.
         """
         assert array.ndim == 2
         fig = figure if figure else go.Figure()
         trace = go.Heatmap(z=array, zmin=zmin, zmax=zmax,
                            zmid=zmid, colorscale=colorscale,
-                           reversescale=reverse,
-                           *args, **kwargs)
+                           reversescale=reverse, **kwargs)
         fig.add_trace(trace)
 
-        fig.update_layout(template=self._template)
+        fig.update_layout(template=self._template, title=title)
         fig.update_xaxes(**self._no_line_axis)
         fig.update_xaxes(title=x_label, range=x_limit)
         fig.update_yaxes(**self._no_line_axis)
@@ -589,11 +938,309 @@ class PlotHelper:
 
         return fig
 
+    def heatmap2d_plot(self,
+                       x_array: np.ndarray,
+                       y_array: np.ndarray,
+                       colorscale: str = 'viridis',
+                       zmin: float = None,
+                       zmid: float = None,
+                       zmax: float = None,
+                       xbinsize: float = None,
+                       ybinsize: float = None,
+                       histfunc: str = 'count',
+                       histnorm: str = "",
+                       figure: go.Figure = None,
+                       title: str = None,
+                       x_label: str = None,
+                       y_label: str = None,
+                       x_limit: Tuple[float] = None,
+                       y_limit: Tuple[float] = None,
+                       **kwargs
+                       ) -> Union[go.Figure, go.FigureWidget]:
+        """
+        Builds a Plotly go.Figure object with a two dimensional density
+        heatmap of the provided arrays. This function is just a very
+        thin wrapper around go.Heatmap2d.
 
+        :param x_array: Array containing observations for the data on the
+            x-axis. Expected to be one dimensional.
+        :param y_array: Array containing observations for the data on the
+            y-axis. Expected to be one dimensional.
+        :param colorscale: The colorscale to make the heatmap in. Options are
+            more limited than the options for colors. Options include:
+            "Blackbody", "Bluered", "Blues", "Cividis", "Earth", "Electric",
+            "Greens", "Greys", "Hot", "Jet", "Picnic", "Portland", "Rainbow",
+            "RdBu", "Reds", "Viridis", "YlGnBu", and "YlOrRd".
+        :param zmin: Sets the lower bound of the color domain. If given, zmax
+            must also be given.
+        :param zmid: Sets the midpoint of the color domain by setting zmin and
+            zmax to be equidistant from this point.
+        :param zmax: Sets the upper bound of the color domain. If given, zmin
+            must also be given.
+        :param xbinsize: Size of the bins along the x-axis.
+        :param ybinsize: Size of the bins along the y-axis.
+        :param histfunc: Specifies the binning function used for
+            this histogram trace. If “count”, the histogram values
+            are computed by counting the number of values lying
+            inside each bin. Can also be “sum”, “avg”, “min”, “max”.
+        :param histnorm: Specifies the type of normalization used
+            for this histogram trace. If “”, the span of each bar
+            corresponds to the number of occurrences  If “percent” /
+            “probability”, the span of each bar corresponds to the
+            percentage / fraction of occurrences with respect to
+            the total number of sample points (here, the sum of
+            all bin HEIGHTS equals 100% / 1). If “density”, the
+            span of each bar corresponds to the number of
+            occurrences in a bin divided by the size of the bin
+            interval. If probability density, the area of each
+            bar corresponds to the probability that an event will
+            fall into the corresponding bin (here, the sum of all
+            bin AREAS equals 1).
+        :param figure: If a go.Figure object is given, will be used to make
+            the plot instead of a blank figure.
+        :param title: Title to add to the plot
+        :param x_label: Label of the x-axis
+        :param y_label: Label of the y-axis
+        :param x_limit: Initial limits for the x-axis. Can be changed if
+            the plot is saved as an HTML object. Only applies if orientation
+            is horizontal.
+        :param y_limit: Initial limits for the y-axis. Can be changed if
+            the plot is saved as an HTML object. Only applies if orientation
+            is veritcal.
+        :param kwargs: Passed to go.Histogram2d.
 
+        :return: Figure object
 
+        :raises AssertionError: If x_array or y_array are more than one
+            dimensional.
+        """
+        assert np.squeeze(x_array).ndim in (1, 0)
+        assert np.squeeze(y_array).ndim in (1, 0)
 
+        fig = figure if figure else go.Figure()
+        trace = go.Histogram2d(x=x_array, y=y_array,
+                               colorscale=colorscale,
+                               histfunc=histfunc,
+                               histnorm=histnorm,
+                               zmin=zmin, zmid=zmid, zmax=zmax,
+                               xbins=dict(size=xbinsize),
+                               ybins=dict(size=ybinsize),
+                               **kwargs)
+        fig.add_trace(trace)
 
+        fig.update_layout(template=self._template, title=title)
+        fig.update_xaxes(**self._no_line_axis)
+        fig.update_xaxes(title=x_label, range=x_limit)
+        fig.update_yaxes(**self._no_line_axis)
+        fig.update_yaxes(title=y_label, range=y_limit)
 
+        return fig
 
+    def contour2d_plot(self,
+                       x_array: np.ndarray,
+                       y_array: np.ndarray,
+                       colorscale: str = 'viridis',
+                       zmin: float = None,
+                       zmid: float = None,
+                       zmax: float = None,
+                       xbinsize: float = None,
+                       ybinsize: float = None,
+                       histfunc: str = 'count',
+                       histnorm: str = "",
+                       figure: go.Figure = None,
+                       title: str = None,
+                       x_label: str = None,
+                       y_label: str = None,
+                       x_limit: Tuple[float] = None,
+                       y_limit: Tuple[float] = None,
+                       **kwargs
+                       ) -> Union[go.Figure, go.FigureWidget]:
+        """
+        Builds a Plotly go.Figure object with a two dimensional density
+        contour heatmap of the provided arrays. This function is just a very
+        thin wrapper around go.Heatmap2dContour.
 
+        :param x_array: Array containing observations for the data on the
+            x-axis. Expected to be one dimensional.
+        :param y_array: Array containing observations for the data on the
+            y-axis. Expected to be one dimensional.
+        :param colorscale: The colorscale to make the heatmap in. Options are
+            more limited than the options for colors. Options include:
+            "Blackbody", "Bluered", "Blues", "Cividis", "Earth", "Electric",
+            "Greens", "Greys", "Hot", "Jet", "Picnic", "Portland", "Rainbow",
+            "RdBu", "Reds", "Viridis", "YlGnBu", and "YlOrRd".
+        :param zmin: Sets the lower bound of the color domain. If given, zmax
+            must also be given.
+        :param zmid: Sets the midpoint of the color domain by setting zmin and
+            zmax to be equidistant from this point.
+        :param zmax: Sets the upper bound of the color domain. If given, zmin
+            must also be given.
+        :param xbinsize: Size of the bins along the x-axis.
+        :param ybinsize: Size of the bins along the y-axis.
+        :param histfunc: Specifies the binning function used for
+            this histogram trace. If “count”, the histogram values
+            are computed by counting the number of values lying
+            inside each bin. Can also be “sum”, “avg”, “min”, “max”.
+        :param histnorm: Specifies the type of normalization used
+            for this histogram trace. If “”, the span of each bar
+            corresponds to the number of occurrences  If “percent” /
+            “probability”, the span of each bar corresponds to the
+            percentage / fraction of occurrences with respect to
+            the total number of sample points (here, the sum of
+            all bin HEIGHTS equals 100% / 1). If “density”, the
+            span of each bar corresponds to the number of
+            occurrences in a bin divided by the size of the bin
+            interval. If probability density, the area of each
+            bar corresponds to the probability that an event will
+            fall into the corresponding bin (here, the sum of all
+            bin AREAS equals 1).
+        :param figure: If a go.Figure object is given, will be used to make
+            the plot instead of a blank figure.
+        :param title: Title to add to the plot
+        :param x_label: Label of the x-axis
+        :param y_label: Label of the y-axis
+        :param x_limit: Initial limits for the x-axis. Can be changed if
+            the plot is saved as an HTML object. Only applies if orientation
+            is horizontal.
+        :param y_limit: Initial limits for the y-axis. Can be changed if
+            the plot is saved as an HTML object. Only applies if orientation
+            is veritcal.
+        :param kwargs: Passed to go.Heatmap2dContour
+
+        :return: Figure object
+
+        :raises AssertionError: If x_array or y_array are more than one
+            dimensional.
+        """
+        assert np.squeeze(x_array).ndim in (1, 0)
+        assert np.squeeze(y_array).ndim in (1, 0)
+
+        fig = figure if figure else go.Figure()
+        trace = go.Histogram2dContour(x=x_array, y=y_array,
+                                      colorscale=colorscale,
+                                      histfunc=histfunc,
+                                      histnorm=histnorm,
+                                      zmin=zmin, zmid=zmid, zmax=zmax,
+                                      xbins=dict(size=xbinsize),
+                                      ybins=dict(size=ybinsize),
+                                      **kwargs)
+        fig.add_trace(trace)
+
+        fig.update_layout(template=self._template, title=title)
+        fig.update_xaxes(**self._no_line_axis)
+        fig.update_xaxes(title=x_label, range=x_limit)
+        fig.update_yaxes(**self._no_line_axis)
+        fig.update_yaxes(title=y_label, range=y_limit)
+
+        return fig
+
+    def trace_color_plot(self,
+                         trace_array: np.ndarray,
+                         color_arrays: Collection[np.ndarray] = [],
+                         color_thres: Collection[float] = [],
+                         colors: Union[str, Collection[str]] = None,
+                         rows: int = 6,
+                         cols: int = 4,
+                         max_figures: int = None,
+                         time: np.ndarray = None,
+                         title: str = None,
+                         x_label: str = None,
+                         y_label: str = None,
+                         x_limit: Tuple[float] = None,
+                         y_limit: Tuple[float] = None,
+                         **kwargs
+                         ) -> Generator:
+        """
+        Generates Plotly go.Figure objects with subplots for each individual
+        trace in trace_array. Traces can be colored with discrete colors based
+        on arbitrary criteria in color_arrays. For example, this function can
+        be used to evaluate the success of peak segmentation by passing the
+        traces to trace_array, and the peak segmentation to color_arrays.
+
+        :param trace_array: Array containing the values to be plotted. Assumed
+            structure is two-dimensional of shape n_cells x n_features.
+        :param color_arrays: Collection of arrays of the same shape as
+            trace_array. Used with color_thres to determine what sections
+            of the trace should be colored. There is no limit on the number
+            of arrays passed, but color_thres must be the same length.
+        :param color_thres: Collection of thresholds associated with
+            color_arrays. For each array and threshold, the trace will be
+            colored wherever color_array >= color_thres.
+        :param colors: Name of a color palette or map to use. Will use the
+            first color as the base color of trace, and subsequent colors
+            for each color_array. Searches first in seaborn/matplotlib,
+            then in Plotly to find the color map. If
+            not provided, the color map will be glasbey. Can also be list
+            of named CSS colors or hexadecimal or RGBA strings.
+        :param rows: Number of rows of subplots to make for each figure.
+        :param cols: Number of columns of subplots to make for each figure.
+        :param max_figures: Maximum number of figures to produce. If None,
+            makes enough figures to plot all of the traces.
+        :param time: Time axis for the plot. Must be the same size as the
+            second dimension of arrays.
+        :param title: Title to add to the plot
+        :param x_label: Label of the x-axis
+        :param y_label: Label of the y-axis
+        :param x_limit: Initial limits for the x-axis. Can be changed if
+            the plot is saved as an HTML object.
+        :param y_limit: Initial limits for the y-axis. Can be changed if
+            the plot is saved as an HTML object.
+        :param kwargs: Depending on name, passed to the "line" keyword
+            argument of go.Scatter or as keyword arguments for go.Scatter.
+            The following kwargs are passed to "line": 'color', 'dash',
+            'shape', 'simplify', 'smoothing', 'width', 'hoverinfo'
+
+        :return: Figure object
+
+        """
+        # Check inputs
+        assert all([trace_array.shape == c.shape for c in color_arrays])
+        assert len(color_arrays) == len(color_thres)
+        colors = self._build_colormap(colors, len(color_arrays) + 1)
+        time = time if time else np.arange(trace_array.shape[1])
+        line_kwargs = {k: v for k, v in kwargs.items()
+                       if k in self._line_kwargs}
+        kwargs = {k: v for k, v in kwargs.items()
+                  if k not in self._line_kwargs}
+
+        # Set up the figure layout
+        num_traces = trace_array.shape[0]
+        num_subplts = int(np.ceil(num_traces / (rows * cols)))
+        if max_figures and max_figures < num_subplts:
+            num_subplts = max_figures
+
+        # Iterate through all of the traces
+        trace_idx = 0
+        for _ in range(num_subplts):
+            fig = psubplt.make_subplots(rows=rows, cols=cols)
+            for fidx in range(rows * cols):
+                try:
+                    trace = trace_array[trace_idx]
+                    r = fidx // cols + 1
+                    c = fidx % cols + 1
+
+                    # Plot the trace first and plot the others on top
+                    line_kwargs.update({'color': next(colors)})
+                    background = go.Scatter(x=time, y=trace, line=line_kwargs,
+                                            showlegend=False, mode='lines',
+                                            **kwargs)
+                    fig.add_trace(background, row=r, col=c)
+
+                    # Plot regions of the traces that will be different colors
+                    for carr, thres in zip(color_arrays, color_thres):
+                        carr = carr[trace_idx]
+                        color_trace = np.where(carr >= thres, trace, np.nan)
+
+                        line_kwargs.update({'color': next(colors)})
+                        ctrace = go.Scatter(x=time, y=color_trace,
+                                            line=line_kwargs,
+                                            showlegend=False, mode='lines',
+                                            **kwargs)
+                        fig.add_trace(ctrace, row=r, col=c)
+
+                    trace_idx += 1
+                except IndexError:
+                    # Reached the end of the traces
+                    break
+
+            yield fig

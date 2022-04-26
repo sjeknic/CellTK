@@ -6,7 +6,7 @@ Important classes
 
 #. ``Pipeline`` - runs CellTK on a single folder of images.
 #. ``Orchestrator`` - runs CellTK on multiple folders of images.
-#. ``Operation`` - includes ``Segmenter``, ``Processor``, ``Tracker`` and ``Extractor``. Each of these holds the functions for analyzing images and can be found in ``CellTK/celltk``.
+#. ``Operation`` - includes ``Segmenter``, ``Processor``, ``Tracker``, ``Extractor``, and ``Evaluator``. Each of these holds the functions for analyzing images and can be found in ``CellTK/celltk``.
 
 
 Setting up a Pipeline
@@ -17,10 +17,10 @@ To use, save all of the following in a python script and run it. First, initiali
 ::
 
     import celltk
-    pipe = celltk.Pipeline(parent_folder='/your/path/to/CellTK/examples/D4-Site_2')
+    pipe = celltk.Pipeline(parent_folder='/your/path/to/CellTK/examples/live_cell_example')
 
 
-Next, build a set of ``Operations`` that you would like to use on those images. We fist need to initialize the operation and let it know which images to use by passing a unique string that is in the name of those image files. In this case the nuclear channel can be identified with "channel000". We tell it that the output should be called "nuc". We also add a few extra options to save our final output and skip functions if it finds the files are already made.
+Next, build a set of ``Operations`` that you would like to use on those images. We first need to initialize the operation and let it know which images to use by passing a unique string that is in the name of those image files. In this case the nuclear channel can be identified with "channel000". We tell it that the output should be called "nuc". We also add a few extra options to save our final output and skip functions if it finds the files are already made.
 
 ::
 
@@ -40,7 +40,7 @@ Next, we will add a tracking operation using the same format as above. This time
 
     tra = celltk.Tracker(images=['channel000'], masks='seg', output='nuc',
                          save=True, force_rerun=False)
-    tra.add_function_to_operation('kit_sch_ge_tracker')``
+    tra.add_function_to_operation('kit_sch_ge_tracker')
 
 Finally, we need to add an operation to extract the data and save it in an easy to use file. For this, we use ``Extractor``. This is the operation to pass most of the experimental metadata to. No functions are added to this operation.
 
@@ -59,11 +59,39 @@ Now we are ready to run everything! For this, we simply add the operations to th
 
 This will create the output folder, run all the operations, and save a file called ``data_frame.hdf5`` with all of the data saved as a ``ConditionArray``.
 
+
 Setting up an Orchestrator
 --------------------------
 
-Uses a very similar API as ``Pipeline``. ``parent_folder`` should point to a directory that contains sub-directories of images.
+Orchestrator es a very similar API as ``Pipeline``. ``parent_folder`` should point to a directory that contains sub-directories of images.
 
 
+Utilizing extracted data
+------------------------
+
+After the pipeline runs, the data will be saved in an ``hdf5`` file. To access these data, load the file as a ``ConditionArray``. For this example, we will use ``examples/example_df.hdf5``.
+
+::
+
+    array = celltk.ConditionArray.load('examples/example_df.hdf5')
+    print(array.shape)
+    > (1, 2, 24, 42, 6)
+
+All ``ConditionArrays`` are five-dimensional. The dimensions are regions (e.g. nucleus, cytoplasm), channels (e.g. TRITC, FITC), metrics (e.g. median_intensity, area), cells, and frames. The first three dimensions can be indexed using strings, while the last two dimensions are indexed using integers. Currently, every indexing operation on a ``ConditionArray`` returns an ``np.ndarray``. Addtionally, the array will always be at least two dimensional.
+
+::
+
+    data = array['nuc', 'fitc', 'area']
+    print(data.shape)
+    > (42, 6)
+    print(type(data))
+    > numpy.ndarray
+
+You can also index multiple items in each axis using a ``list`` or ``tuple``. For example, you may want to get the ``x`` and ``y`` positions of each cell.
+
+::
+    position = array['nuc', 'fitc', ('x', 'y')]
+    print(data.shape)
+    > (2, 42, 6)
 
 .. _Katharina Loeffler and colleagues: https://git.scc.kit.edu/KIT-Sch-GE/2021-cell-tracking

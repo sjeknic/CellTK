@@ -5,9 +5,9 @@ import numpy as np
 import pytest
 
 # Correct import paths
-# cwd = os.path.dirname(os.path.realpath(__file__))
-# par = os.path.dirname(cwd)
-# sys.path.insert(0, par)
+cwd = os.path.dirname(os.path.realpath(__file__))
+par = os.path.dirname(cwd)
+sys.path.insert(0, par)
 
 import celltk
 import celltk.utils.unet_model

@@ -111,7 +111,8 @@ class ConditionArray():
 
     @property
     def coordinate_dimensions(self):
-        """Dictionary of coordinate_name : coordinate_length"""
+        """Dictionary of with coordinate names as keys
+        and coordinate length as values"""
         return {k: len(v) for k, v in self.coords.items()}
 
     @property
@@ -485,7 +486,8 @@ class ConditionArray():
 
         NOTE:
             - This method must be used before attempting to add new
-            metrics to the ConditionArray.
+              metrics to the ConditionArray.
+
 
         :param name: List of names of the metrics to add
 
@@ -539,6 +541,7 @@ class ConditionArray():
         TODO:
             - Add option to return a new Condition instead of
               an np.ndarray
+
         """
         # If key is provided, look for saved mask
         if key and mask is None:
@@ -621,6 +624,7 @@ class ConditionArray():
 
         TODO:
             - Add option to create cell_index from track
+            - Should check that daughter cells are present
         """
         # Find indices of all parents along cell axis
         parents = np.unique(tuple(parent_daughter.values()))
@@ -677,10 +681,9 @@ class ConditionArray():
             frames.
         :param key: If given, saves the mask in ConditionArray as key.
         :param *args: passed to function
-        :param **kwargs: passed to function
+        :param kwargs: passed to function
 
         :return: 2D boolean array that masks cells outside filter
-        :rtype: np.ndarray
         """
         # Format inputs to the correct type
         if isinstance(region, int):
@@ -851,7 +854,7 @@ class ConditionArray():
             keys in ConditionArray
         :param segment: If True, uses a watershed-based segmentation to label
             peaks based on the predictions.
-        :param **kwargs: Passed to segmentation function
+        :param kwargs: Passed to segmentation function
 
         :return: None
         """
@@ -1265,8 +1268,8 @@ class ExperimentArray():
         :param individual: If true, the filter is calculated for each
             ConditionArray independently. Otherwise, calculated on
             the whole data set, then applied to ConditionArrays.
-        :param *args: passed to function
-        :param **kwargs: passed to function
+        :param args: passed to function
+        :param kwargs: passed to function
 
         :return: List of 2D boolean array to masks cells outside filter
         """
@@ -1315,8 +1318,8 @@ class ExperimentArray():
             msak if provided.
         :param delete: If True, cells are removed in the base array. Otherwise
             they are only removed in the array that is returned.
-        :param *args: Passed to filtering function.
-        :param **kwargs: Passed to filtering function.
+        :param args: Passed to filtering function.
+        :param kwargs: Passed to filtering function.
 
         :return: array with cells designated by maks or key removed.
         :rtype: np.ndarray
@@ -1466,7 +1469,7 @@ class ExperimentArray():
             keys in ConditionArray
         :param segment: If True, uses a watershed-based segmentation to label
             peaks based on the predictions.
-        :param **kwargs: Passed to segmentation function,
+        :param kwargs: Passed to segmentation function.
 
         :return: None
         """
@@ -1528,110 +1531,6 @@ class ExperimentArray():
         """
         for v in self.sites.values():
             v.mark_active_cells(key, thres, propagate)
-
-    def plot_by_condition(self,
-                          keys: List[Tuple[str]],
-                          conditions: Collection[str],
-                          estimator: Union[Callable, str, functools.partial] = None,
-                          err_estimator: Union[Callable, str, functools.partial] = None,
-                          colors: Union[Callable, Collection] = None,
-                          kind: str = 'line',
-                          title: str = None,
-                          x_label: str = None,
-                          y_label: str = None,
-                          x_limit: Tuple[float] = None,
-                          y_limit: Tuple[float] = None,
-                          layout_spec: dict = {},
-                          show: bool = False,
-                          save: str = None,
-                          figure: go.Figure = None,
-                          _format: str = 'svg'
-                          ) -> go.Figure:
-        """Used to generate a variety of plots comparing the ConditionArrays for the
-        conditions passed.
-
-        NOTE:
-            - As of version 0.3.0, this function is not implemented
-
-        NOTE:
-            - Plotting should still be considered in the beta-stage.
-              Bugs may exist. The API of this function will likely
-              change and/or be replaced in the near future.
-
-        :param keys: Keys to plot from each ConditiomArray. Likely best to
-            pass only one key at a time
-            (e.g. ['nuc', 'fitc', 'median_intensity']).
-        :param condtions: Conditons from the ExperimentArray to plot. If not
-            provided, defaults to plotting all conditions.
-        :param estimator: Used to combine the traces in each ConditionArray.
-            If str, must be name of numpy function. If a function object,
-            will be applied across axis 0 (like numpy). If a functools.partial
-            object, must accept a 2D array and return a 1D array.
-            For example, if 'mean' is provided, the plotted trace will
-            be the mean of all the cells in each ConditionArray.
-            This kwarg is currently incompatible with 'overlay' plot kind.
-        :param err_estimator: Used to estimate the error bars around the
-            estimator. Same stipulations as 'estimator' kwarg.
-        :param colors: Name of colormap or color to use. Seaborn and matplotlib
-            colormaps can be used. Any named CSS color can be used.
-        :param kind: Type of plot. Options are 'line' (self-explanatory),
-            'overlay' (plots the mean over lightened inidivudal traces),
-            and 'hist' (histogram, only alphpa right now)
-        :param title: Title to display on the plot.
-        :param x_label: Label for the x-axis of the plot.
-        :param y_label: Label for the y-axis of the plot.
-        :param x_limit: Lower and upper limit of the x-axis
-        :param y_limit: Lower and upper limit of the y-axis.
-        :param layout_spec: Dictionary specifiying the layout of the go.Figure
-            object. See plotly documentation for options.
-        :paraqm show: If True, plots are displayed to the user.
-        :param save: If given, saves plots with the given filename. The
-            extension of the given string determines the format of the saved
-            plot. If saved as HTML, plot is interactive.
-        :param figure: If given, all plots are made in the given go.Figure
-            object. Otherwise, a new object is created.
-        :param _format: HTML plots give the option to download as a different
-            figure format after making adjustments. This parameter determines
-            that format.
-
-        :return: go.Figure with the data plotted.
-
-        TODO:
-            - More generic way to group conditions
-        """
-        raise NotImplementedError('Please use plot_utils.PlotHelper for plotting.')
-        # Get the data to plot
-        keys = tuple(keys) if not isinstance(keys, tuple) else keys
-        if not conditions: return go.Figure()
-        arrs = self[conditions][keys]
-        time = self.time[0]
-
-        # Make the base plot
-        fig = plot_groups(arrs, conditions, estimator, err_estimator,
-                          kind=kind, time=time, colors=colors, figure=figure)
-
-        # Update the figure layout
-        fig.update_xaxes(title=x_label, range=x_limit)
-        fig.update_yaxes(title=y_label, range=y_limit)
-        fig.update_layout(title=title, **layout_spec)
-
-        if show:
-            fig.show()
-        if save:
-            # Determines fig type based on extension
-            html = save.split('.')[-1] == 'html'
-            if html:
-                config = {'toImageButtonOptions': {
-                            'format': _format,
-                            'filename': 'figure',
-                            'scale': 1
-                            }
-                         }
-                fig.write_html(save, config=config)
-            else:
-                fig.write_image(save)
-
-        return fig
 
     @classmethod
     def _build_from_file(cls, f: h5py.File) -> 'ExperimentArray':

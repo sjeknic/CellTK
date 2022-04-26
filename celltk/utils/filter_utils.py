@@ -28,7 +28,6 @@ def _clean_mask(values: np.ndarray,
                 user_mask: np.ndarray = None
                 ) -> np.ndarray:
     """"""
-
     # Set nans to True to exclude from masking
     if ignore_nans:
         mask[np.isnan(values)] = True
@@ -84,8 +83,8 @@ def inside(values: np.ndarray,
 
 
 def outside_percentile(values: np.ndarray,
-                       lo: float = 5,
-                       hi: float = 95,
+                       lo: float = 0,
+                       hi: float = 100,
                        ignore_nans: bool = False,
                        propagate: bool = True,
                        mask: np.ndarray = None,
@@ -95,16 +94,20 @@ def outside_percentile(values: np.ndarray,
     percentile range
     """
     # Compute values of the boundries
-    lo = np.percentile(values, lo)
-    hi = np.percentile(values, hi)
+    if ignore_nans:
+        lo = np.nanpercentile(values, lo)
+        hi = np.nanpercentile(values, hi)
+    else:
+        lo = np.percentile(values, lo)
+        hi = np.percentile(values, hi)
     ma = outside(values, lo, hi, propagate=False)
 
     return _clean_mask(values, ma, ignore_nans, propagate, mask)
 
 
 def inside_percentile(values: np.ndarray,
-                      lo: float = 5,
-                      hi: float = 95,
+                      lo: float = 0,
+                      hi: float = 100,
                       ignore_nans: bool = False,
                       propagate: bool = True,
                       mask: np.ndarray = None,
@@ -114,8 +117,12 @@ def inside_percentile(values: np.ndarray,
     percentile range
     """
     # Compute values of the boundries
-    lo = np.percentile(values, lo)
-    hi = np.percentile(values, hi)
+    if ignore_nans:
+        lo = np.nanpercentile(values, lo)
+        hi = np.nanpercentile(values, hi)
+    else:
+        lo = np.percentile(values, lo)
+        hi = np.percentile(values, hi)
     ma = inside(values, lo, hi, propagate=False)
 
     return _clean_mask(values, ma, ignore_nans, propagate, mask)

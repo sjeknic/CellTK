@@ -2,11 +2,12 @@ import warnings
 from typing import Tuple
 
 import numpy as np
+import skimage.segmentation as segm
 
 from celltk.utils._types import Track, Mask, Image, Arr
 from celltk.core.operation import BaseEvaluator
 from celltk.utils.utils import ImageHelper
-from celltk.utils.operation_utils import track_to_mask
+from celltk.utils.operation_utils import track_to_mask, get_cell_index
 from celltk.utils.info_utils import nan_helper_1d
 
 
@@ -17,22 +18,22 @@ class Evaluator(BaseEvaluator):
                         array: Arr
                         ) -> Track:
         """"""
-        # Figure out all the cells that were missing
-        all_cells = np.unique(track)
+        # Figure out all the cells that were kept
         kept_cells = np.unique(array[:, :, 'label']).astype(int)
-        missing_cells = set(all_cells).difference(kept_cells)
 
         # Change to mask to also blank negatives
-        out = track_to_mask(track)
-        for cell in missing_cells:
-            out[track == cell] = 0
+        ravel = track_to_mask(track).ravel()
+
+        # Remove the missing cells by excluding from mapping
+        mapping = {c: c for c in kept_cells}
+        ravel = np.asarray([mapping.get(c, 0) for c in ravel])
 
         # Add back the parent labels
-        parents = np.unique(track[track < 0])
-        for par in parents:
-            np.where(np.logical_and(track == par, track > 0), par, out)
+        parent_ravel = track.ravel()  # Includes negative values
+        mask = (parent_ravel < 0) * (ravel > 0)
+        np.copyto(ravel, parent_ravel, where=mask)
 
-        return out
+        return ravel.reshape(track.shape).astype(np.int16)
 
     @ImageHelper(by_frame=False, as_tuple=False)
     def make_single_cell_stack(self,
@@ -53,21 +54,13 @@ class Evaluator(BaseEvaluator):
         # Simpler if it's limited to even numbers only
         assert all([not (w % 2) for w in window_size])
 
-        # Find the centroid for the cell in question
+        # Find the row that contains the cell data
         region = array.regions[0] if not region else region
         channel = array.channels[0] if not channel else channel
-        cell_index = np.where(array[region, channel, 'label'] == cell_id)[0]
-        if len(np.unique(cell_index)) > 1:
-            # Greater than one instance found
-            if position_id:
-                # Get it based on the position
-                pass
-            else:
-                warnings.warn('Found more than one matching cell. Using '
-                              f'first instance found at {cell_index[0]}.')
-                cell_index = int(cell_index[0])
-        else:
-            cell_index = int(cell_index[0])
+        label_array = array[region, channel, 'label']
+        position_array = array[region, channel, 'position_id']
+        cell_index = get_cell_index(cell_id, label_array,
+                                    position_id, position_array)
 
         # Get the centroid, window for the cell, and img size
         y, x = array[region, channel, ('y', 'x'), cell_index, :]
@@ -84,9 +77,24 @@ class Evaluator(BaseEvaluator):
         x_min = np.floor(np.clip(x - x_adj, a_min=0, a_max=None)).astype(int)
         x_max = np.floor(np.clip(x + x_adj, a_min=None, a_max=x_img)).astype(int)
 
+        # Crop the orig array and save in out array - shape must always match
         out = np.empty((frames, y_win, x_win), dtype=image.dtype)
         for fr in range(frames):
             fr = int(fr)
             out[fr, ...] = image[fr, y_min[fr]:y_max[fr], x_min[fr]:x_max[fr]]
 
         return out
+
+    @ImageHelper(by_frame=True)
+    def overlay_tracks(self,
+                       image: Image,
+                       track: Track,
+                       boundaries: bool = False,
+                       mode: str = 'inner'
+                       ) -> Image:
+        """"""
+        if (track < 0).any():
+            track = track_to_mask(track)
+        if boundaries:
+            track = segm.find_boundaries(track, mode=mode)
+        return np.where(track > 0, track, image).astype(np.uint16)

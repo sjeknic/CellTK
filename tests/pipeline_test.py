@@ -17,7 +17,7 @@ class TestPipeline():
     _orch_path = os.path.join(par, 'examples')
     _img_path = os.path.join(_orch_path, 'live_cell_example')
     _output_path = os.path.join(_img_path, '_output')
-    _nuc_weight_path = os.path.join(par, 'celltk/config/unet_example_cell_weights.hdf5')
+    _nuc_weight_path = os.path.join(par, 'celltk/config/unet_example_cell_weights.tf')
 
     def _make_operations(self):
 

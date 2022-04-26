@@ -43,7 +43,7 @@ def bayes_extract_tracker_data(mask: Mask,
     mapping = {}
     for btrk, bref in zip(tracks, references):
         for b in bref:
-            if b > 0: mapping[b] = btrk[0]
+            if b > 0: mapping[b] = btrk
 
     # Build output array and then reshape
     out = [mapping.get(r, 0) for r in ravel]
