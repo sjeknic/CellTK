@@ -90,8 +90,11 @@ All ``ConditionArrays`` are five-dimensional. The dimensions are regions (e.g. n
 You can also index multiple items in each axis using a ``list`` or ``tuple``. For example, you may want to get the ``x`` and ``y`` positions of each cell.
 
 ::
+
     position = array['nuc', 'fitc', ('x', 'y')]
     print(data.shape)
     > (2, 42, 6)
+
+
 
 .. _Katharina Loeffler and colleagues: https://git.scc.kit.edu/KIT-Sch-GE/2021-cell-tracking
