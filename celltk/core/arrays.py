@@ -13,7 +13,7 @@ import celltk.utils.filter_utils as filtu
 from celltk.utils.info_utils import nan_helper_2d, get_split_idxs, split_array
 from celltk.utils.unet_model import UPeakModel
 from celltk.utils.peak_utils import (segment_peaks_agglomeration,
-                                     PeakMetrics)
+                                     PeakHelper)
 from celltk.utils.metric_utils import active_cells, cumulative_active
 
 
@@ -864,7 +864,7 @@ class ConditionArray():
         assert data.ndim == 2
 
         # Make the destination metric slots and keys
-        slots = ['slope_prob', 'plateau_prob']
+        slots = ['peak_prob']
         if segment:
             # Add the extra slot here
             self.add_metric_slots(slots + ['peaks'])
@@ -872,17 +872,16 @@ class ConditionArray():
             self.add_metric_slots(slots)
 
         base = self._get_key_components(key, 'metrics')
-        dest_keys = [base + tuple([s]) for s in slots]
+        dest_key = base + tuple(slots)
 
         # Initialize the UPeak model if needed
         if not model:
             model = UPeakModel(weight_path)
 
         # Get predictions of where peaks exist
-        predictions = model.predict(data, roi=(1, 2))  # slope, plateau
-        for i, d in enumerate(dest_keys):
-            self[d] = predictions[..., i]
-            if propagate: self.propagate_values(d, prop_to=propagate)
+        predictions = model.predict(data, roi=1)  # slope, plateau
+        self[dest_key] = predictions
+        if propagate: self.propagate_values(dest_key, prop_to=propagate)
 
         # Segment peaks if needed
         if segment:
@@ -906,7 +905,7 @@ class ConditionArray():
         :param value_key: Key to the traces used to calculate the peak
             metrics.
         :param metrics: Names of the metrics to use for segmentation. See
-            PeakMetrics in celltk.utils.peak_utils.
+            PeakHelper in celltk.utils.peak_utils.
         :param thresholds: Lower threshold for the metrics given. If a peak
             metric is less than the threshold, it will be removed. Must be the
             same length as metrics.
@@ -927,8 +926,8 @@ class ConditionArray():
         traces = self[value_key]
         labels = self[peak_key]
 
-        # Filter the peaks with PeakMetrics
-        filtered = PeakMetrics().filter_peaks(traces, labels, metrics,
+        # Filter the peaks with PeakHelper
+        filtered = PeakHelper().filter_peaks(traces, labels, metrics,
                                               thresholds, kwargs)
 
         # Apply the values
@@ -1480,7 +1479,8 @@ class ExperimentArray():
         '''
         model = UPeakModel(weight_path)
         for v in self.sites.values():
-            v.predict_peaks(key, model, propagate=propagate)
+            v.predict_peaks(key, model, propagate=propagate,
+                            segment=segment, **kwargs)
 
     def filter_peaks(self,
                      value_key: Tuple[int, str],
@@ -1497,7 +1497,7 @@ class ExperimentArray():
         :param value_key: Key to the traces used to calculate the peak
             metrics.
         :param metrics: Names of the metrics to use for segmentation. See
-            PeakMetrics in celltk.utils.peak_utils.
+            PeakHelper in celltk.utils.peak_utils.
         :param thresholds: Lower threshold for the metrics given. If a peak
             metric is less than the threshold, it will be removed. Must be the
             same length as metrics.

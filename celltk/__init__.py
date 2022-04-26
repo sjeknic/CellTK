@@ -18,4 +18,4 @@ from .utils.slurm_utils import SlurmController
 # Import helper classes
 from .utils.utils import ImageHelper
 from .utils.plot_utils import PlotHelper
-from .utils.peak_utils import PeakMetrics
+from .utils.peak_utils import PeakHelper

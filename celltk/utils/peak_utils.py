@@ -4,14 +4,15 @@ from typing import List, Collection
 import numpy as np
 import skimage.segmentation as segm
 import scipy.integrate as integrate
+import scipy.stats as stats
 
 from celltk.utils.filter_utils import outside, inside
 
 def segment_peaks_agglomeration(traces: np.ndarray,
                                 probabilities: np.ndarray,
                                 steps: int = 15,
-                                min_seed_prob: float = 0.8,
-                                min_peak_prob: float = 0.5,
+                                min_seed_prob: float = 0.9,
+                                min_peak_prob: float = 0.3,
                                 min_seed_length: int = 2,
                                 **kwargs  # Messy fix for running this from derived metrics
                                 ) -> np.ndarray:
@@ -22,7 +23,7 @@ def segment_peaks_agglomeration(traces: np.ndarray,
     And the mask can just be labels > 0
     That should work for everything...
 
-    0 - BG, 1 - slope, 2 - plateau
+    0 - BG, 1 - peak
 
     TODO:
         - Add option for user-passed seeds
@@ -30,42 +31,31 @@ def segment_peaks_agglomeration(traces: np.ndarray,
     # Make sure traces and probabilities match
     assert traces.shape[:2] == probabilities.shape[:2]
 
-    # Probabilities should be 3D. If 2D, assume slope + plateau
-    assert probabilities.ndim == 3
-    if probabilities.shape[-1] == 3:
-        # Background probability is not needed
-        probabilities = probabilities[..., 1:]
-    elif probabilities.shape[-1] < 2 or probabilities.shape[-1] > 3:
-        raise ValueError('Expected 2 or 3 classes in probabilities. '
-                         f'Got {probabilities.shape[-1]}.')
-
-    # Extract individual probabilities
-    slope, plateau = (probabilities[..., 0], probabilities[..., 1])
     # Apply to each trace
     out = np.zeros(traces.shape, dtype=np.uint8)
-    for n, (t, s, p) in enumerate(zip(traces, slope, plateau)):
-        out[n] = _peak_labeler(t, s, p)
+    for n, (t, p) in enumerate(zip(traces, probabilities)):
+        out[n] = _peak_labeler(t, p)
 
     return out
 
 
 def _peak_labeler(trace: np.ndarray,
-                  slope: np.ndarray,
-                  plateau: np.ndarray,
+                  probability: np.ndarray,
                   steps: int = 15,
-                  min_seed_prob: float = 0.8,
-                  min_peak_prob: float = 0.5,
+                  min_seed_prob: float = 0.9,
+                  min_peak_prob: float = 0.3,
                   min_seed_length: int = 2
                   ) -> np.ndarray:
     """Gets 1D trace and returns with peaks labeled
     """
     # Get seeds based on constant probability
     seeds = _idxs_to_labels(
-        trace, _constant_thres_peaks(plateau, min_seed_prob, min_seed_length)
+        trace, _constant_thres_peaks(probability, min_seed_prob,
+                                     min_seed_length)
     )
 
     # Use iterative watershed to segment
-    peaks = _agglom_watershed_peaks(trace, seeds, slope + plateau,
+    peaks = _agglom_watershed_peaks(trace, seeds, probability,
                                     steps, min_peak_prob)
 
     return peaks
@@ -141,7 +131,7 @@ def _labels_to_idxs(labels: np.ndarray) -> List[np.ndarray]:
     return out
 
 
-class PeakMetrics:
+class PeakHelper :
     """Helper class for getting data from peak labels"""
     def amplitude(self,
                   traces: np.ndarray,
