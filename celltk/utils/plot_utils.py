@@ -317,11 +317,13 @@ class PlotHelper:
         return fig
 
     def scatter_plot(self,
-                     arrays: Collection[np.ndarray],
+                     x_arrays: Collection[np.ndarray] = [],
+                     y_arrays: Collection[np.ndarray] = [],
                      keys: Collection[str] = [],
                      estimator: Union[Callable, str, functools.partial] = None,
                      err_estimator: Union[Callable, str, functools.partial] = None,
                      colors: Union[str, Collection[str]] = None,
+                     alpha: float = 1.0,
                      symbols: Union[str, Collection[str]] = None,
                      legend: bool = True,
                      figure: go.Figure = None,
@@ -337,11 +339,10 @@ class PlotHelper:
         arrays. Each array is interpreted as a separate condition and is
         plotted in a different color or with a different marker.
 
-        :param arrays: List of arrays to plot. Assumed structure is n_cells x
-            n_features. If two features, first feature is plotted on the x-axis
-            and second feature on the y-axis. If one feature, data are plotted
-            on the y-axis and the x-axis is categorical. More than two features
-            is not currently supported.
+        :param x_arrays: List of arrays that set the x-coordinates to plot.
+            Each array is assumed to be a different condition.
+        :param y_arrays: List of arrays that set the y-coordinates to plot.
+            Each array is assumed to be a different condition.
         :param keys: Names corresponding to the data arrays. If not provided,
             the keys will be integers.
         :param estimator: Function for aggregating observations from multiple
@@ -364,6 +365,7 @@ class PlotHelper:
             in seaborn/matplotlib, then in Plotly to find the color map. If
             not provided, the color map will be glasbey. Can also be list
             of named CSS colors or hexadecimal or RGBA strings.
+        :param alpha: Opacity of the marker fill colors.
         :param legend: If False, no legend is made on the plot.
         :param figure: If a go.Figure object is given, will be used to make
             the plot instead of a blank figure.
@@ -381,18 +383,23 @@ class PlotHelper:
 
         :return: Figure object
 
-        :raises AssertionError: If not all items in arrays are np.ndarray.
+        :raises AssertionError: If both x_arrays and y_arrays are given,
+            but have different lengths.
+        :raises AssertionError: If not all items in either array are
+            np.ndarray.
         :raises AssertionError: If not all items in arrays have the same
             number of columns.
         :raises AssertionError: If any item in arrays has more than 3 columns.
         """
         # Format inputs - should be cells x features
-        assert all(isinstance(a, np.ndarray) for a in arrays)
-        assert all(a.shape[1] == arrays[0].shape[1] for a in arrays)
-        assert arrays[0].shape[1] < 3
+        if x_arrays and y_arrays: assert len(x_arrays) == len(y_arrays)
+        assert all(isinstance(a, np.ndarray) for a in x_arrays)
+        assert all(isinstance(a, np.ndarray) for a in y_arrays)
 
         # Convert any inputs that need converting
-        colors = self._build_colormap(colors, len(arrays))
+        colors = self._build_colormap(colors,
+                                      max(len(x_arrays), len(y_arrays)),
+                                      alpha)
         symbols = self._build_symbolmap(symbols)
         if estimator: estimator = self._build_estimator_func(estimator)
         if err_estimator: err_estimator = self._build_estimator_func(err_estimator)
@@ -404,31 +411,30 @@ class PlotHelper:
         # Build the figure and start plotting
         fig = figure if figure else go.Figure()
         traces = []
-        for idx, (arr, key) in enumerate(itertools.zip_longest(arrays, keys)):
+        zipped = itertools.zip_longest(x_arrays, y_arrays, keys,
+                                       fillvalue=None)
+        for idx, (xarr, yarr, key) in enumerate(zipped):
             # Get the key
             if not key:
                 key = f'group_{idx}'
-            key += f' | n={arr.shape[0]}'
+            n = yarr.shape[0] if yarr is not None else xarr.shape[0]
+            key += f' | n={n}'
 
             # err_estimator is used to set error bars
             if err_estimator:
-                err_arr = err_estimator(arr)
+                err_arr = err_estimator(yarr)
             else:
                 err_arr = None
 
             # estimator is used to condense all the cells to a single point
             if estimator:
-                arr = estimator(arr)
-                if arr.ndim == 1: arr = arr[None, :]
+                yarr = estimator(yarr)
 
             # Assign to x and y:
-            if arr.ndim in (0, 1):
-                x = None
-                y = arr
-            if arr.ndim == 2:
-                x = arr[:, 0]
-                y = arr[:, 1]
+            x = np.squeeze(xarr) if xarr is not None else None
+            y = np.squeeze(yarr) if yarr is not None else None
 
+            # Calculate error bars for y axis
             error_x = None
             error_y = None
             if err_arr is not None:
@@ -438,8 +444,8 @@ class PlotHelper:
                     # Assume symmetric
                     error_y.update({'array': err_arr, 'symmetric': True})
                 elif err_arr.ndim == 2:
-                    err_plus = arr - err_arr[0, :]
-                    err_minus = err_arr[-1, :] - arr
+                    err_plus = y - err_arr[0, :]
+                    err_minus = err_arr[-1, :] - y
                     error_y.update({'array': err_plus,
                                     'arrayminus': err_minus})
 
@@ -617,7 +623,8 @@ class PlotHelper:
 
         # Format plot on the way out
         fig.update_traces(**kwargs)
-        fig.update_layout(template=self._template, barmode=barmode)
+        fig.update_layout(template=self._template, barmode=barmode,
+                          title=title)
         fig.update_xaxes(**self._default_axis_layout)
         fig.update_xaxes(title=x_label, range=x_limit)
         fig.update_yaxes(**self._default_axis_layout)
@@ -863,7 +870,7 @@ class PlotHelper:
                                orientation='h', **kwargs)
 
         # Some settings for making a ridgeline out of the violin plot
-        fig.update_traces(width=spacing)
+        fig.update_traces(width=overlap)
         fig.update_layout(template=self._template,
                           title=title, xaxis_showgrid=False,
                           xaxis_zeroline=False)
@@ -1190,7 +1197,7 @@ class PlotHelper:
             The following kwargs are passed to "line": 'color', 'dash',
             'shape', 'simplify', 'smoothing', 'width', 'hoverinfo'
 
-        :return: Figure object
+        :return: Generator that produces go.Figure objects
 
         """
         # Check inputs
