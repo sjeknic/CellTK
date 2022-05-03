@@ -131,13 +131,55 @@ def _labels_to_idxs(labels: np.ndarray) -> List[np.ndarray]:
     return out
 
 
-class PeakHelper :
-    """Helper class for getting data from peak labels"""
-    def amplitude(self,
+class PeakHelper:
+    """Helper class for getting data from traces and peak labels"""
+    def first_time(self,
+                   traces: np.ndarray,
+                   labels: np.ndarray,
+                   ) -> List[List[float]]:
+        """"""
+        idxs = _labels_to_idxs(labels)
+        out = []
+        for trace, idx in zip(traces, idxs):
+            out.append(self._times(trace, idx, 'first'))
+        return out
+
+    def last_time(self,
                   traces: np.ndarray,
                   labels: np.ndarray
                   ) -> List[List[float]]:
         """"""
+        idxs = _labels_to_idxs(labels)
+        out = []
+        for trace, idx in zip(traces, idxs):
+            out.append(self._times(trace, idx, 'last'))
+        return out
+
+    def max_time(self,
+                 traces: np.ndarray,
+                 labels: np.ndarray
+                 ) -> List[List[float]]:
+        """"""
+        idxs = _labels_to_idxs(labels)
+        out = []
+        for trace, idx in zip(traces, idxs):
+            out.append(self._times(trace, idx, 'max'))
+        return out
+
+    def amplitude(self,
+                  traces: np.ndarray,
+                  labels: np.ndarray
+                  ) -> List[List[float]]:
+        """Returns the maximum value in each peak for each trace.
+        Each cell has an empty list if no peaks are labeled.
+
+        :param traces: Array of shape n_cells x n_features with values
+            to use for calculating amplitude.
+        :param labels: Array of same shape as traces with peaks labeled
+            with unique integers in each cell trace.
+
+        :return: List of amplitudes for each cell trace.
+        """
         out = []
         for trace, label in zip(traces, labels):
             out.append(self._amplitude(trace, label))
@@ -290,6 +332,24 @@ class PeakHelper :
         return out
 
     @staticmethod
+    def _times(trace: np.ndarray,
+               index: np.ndarray,
+               time: str,
+               ) -> List[float]:
+        """"""
+        if time == 'first':
+            return [idx[0] for idx in index]
+        elif time == 'last':
+            return [idx[-1] for idx in index]
+        elif time == 'max':
+            out = []
+            for idx in index:
+                _tr = np.zeros_like(trace)
+                _tr[idx] = trace[idx]
+                out.append(np.argmax(trace[idx]))
+            return out
+
+    @staticmethod
     def _amplitude(trace: np.ndarray,
                    label: np.ndarray,
                    ) -> List[float]:
@@ -297,7 +357,7 @@ class PeakHelper :
         out = []
         for l in np.unique(label[label > 0]):
             mask = np.where(label == l, trace, 0)
-            out.append(np.max(mask))
+            out.append(np.nanmax(mask))
 
         return out
 
