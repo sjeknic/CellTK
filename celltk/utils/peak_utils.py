@@ -367,31 +367,44 @@ class PeakHelper:
                     amplitude: List[float],
                     tract: List[List[int]]
                     ) -> List[float]:
-        """"""
+        """TODO: This doesn't work without tracts!!"""
+        _edge_dist = 4
         out = []
-        for t in tract:
-            # Peaks are 1-indexed
-            frst_pk = t[0] - 1
-            last_pk = t[-1] - 1
+        if tract:
+            for t in tract:
+                # Peaks are 1-indexed
+                frst_pk = t[0] - 1
+                last_pk = t[-1] - 1
 
-            # Get first and last point in tract
-            x = [index[frst_pk][0], index[last_pk][-1]]
-            y = [trace[x[0]], trace[x[-1]]]
+                # Get first and last point in tract
+                x = [index[frst_pk][0], index[last_pk][-1]]
+                y = [trace[x[0]], trace[x[-1]]]
 
-            # Adjust heights if close to edge
-            _edge_dist = 4
-            if abs(x[0] - 0) <= _edge_dist:
-                y[0] = y[-1]
-            if abs(x[1] - len(trace) - 1) <= _edge_dist:
-                y[-1] = y[0]
+                # Adjust heights if close to edge
+                if abs(x[0] - 0) <= _edge_dist:
+                    y[0] = y[-1]
+                if abs(x[1] - len(trace) - 1) <= _edge_dist:
+                    y[-1] = y[0]
+                _base = np.mean(y)
 
-            _base = np.mean(y)
+                # For each peak in the tract, take amp - base
+                for pk in t:
+                    pk -= 1  # peaks are 1-indexed
+                    out.append(amplitude[pk] - _base)
+        else:
+            for amp, idx in zip(amplitude, index):
+                # Get edge points of peak
+                x = [idx[0], idx[-1]]
+                y = [trace[x[0]], trace[x[-1]]]
 
-            # For each peak in the tract, take amp - base
-            for pk in t:
-                pk -= 1  # peaks are 1-indexed
-                out.append(amplitude[pk] - _base)
+                # Adjust heights if close to edge
+                if abs(x[0] - 0) <= _edge_dist:
+                    y[0] = y[-1]
+                if abs(x[1] - len(trace) - 1) <= _edge_dist:
+                    y[-1] = y[0]
+                _base = np.mean(y)
 
+                out.append(amp - _base)
         return out
 
     @staticmethod
