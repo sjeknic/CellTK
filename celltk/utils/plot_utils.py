@@ -3,6 +3,8 @@ import functools
 from typing import Collection, Union, Callable, Generator, Tuple
 
 import numpy as np
+import sklearn.base as base
+import sklearn.preprocessing as preproc
 import matplotlib.colors as mcolors
 import seaborn as sns
 import plotly.graph_objects as go
@@ -61,6 +63,29 @@ class PlotHelper:
                       'marker', 'opacity', 'pointpos', 'points', 'span',
                       'width', 'hoverinfo')
     _bar_kwargs = ('hoverinfo', 'marker', 'width')
+
+    class _Normalizer:
+        def __init__(self, fitter: base.BaseEstimator) -> None:
+            self._fitter = fitter()
+            self._fitter_type = self._fitter.__str__().split('(')[0]
+            self._fit = False
+
+        def __call__(self, array: np.ndarray, scale_only: bool = False):
+            """Fits the scaler on the first call and only applies
+            on all subsequent calls."""
+            if array is None:
+                return
+            elif self._fit:
+                if scale_only:
+                    if self._fitter_type in ('MinMaxScaler'):
+                        return array * self._fitter.scale_
+                    else:
+                        return array / self._fitter.scale_
+                else:
+                    return self._fitter.transform(array)
+            else:
+                self._fit = True
+                return self._fitter.fit_transform(array)
 
     def _build_colormap(self,
                         colors: Union[str, Collection[str]],
@@ -159,6 +184,7 @@ class PlotHelper:
                               func: Union[Callable, str, functools.partial],
                               *args, **kwargs
                               ) -> functools.partial:
+        """"""
         if isinstance(func, functools.partial):
             # Assume user already made the estimator
             return func
@@ -175,11 +201,29 @@ class PlotHelper:
                 except AttributeError:
                     raise ValueError(f'Did not understand estimator {func}')
 
+    def _build_normalizer_func(self,
+                               func: Union[str, Callable]
+                               ) -> functools.partial:
+        """"""
+        if isinstance(func, Callable):
+            return func
+        elif isinstance(func, str):
+            if func == 'minmax': fitter = 'MinMax'
+            elif func == 'maxabs': fitter = 'MaxAbs'
+            elif func == 'standard': fitter = 'Standard'
+            elif func == 'robust': fitter = 'Robust'
+            else: raise ValueError(f'Did not understand normalizer {func}.')
+            fitter += 'Scaler'
+
+            fitter = getattr(preproc, fitter)
+            return self._Normalizer(fitter)
+
     def line_plot(self,
                   arrays: Collection[np.ndarray],
                   keys: Collection[str] = [],
                   estimator: Union[Callable, str, functools.partial] = None,
                   err_estimator: Union[Callable, str, functools.partial] = None,
+                  normalizer: Union[Callable, str] = None,
                   colors: Union[str, Collection[str]] = None,
                   time: np.ndarray = None,
                   legend: bool = True,
@@ -216,6 +260,10 @@ class PlotHelper:
             1D or 2D array. If output is 1D, errors will be symmetric
             If output is 2D, the first dimension is used for the high
             error and second dimension is used for the low error.
+        :param normalizer: If given, used to normalize the data after applying
+            the estimators. Normalizes the error as well. Can be 'minmax',
+            'maxabs', 'standard', 'robust', or a callable that inputs an array
+            and outputs an array of the same shape.
         :param colors: Name of a color palette or map to use. Searches first
             in seaborn/matplotlib, then in Plotly to find the color map. If
             not provided, the color map will be glasbey.
@@ -247,6 +295,7 @@ class PlotHelper:
 
         # Convert any inputs that need converting
         colors = self._build_colormap(colors, len(arrays))
+        if normalizer: normalizer = self._build_normalizer_func(normalizer)
         if estimator: estimator = self._build_estimator_func(estimator)
         if err_estimator: err_estimator = self._build_estimator_func(err_estimator)
         line_kwargs = {k: v for k, v in kwargs.items()
@@ -272,8 +321,16 @@ class PlotHelper:
             if estimator:
                 arr = estimator(arr)
                 if arr.ndim == 1: arr = arr[None, :]
-            x = time if time is not None else np.arange(arr.shape[1])
 
+            # normalizer can be used to set the range of arr and err_arr
+            if normalizer:
+                arr = normalizer(arr.reshape(-1, 1)).reshape(arr.shape)
+                if err_arr is not None:
+                    err_arr = normalizer(
+                        err_arr.reshape(-1, 1), scale_only=True
+                    ).reshape(err_arr.shape)
+
+            x = time if time is not None else np.arange(arr.shape[1])
             lines = []
             _legend = True
             for a, y in enumerate(arr):
@@ -322,6 +379,7 @@ class PlotHelper:
                      keys: Collection[str] = [],
                      estimator: Union[Callable, str, functools.partial] = None,
                      err_estimator: Union[Callable, str, functools.partial] = None,
+                     normalizer: Union[Callable, str] = None,
                      colors: Union[str, Collection[str]] = None,
                      alpha: float = 1.0,
                      symbols: Union[str, Collection[str]] = None,
@@ -361,6 +419,10 @@ class PlotHelper:
             error and second dimension is used for the low error. Only
             applies to the y-dimension. Horizontal error bars not currrently
             implemented.
+        :param normalizer: If given, used to normalize the data after applying
+            the estimators. Normalizes the error as well. Can be 'minmax' or
+            'maxabs', or a callable that inputs an array and outputs an array
+            of the same shape.
         :param colors: Name of a color palette or map to use. Searches first
             in seaborn/matplotlib, then in Plotly to find the color map. If
             not provided, the color map will be glasbey. Can also be list
@@ -403,6 +465,7 @@ class PlotHelper:
         symbols = self._build_symbolmap(symbols)
         if estimator: estimator = self._build_estimator_func(estimator)
         if err_estimator: err_estimator = self._build_estimator_func(err_estimator)
+        if normalizer: normalizer = self._build_normalizer_func(normalizer)
         marker_kwargs = {k: v for k, v in kwargs.items()
                          if k in self._marker_kwargs}
         kwargs = {k: v for k, v in kwargs.items()
@@ -429,6 +492,14 @@ class PlotHelper:
             # estimator is used to condense all the cells to a single point
             if estimator:
                 yarr = estimator(yarr)
+
+            # normalizer is used to get data onto the same scale
+            if normalizer:
+                yarr = normalizer(yarr.reshape(-1, 1)).reshape(yarr.shape)
+                if err_arr is not None:
+                    err_arr = normalizer(
+                        err_arr.reshape(-1, 1), scale_only=True
+                ).reshape(err_arr.shape)
 
             # Assign to x and y:
             x = np.squeeze(xarr) if xarr is not None else None
