@@ -58,7 +58,10 @@ class Evaluator(BaseEvaluator):
         region = array.regions[0] if not region else region
         channel = array.channels[0] if not channel else channel
         label_array = array[region, channel, 'label']
-        position_array = array[region, channel, 'position_id']
+        if position_id is not None:
+            position_array = array[region, channel, 'position_id']
+        else:
+            position_array = None
         cell_index = get_cell_index(cell_id, label_array,
                                     position_id, position_array)
 
