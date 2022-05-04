@@ -714,6 +714,7 @@ class PlotHelper:
                     orientation: str = 'v',
                     show_box: bool = False,
                     show_points: Union[str, bool] = False,
+                    show_mean: bool = False,
                     spanmode: str = 'soft',
                     side: str = None,
                     legend: bool = True,
@@ -809,6 +810,7 @@ class PlotHelper:
                          if k in self._violin_kwargs}
         kwargs = {k: v for k, v in kwargs.items()
                   if k not in self._violin_kwargs}
+        meanline_kw = {'visible': show_mean, 'width': 3}
 
         fig = figure if figure else go.Figure()
         for idx, (arr, key) in enumerate(itertools.zip_longest(arrays, keys)):
@@ -840,7 +842,8 @@ class PlotHelper:
             trace = go.Violin(x=x, y=y, name=key, legendgroup=key, side=side,
                               spanmode=spanmode, box_visible=show_box,
                               points=show_points, hoverinfo='skip',
-                              line=line, **violin_kwargs)
+                              line=line, meanline=meanline_kw,
+                              **violin_kwargs)
             fig.add_trace(trace)
 
             # Add the other half of the distributions if needed
@@ -856,7 +859,8 @@ class PlotHelper:
                                       name=key, legendgroup=nkey,
                                       spanmode=spanmode, box_visible=show_box,
                                       points=show_points, hoverinfo='skip',
-                                      line=line, **violin_kwargs)
+                                      line=line, meanline=meanline_kw,
+                                      **violin_kwargs)
                 fig.add_trace(neg_trace)
 
         # Format plot on the way out
@@ -879,6 +883,7 @@ class PlotHelper:
                        overlap: float = 3,
                        show_box: bool = False,
                        show_points: Union[str, bool] = False,
+                       show_mean: bool = True,
                        legend: bool = True,
                        figure: go.Figure = None,
                        title: str = None,
@@ -937,8 +942,8 @@ class PlotHelper:
         fig = self.violin_plot(arrays, keys=keys, colors=colors,
                                spanmode=spanmode, legend=legend,
                                show_box=show_box, show_points=show_points,
-                               figure=figure, side='positive',
-                               orientation='h', **kwargs)
+                               show_mean=show_mean, figure=figure,
+                               side='positive', orientation='h', **kwargs)
 
         # Some settings for making a ridgeline out of the violin plot
         fig.update_traces(width=overlap)
