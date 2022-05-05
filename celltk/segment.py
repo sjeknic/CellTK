@@ -52,16 +52,26 @@ class Segmenter(BaseSegmenter):
     @ImageHelper(by_frame=True)
     def sitk_label(self,
                    mask: Mask,
+                   min_size: float = None
                    ) -> Mask:
-        """Uniquely labels connected pixels using a SimpleITK filter
+        """Uniquely labels connected pixels. Also removes connected objects below
+        a specified size.
 
         :param mask: Mask of objects to be labeled. Can be binary or greyscale.
+        :param min_size: If given, all objects smaller than min_size are removed.
 
         :return: Labeled mask
+
+        TODO:
+            - These functions are confusing and only one should be kept.
         """
         fil = sitk.ConnectedComponentImageFilter()
         msk = sitk.GetImageFromArray(mask)
         msk = cast_sitk(fil.Execute(msk), 'sitkUInt16')
+        if min_size:
+            fil2 = sitk.RelabelComponentImageFilter()
+            fil2.SetMinimumObjectSize(min_size)
+            msk = fil2.Execute(msk)
         return sitk.GetArrayFromImage(msk)
 
     @ImageHelper(by_frame=True)
