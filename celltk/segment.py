@@ -39,7 +39,7 @@ class Segmenter(BaseSegmenter):
               mask: Mask,
               connectivity: int = 2
               ) -> Mask:
-        """Uniiquely labels connected pixels.
+        """Uniquely labels connected pixels.
 
         :param mask: Mask of objects to be labeled. Can be binary or greyscale.
         :param connectivity: Determines the local neighborhood around a pixel.
@@ -86,8 +86,29 @@ class Segmenter(BaseSegmenter):
                      connectivity: int = 2,
                      ) -> Mask:
         """
-        Applies light cleaning. Removes small, large, and border-connected
-        objectes. Applies opening.
+        Applies light cleaning intended for relatively small mammalian nuclei.
+        Fills holes, removes small, large, and border-connected objectes, and
+        then applies morphological opening.
+
+        :param mask: Mask of uniquely labeled cell nuclei
+        :param min_radius: Objects smaller than a circle with radius min_radius
+            are removed.
+        :param max_radius: Objects larger than a circle with radius max_radius
+            are removed.
+        :param open_size: Side length of the footprint used for the morphological
+            opening operation.
+        :param clear_border: If True or int, adny object connected to the border
+            is removed. If an integer is given, objects that many pixels from the
+            border are also removed.
+        :param relabel: If True, objects are relabeled after cleaning. This can
+            help separate objects that were connected before cleaning, but are no
+            longer connected.
+        :param sequential: If True, objects are relabeled with sequential labels.
+        :param connectivity: Determines the local neighborhood around a pixel for
+            defining connected objects. Connectivity is defined as the number of
+            orthogonal steps needed to reach a pixel.
+
+        :return: Mask with cleaned labels
 
         TODO:
             - Prevent int32/64 w/o having to use img_as_uint
@@ -125,14 +146,20 @@ class Segmenter(BaseSegmenter):
                                 limits: Collection[Tuple[float]],
                                 image: Image = None,
                                 ) -> Mask:
-        """
-        Image has to already be labeled
+        """Removes objects from a labeled image based on shape properties.
+        Acceptable properties are ones available for
+        skimage.measure.regionprops.
 
         :param mask:
         :param image:
         :param properties:
         :param limits:
 
+        :return:
+
+        TODO:
+            - functools.reduce raises TypeError if list is empty
+            - Add using an intensity image too
         """
         # User must provide both low and high bound
         assert all([len(l) == 2 for l in limits])
@@ -169,8 +196,15 @@ class Segmenter(BaseSegmenter):
                        connectivity: int = 2,
                        relative: bool = False
                        ) -> Mask:
-        """
-        Labels pixels above or below a constant threshold
+        """Labels pixels above or below a threshold value.
+
+        :param image:
+        :param thres:
+        :param negative:
+        :param connectivity:
+        :param relative:
+
+        :return: Labeled binary mask
         """
         if relative:
             assert thres <= 1 and thres >= 0
@@ -181,7 +215,6 @@ class Segmenter(BaseSegmenter):
         else:
             test_arr = image >= thres
 
-        # return meas.label(test_arr, connectivity=connectivity).astype(np.uint16)
         return test_arr.astype(np.uint8)
 
     @ImageHelper(by_frame=True)
@@ -191,9 +224,15 @@ class Segmenter(BaseSegmenter):
                        sigma: float = 50,
                        connectivity: int = 2
                        ) -> Mask:
-        """
-        Applies Gaussian blur to the image and selects pixels that
-        are relative_thres brighter than the blurred image.
+        """Applies Gaussian blur to the image and marks pixels that
+        are brighter than the blurred image by a specified threshold.
+
+        :param image:
+        :param relative_thres:
+        :param sigma:
+        :param connectivity:
+
+        :return:
         """
         fil = ndi.gaussian_filter(image, sigma)
         fil = image > fil * (1 + relative_thres)
@@ -207,9 +246,16 @@ class Segmenter(BaseSegmenter):
                    buffer: float = 0.,
                    fill_holes: bool = False,
                    ) -> Mask:
-        """
-        Uses Otsu's method to determine the threshold. All pixels
-        above the threshold are labeled
+        """Uses Otsu's method to determine the threshold and labels all pixels
+        above the threshold.
+
+        :param image:
+        :param nbins:
+        :param connectivity:
+        :param buffer:
+        :param fill_holes:
+
+        :return:
         """
         thres = (1 - buffer) * filt.threshold_otsu(image, nbins=nbins)
         labels = image > thres
@@ -230,7 +276,19 @@ class Segmenter(BaseSegmenter):
                         hist: np.ndarray = None,
                         binarize: bool = False,
                         ) -> Mask:
-        """"""
+        """Applies Otsu's thresholding with multiple classes. By default,
+        returns a mask with all classes included, but can be limited to
+        only returning some of the classes.
+
+        :param image:
+        :param classes:
+        :param roi:
+        :param nbins:
+        :param hist:
+        :param binarize:
+
+        :return:
+        """
         thres = filt.threshold_multiotsu(image, classes, nbins,
                                          hist=hist)
         out = np.digitize(image, bins=thres).astype(np.uint8)
@@ -247,20 +305,27 @@ class Segmenter(BaseSegmenter):
         if binarize:
             out[out > 0] = 1
 
-        return out.astype(np.uint16)
+        return out.astype(np.uint8)
 
     @ImageHelper(by_frame=True)
     def li_thres(self,
                  image: Image,
-                 tol: float = None,
-                 init_guess: Union[float, Callable] = None,
-                 connectivity: int = 2,
-                 fill_holes: bool = True
+                 inside_val: int = 0,
+                 outside_val: int = 1
                  ) -> Mask:
-        """"""
+        """Applies Li's thresholding method.
+
+        :param image:
+        :param inside_val:
+        :param outside_val:
+
+        :return:
+
+        """
+
         fil = sitk.LiThresholdImageFilter()
-        fil.SetInsideValue(0)
-        fil.SetOutsideValue(1)
+        fil.SetInsideValue(inside_val)
+        fil.SetOutsideValue(outside_val)
         out = fil.Execute(sitk.GetImageFromArray(image))
 
         out = cast_sitk(out, 'sitkUInt8')
@@ -275,9 +340,15 @@ class Segmenter(BaseSegmenter):
                          min_size: int = 12
                          ) -> Mask:
         """Finds regional minima/maxima within flat areas.
+        Generally requires an image with little noise.
 
-        TODO:
-            - Is it possible to remove large objects here.
+        :param image:
+        :param find:
+        :param fully_connected:
+        :param thres:
+        :param min_size:
+
+        :return: Mask with regional extrema labeled
         """
         if thres:
             assert 0 <= thres and thres <= 1
@@ -313,7 +384,16 @@ class Segmenter(BaseSegmenter):
                              filters: Collection[str],
                              kwargs: Collection[dict] = [],
                              ) -> Mask:
-        """"""
+        """Applies arbitrary filters from the SimpleITK package.
+        Any image filter in SimpleITK, and most arguments for those
+        filters, can be used.
+
+        :param mask:
+        :param filters:
+        :param kwargs:
+
+        :return:
+        """
         # TODO: Add to process
         # TODO: Should use Stack type
         if kwargs:
@@ -358,10 +438,18 @@ class Segmenter(BaseSegmenter):
                                  tol: float = 0.01,
                                  seg_thres: float = 0.85,
                                  ) -> Mask:
-        """
-        Uses random aniostropic diffusion from seeds determined
-        by a constant threshold to assign each pixel in the image.
-        NOTE: This function is similar to, but slower than, agglomerations.
+        """Uses random aniostropic diffusion from given seeds
+        to assign each pixel in the image to a specific seed.
+
+        :param image:
+        :param seeds:
+        :param seed_thres:
+        :param seed_min_size:
+        :param beta:
+        :param tol:
+        :param seg_thres:
+
+        :return:
 
         TODO:
             - Could setting the image values all to 0 help the
@@ -402,10 +490,20 @@ class Segmenter(BaseSegmenter):
                                    ) -> Mask:
         """
         Starts from a seed mask determined by a constant threshold. Then
-        incrementally uses watershed to connect neighboring pixels to the
+        incrementally uses watershed to connect neighboring pixels to each
         seed.
 
-        Similar to, but likely faster than, random walk segmentation.
+        :param image:
+        :param seeds:
+        :param agglom_min:
+        :param agglom_max:
+        :param compact:
+        :param seed_thres:
+        :param seed_min_size:
+        :param steps:
+        :param connectivity:
+
+        :return:
 
         TODO:
             - agglom_min and agglom_max should be set as a fraction of the image values
@@ -447,7 +545,16 @@ class Segmenter(BaseSegmenter):
                                    connectivity: int = 2
                                    ) -> Mask:
         """
-        Wrapper for scipy.ndimage.watershed_ift.
+        Applies watershed from the given seeds using the image foresting
+        transform algorithm.
+
+        :param image:
+        :param seeds:
+        :param seed_thres:
+        :param seed_min_size:
+        :param connectivity:
+
+        :return:
         TODO:
             - Accept pre-made seed mask from a different function
         """
@@ -482,7 +589,22 @@ class Segmenter(BaseSegmenter):
                                  lambda2: float = 1,
                                  epsilon: float = 1,
                                  ) -> Mask:
-        """"""
+        """Calculates the Chan-Vese level set from initial seeds.
+        Similar to ``Segmenter.morphological_acwe``, but more
+        customizable.
+
+        :param image:
+        :param mask:
+        :param iterations:
+        :param smoothing:
+        :param curve_weight:
+        :param area_weight:
+        :param lambda1:
+        :param lambda2:
+        :param epsilon:
+
+        :return:
+        """
         # Set up the filter
         fil = sitk.ScalarChanAndVeseDenseLevelSetImageFilter()
         fil.SetNumberOfIterations(iterations)
@@ -506,26 +628,36 @@ class Segmenter(BaseSegmenter):
     def morphological_acwe(self,
                            image: Image,
                            seeds: Mask = 'checkerboard',
-                           iterations: int = 10,  # TODO: Set appr. value
+                           iterations: int = 10,
                            smoothing: int = 1,
                            lambda1: float = 1,
                            lambda2: float = 1,
                            connectivity: int = 1,
                            thres: float = None,
+                           voronoi: bool = False,
                            keep_labels: bool = True,
                            clean_before_match: bool = True
                            ) -> Mask:
         """
-        Uses morphological_chan_vese to segment objects, followed by a
-        voronoi calculation to separate them.
+        Uses morphological active contours without edges (ACWE) algorithm
+        to segment objects. Optionally, applies a vornoi mask after segmentation
+        to separate objects.
 
-        Args:
-        thres - if set, only considers values in image > thres
-        keep_labels - uses linear assignment to transfer seed labels
-        clean_before_match - apply simple cleaning to masks before match
+        :param image:
+        :param seeds:
+        :param iterations:
+        :param smoothing:
+        :param lambda1:
+        :param lambda2:
+        :param connectivity:
+        :param thres:
+        :param voronoi:
+        :param keep_labels:
+        :param clean_before_match:
+
+        :return:
 
         TODO:
-            - Add option to draw voronoi boundaries after each iteration
             - Should thresholding happen before or after morph?
         """
         # Get level_set mask if needed - dont use voronoi boundaries
@@ -534,7 +666,10 @@ class Segmenter(BaseSegmenter):
             vor_mask = np.zeros(image.shape, dtype=bool)
         else:
             # Get Voronoi boundaries to use to separate objects
-            vor_mask = voronoi_boundaries(seeds, thin=False)
+            if voronoi:
+                vor_mask = voronoi_boundaries(seeds, thin=False)
+            else:
+                vor_mask = np.zeros(image.shape, dtype=bool)
 
         # Apply threshold to image. Should this happen before or after???
         if thres:
@@ -561,13 +696,23 @@ class Segmenter(BaseSegmenter):
     def morphological_geodesic_active_contour(self,
                                               image: Image,
                                               seeds: Mask = 'checkerboard',
-                                              iterations: int = 50,  # TODO: Set appr. value
+                                              iterations: int = 10,
                                               smoothing: int = 1,
                                               threshold: float = 'auto',
                                               balloon: float = 0
                                               ) -> Mask:
         """
-        Should run skimage.segmentation.morphological_geodesic_active_contour
+        Applies geodesic active contours with morphological operators to segment objects.
+        Light wrapper for ``skimage.segmentation.morphological_geodesic_active_contour``.
+
+        :param image:
+        :param seeds:
+        :param iterations:
+        :param smoothing:
+        :param threshold:
+        :param balloon:
+
+        :return:
 
         TODO:
             - Add preprocess options - sobel, inverse gaussian
@@ -581,7 +726,15 @@ class Segmenter(BaseSegmenter):
                            mask: Mask,
                            connectivity: int = 2,
                            ) -> Mask:
-        """"""
+        """
+        Computes the convex hull of each object found in a binary
+        mask. If mask is not binary already, will be binarized.
+
+        :param mask:
+        :param connectivity:
+
+        :return:
+        """
         # Binarize image
         if mask.max() > 1: mask = mask.astype(bool)
 
@@ -596,7 +749,17 @@ class Segmenter(BaseSegmenter):
                                 use_quantiles: bool = False,
                                 fill_holes: bool = False
                                 ) -> Mask:
-        """"""
+        """Uses a Canny filter to find edges in the image.
+
+        :param image:
+        :param sigma:
+        :param low_thresh:
+        :param high_thres:
+        :param use_quantiles:
+        :param fill_holes:
+
+        :return:
+        """
         out = feat.canny(image, sigma=sigma, low_threshold=low_thres,
                          high_threshold=high_thres,
                          use_quantiles=use_quantiles)
@@ -610,13 +773,19 @@ class Segmenter(BaseSegmenter):
     def find_boundaries(self,
                         mask: Mask,
                         connectivity: int = 2,
-                        mode: str = 'inner',
-                        keep_labels: bool = False
+                        mode: str = 'thick',
+                        keep_labels: bool = True
                         ) -> Mask:
         """
-        Outlines the objects in mask and preserves labels.
+        Returns the outlines of the objects in the mask, optionally
+        preserving the labels.
 
-        if not keep_labels - don't preserve labels
+        :param mask:
+        :param connectivity:
+        :param mode:
+        :param keep_labels:
+
+        :return:
         """
         boundaries = segm.find_boundaries(mask, connectivity=connectivity,
                                           mode=mode)
@@ -627,63 +796,23 @@ class Segmenter(BaseSegmenter):
             return boundaries
 
     @ImageHelper(by_frame=True)
-    def dilate_to_cytoring_celltk(self,
-                                  mask: Mask,
-                                  ringwidth: int = 1,
-                                  margin: int = 1
-                                  ) -> Mask:
-        """
-        Copied directly from CellTK. Should dilate out from nuclear mask
-        to create cytoplasmic ring.
-
-        NOTE:
-            - I think this is done in greyscale, so labels should be preserved.
-            - I think ringwidth is the amount to expand the labels
-            - I think margin is dist. between the nuclear mask and the cytoring
-            - No clue why multiple rounds of dilation are used.
-
-        TODO:
-            - Re-write this function. Needs to be consistent
-            - There is another function in CellTK that uses Voronoi expansion
-              to set a buffer between adjacent cytorings. Copy that functionality
-              here.
-            - Add cytoring_above_thres, cytoring_above_adaptive_thres,
-              cytoring_above_buffer
-        """
-        dilated_nuc = dilate_sitk(mask.astype(np.int32), ringwidth)
-
-        # TODO: Replace with np.where(mask == 0, 0, comp_dilated_nuc)??
-        comp_dilated_nuc = 1e4 - mask
-        comp_dilated_nuc[comp_dilated_nuc == 1e4] = 0
-
-        #  TODO: Why is the dilation done twice?
-        comp_dilated_nuc = dilate_sitk(comp_dilated_nuc.astype(np.int32), ringwidth)
-        # TODO: See replacement above.
-        comp_dilated_nuc = 1e4 - comp_dilated_nuc
-        comp_dilated_nuc[comp_dilated_nuc == 1e4] = 0
-        # TODO: Not sure what this is for
-        dilated_nuc[comp_dilated_nuc != dilated_nuc] = 0
-
-        # TODO: This is for adding the margin. Why is the if/else needed?
-        if margin == 0:
-            antinucmask = mask
-        else:
-            antinucmask = dilate_sitk(np.int32(mask), margin)
-        dilated_nuc[antinucmask.astype(bool)] = 0
-
-        return util.img_as_uint(np.uint16)
-
-    @ImageHelper(by_frame=True)
     def expand_to_cytoring(self,
                            mask: Mask,
                            distance: float = 1,
                            margin: int = 0
                            ) -> Mask:
         """
-        Creating a cytoring using skimage functions
+        Expands labels in the given mask by a fixed
+        distance.
+
+        :param mask:
+        :param distance:
+        :param margin:
+
+        :return:
 
         TODO:
-            - need to implement margin
+            - add thresholding
         """
         # Expand initial seeds before applying expansion
         if margin:
@@ -701,7 +830,15 @@ class Segmenter(BaseSegmenter):
                              erosion: bool = False
                              ) -> Mask:
         """
-        Removes nuclei from a cytoplasmic mask
+        Removes nuclei from a cytoplasmic mask, optionally
+        eroding the final mask.
+
+        :param cyto_mask:
+        :param nuc_mask:
+        :param val_match:
+        :param erosion
+
+        :return:
         """
         if val_match:
             new_cyto_mask = np.where(cyto_mask == nuc_mask, 0, cyto_mask)
@@ -723,11 +860,26 @@ class Segmenter(BaseSegmenter):
                           kernel_radius: int = 4,
                           max_length: int = 45,
                           in_place: bool = True,
-                          method: str = 'sitk',
+                          method: str = 'ndi',
                           **kwargs
                           ) -> Mask:
         """
-        kwargs get used to set attributes on the sitk filters that were used
+        Fills holes in a binary image. Two algorithms are available, one
+        from SimpleITK and one from scipy. Neither algorithm fills holes
+        on the border of the image (due to ambiguity in defining a hole).
+        This function can optionally fill holes on the border by guessing
+        which holes are holes in a larger object.
+
+        :param mask:
+        :param fill_border:
+        :param iterations:
+        :parma kernel_radius:
+        :param max_length:
+        :param in_place:
+        :param method:
+        :param kwargs:
+
+        :return:
 
         TODO:
             - Write a greyscale version (will work better on the borders,
@@ -750,9 +902,18 @@ class Segmenter(BaseSegmenter):
                        label: bool = False
                        ) -> Mask:
         """
-        Wrapper for levelset functions in skimage.segmentation
+        Returns a binary level set of various shapes.
 
-        size refers to square_size for checkerboard or radius for disk
+        :param image:
+        :param levelset:
+        :param size:
+        :param center:
+        :param label:
+
+        :return:
+
+        TODO:
+            - size refers to square_size for checkerboard or radius for disk
         """
         mask = skimage_level_set(image.shape, levelset, size, center)
 
@@ -769,7 +930,18 @@ class Segmenter(BaseSegmenter):
                                   propagation: float = 1,
                                   iterations: int = 1000,
                                   ) -> Mask:
-        """"""
+        """Propagates an initial level set to edges found in an edge potential image.
+        This function will likely not work well on an unmodified input image. Use the
+        edge detection functions in ``Processor`` to create an edge potential image.
+
+        :param edge_potential:
+        :param initial_level_set:
+        :param curvature:
+        :param propagation:
+        :param iterations:
+
+        :return:
+        """
         # Set up filter
         fil = sitk.GeodesicActiveContourLevelSetImageFilter()
         fil.SetCurvatureScaling(curvature)
@@ -799,7 +971,19 @@ class Segmenter(BaseSegmenter):
                             iterations: int = 1000,
                             max_rms_error: float = 0.02,
                             ) -> Mask:
-        """"""
+        """Level set segmentation method based on intensity values.
+
+        :param image:
+        :param initial_level_set:
+        :param lower_thres:
+        :param upper_thres:
+        :param propagation:
+        :param curvature:
+        :param iterations:
+        :param max_rms_error:
+
+        :return:
+        """
         # Set up the level set filter
         fil = sitk.ThresholdSegmentationLevelSetImageFilter()
         fil.SetCurvatureScaling(curvature)
@@ -849,8 +1033,15 @@ class Segmenter(BaseSegmenter):
                                 seeds: Mask,
                                 n_points: int = 0
                                 ) -> Mask:
-        """"""
-        # TODO: Add using regular seeds instead of a mask
+        """Computes the distance from the seeds based on a fast
+        marching algorithm.
+
+        :param image:
+        :param seeds:
+        :param n_points:
+
+        :return:
+        """
         if n_points:
             seeds = self.regular_seeds(image, n_points)
 
@@ -874,7 +1065,15 @@ class Segmenter(BaseSegmenter):
                                watershed_line: bool = True,
                                remove_large: bool = True
                                ) -> Mask:
-        """"""
+        """Runs morphological watershed from given seeds.
+
+        :param image:
+        :param mask:
+        :param watershed_line:
+        :param remove_large:
+
+        :return:
+        """
         fil = sitk.MorphologicalWatershedFromMarkersImageFilter()
         fil.SetMarkWatershedLine(watershed_line)
 
@@ -903,7 +1102,13 @@ class Segmenter(BaseSegmenter):
                                 image: Image,
                                 watershed_line: bool = True
                                 ) -> Mask:
-        """"""
+        """Runs morphological watershed on the image.
+
+        :param image:
+        :param watershed_line:
+
+        :return:
+        """
         fil = sitk.MorphologicalWatershedImageFilter()
         fil.SetMarkWatershedLine(watershed_line)
 
@@ -918,7 +1123,15 @@ class Segmenter(BaseSegmenter):
                         mask: Mask,
                         label_undecided: int = 0
                         ) -> Mask:
-        """"""
+        """Applies a voting algorithm to determine the value
+        of each pixel. Can be used to get the combined result
+        from multiple masks.
+
+        :param mask:
+        :param label_undecided:
+
+        :return:
+        """
         # Set up the vector
         fil = sitk.LabelVotingImageFilter()
         fil.SetLabelForUndecidedPixels(label_undecided)
@@ -936,13 +1149,27 @@ class Segmenter(BaseSegmenter):
     @ImageHelper(by_frame=False)
     def unet_predict(self,
                      image: Image,
-                     weight_path: str = 'celltk/config/unet_example_cell_weights.tf',
+                     weight_path: str = 'celltk/config/unet_example_cell_weights.hdf5',
                      roi: Union[int, str] = 2,
                      batch: int = None,
                      classes: int = 3,
                      ) -> Image:
         """
-        This should just call the Process version __wrapped__
+        Uses a UNet-based neural net to predict the label of each pixel in the
+        input image. This function returns the probability of a specific region
+        of interest, not a labeled mask.
+
+        :param image:
+        :param weight_path:
+        :param roi:
+        :param batch:
+        :param classes:
+
+        :return:
+
+        TODO:
+            - This should just call the Process version __wrapped__
+            - Add citations
         """
         _roi_dict = {'background': 0, 'bg': 0, 'edge': 1,
                      'interior': 2, 'nuc': 2, 'cyto': 2}
@@ -984,7 +1211,17 @@ class Segmenter(BaseSegmenter):
                       weight_path: str = None,
                       batch: int = None,
                       ) -> Mask:
-        """Wrapper for implementation of Misic paper.
+        """Wrapper for implementation of Misic. Original paper from
+        `Panigrahi and colleagues`_.
+
+        .. _Panigrahi and colleagues: https://elifesciences.org/articles/65151
+
+        :param image:
+        :param model_path:
+        :param weight_path:
+        :param batch:
+
+        :return:
 
         TODO:
             - Make custom structure to speed up calculations
