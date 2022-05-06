@@ -177,14 +177,15 @@ class Segmenter(BaseSegmenter):
         to_remove = rp['label'][to_remove]
 
         # Get the values and again mark indices as True
-        remove_idx = functools.reduce(
-            np.add,
-            [np.where(mask == r, 1, 0) for r in to_remove],
-        ).astype(bool)
-
-        # Set those indices to 0 and return
         out = mask.copy()
-        out[remove_idx] = 0
+        if to_remove:
+            remove_idx = functools.reduce(
+                np.add,
+                [np.where(mask == r, 1, 0) for r in to_remove],
+            ).astype(bool)
+
+            # Set those indices to 0 and return
+            out[remove_idx] = 0
 
         return out
 
