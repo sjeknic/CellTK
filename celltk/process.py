@@ -603,7 +603,7 @@ class Processor(BaseProcessor):
                                         weight_path=weight_path)
 
         # Pre-allocate output memory
-        if batch is None or batch <= image.shape[0]:
+        if batch is None or batch >= image.shape[0]:
             output = self.model.predict(image[:, :, :], roi=roi)
         else:
             arrs = np.array_split(image, image.shape[0] // batch, axis=0)

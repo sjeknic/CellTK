@@ -555,6 +555,7 @@ class Segmenter(BaseSegmenter):
         :param connectivity:
 
         :return:
+
         TODO:
             - Accept pre-made seed mask from a different function
         """
@@ -836,7 +837,7 @@ class Segmenter(BaseSegmenter):
         :param cyto_mask:
         :param nuc_mask:
         :param val_match:
-        :param erosion
+        :param erosion:
 
         :return:
         """
@@ -1192,9 +1193,7 @@ class Segmenter(BaseSegmenter):
             self.model = FluorUNetModel(dimensions=dims,
                                         weight_path=weight_path)
 
-        # Pre-allocate output memory
-        # TODO: Incorporate the batch here.
-        if batch is None:
+        if batch is None or batch >= image.shape[0]:
             output = self.model.predict(image[:, :, :], roi=roi)
         else:
             arrs = np.array_split(image, image.shape[0] // batch, axis=0)
@@ -1231,7 +1230,7 @@ class Segmenter(BaseSegmenter):
         self.model = MisicModel(model_path)
 
         # Use model for predictions
-        if batch is None:
+        if batch is None or batch >= image.shape[0]:
             output = self.model.predict(image[:, :, :], )
         else:
             arrs = np.array_split(image, image.shape[0] // batch, axis=0)
