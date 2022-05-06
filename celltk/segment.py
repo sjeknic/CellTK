@@ -178,7 +178,7 @@ class Segmenter(BaseSegmenter):
 
         # Get the values and again mark indices as True
         out = mask.copy()
-        if to_remove:
+        if len(to_remove):
             remove_idx = functools.reduce(
                 np.add,
                 [np.where(mask == r, 1, 0) for r in to_remove],
