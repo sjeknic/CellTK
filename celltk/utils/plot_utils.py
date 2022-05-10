@@ -227,13 +227,14 @@ class PlotHelper:
                   colors: Union[str, Collection[str]] = None,
                   time: np.ndarray = None,
                   legend: bool = True,
-                  figure: go.Figure = None,
+                  figure: Union[go.Figure, go.FigureWidget] = None,
                   size: Tuple[int] = (None, None),
                   title: str = None,
                   x_label: str = None,
                   y_label: str = None,
                   x_limit: Tuple[float] = None,
                   y_limit: Tuple[float] = None,
+                  widget: bool = False,
                   **kwargs
                   ) -> Union[go.Figure, go.FigureWidget]:
         """
@@ -282,6 +283,8 @@ class PlotHelper:
             the plot is saved as an HTML object.
         :param y_limit: Initial limits for the y-axis. Can be changed if
             the plot is saved as an HTML object.
+        :param widget: If True, returns a go.FigureWidget object instead of
+            a go.Figure object.
         :param kwargs: Depending on name, passed to the "line" keyword
             argument of go.Scatter or as keyword arguments for go.Scatter.
             The following kwargs are passed to "line": 'color', 'dash',
@@ -309,7 +312,10 @@ class PlotHelper:
                   if k not in self._line_kwargs}
 
         # Build the figure and start plotting
-        fig = figure if figure else go.Figure()
+        if figure: fig = figure
+        elif widget: fig = go.FigureWidget()
+        else: fig = go.Figure()
+
         for idx, (arr, key) in enumerate(itertools.zip_longest(arrays, keys)):
             # Get the key
             if not key:
@@ -396,13 +402,14 @@ class PlotHelper:
                      alpha: float = 1.0,
                      symbols: Union[str, Collection[str]] = None,
                      legend: bool = True,
-                     figure: go.Figure = None,
+                     figure: Union[go.Figure, go.FigureWidget] = None,
                      size: Tuple[int] = (None, None),
                      title: str = None,
                      x_label: str = None,
                      y_label: str = None,
                      x_limit: Tuple[float] = None,
                      y_limit: Tuple[float] = None,
+                     widget: bool = False,
                      **kwargs
                      ) -> Union[go.Figure, go.FigureWidget]:
         """
@@ -453,6 +460,8 @@ class PlotHelper:
             the plot is saved as an HTML object.
         :param y_limit: Initial limits for the y-axis. Can be changed if
             the plot is saved as an HTML object.
+        :param widget: If True, returns a go.FigureWidget object instead of
+            a go.Figure object.
         :param kwargs: Depending on name, passed to the "marker" keyword
             argument of go.Scatter or as keyword arguments for go.Scatter.
             The following kwargs are passed to "marker": 'color', 'line',
@@ -489,7 +498,9 @@ class PlotHelper:
                   if k not in self._marker_kwargs}
 
         # Build the figure and start plotting
-        fig = figure if figure else go.Figure()
+        if figure: fig = figure
+        elif widget: fig = go.FigureWidget()
+        else: fig = go.Figure()
         traces = []
         zipped = itertools.zip_longest(x_arrays, y_arrays, keys,
                                        fillvalue=None)
@@ -573,13 +584,14 @@ class PlotHelper:
                  orientation: str = 'v',
                  barmode: str = 'group',
                  legend: bool = True,
-                 figure: go.Figure = None,
+                 figure: Union[go.Figure, go.FigureWidget] = None,
                  size: Tuple[int] = (None, None),
                  title: str = None,
                  x_label: str = None,
                  y_label: str = None,
                  x_limit: Tuple[float] = None,
                  y_limit: Tuple[float] = None,
+                 widget: bool = False,
                  **kwargs
                  ) -> Union[go.Figure, go.FigureWidget]:
         """Builds a Plotly Figure object plotting bars from the given arrays. Each
@@ -629,6 +641,8 @@ class PlotHelper:
         :param y_limit: Initial limits for the y-axis. Can be changed if
             the plot is saved as an HTML object. Only applies if orientation
             is vertical.
+        :param widget: If True, returns a go.FigureWidget object instead of
+            a go.Figure object.
         :param kwargs: Depending on name, passed to go.Bar or to
             go.Figure.update_traces(). The following kwargs are passed to
             go.Bar: 'hoverinfo', 'marker', 'width'.
@@ -653,7 +667,10 @@ class PlotHelper:
         kwargs = {k: v for k, v in kwargs.items()
                   if k not in self._bar_kwargs}
 
-        fig = figure if figure else go.Figure()
+        # Build the figure and start plotting
+        if figure: fig = figure
+        elif widget: fig = go.FigureWidget()
+        else: fig = go.Figure()
         for idx, (arr, key) in enumerate(itertools.zip_longest(arrays, keys)):
             # Get the key
             if not key:
@@ -663,14 +680,10 @@ class PlotHelper:
             # err_estimator is used to calculate errorbars
             if err_estimator:
                 err_arr = err_estimator(arr)
-
-                # If one dimensional, it's the error relative to the mean
-                # that's how Plotly wants it
-                # if if it is 2D, need to subtract from the mean
             else:
                 err_arr = None
 
-            # estimator is used to condense all the lines to a single line
+            # estimator is used to condense all the data to a single point
             if estimator:
                 arr = np.squeeze(estimator(arr))
 
@@ -751,13 +764,14 @@ class PlotHelper:
                     spanmode: str = 'soft',
                     side: str = None,
                     legend: bool = True,
-                    figure: go.Figure = None,
+                    figure: Union[go.Figure, go.FigureWidget] = None,
                     size: Tuple[int] = (None, None),
                     title: str = None,
                     x_label: str = None,
                     y_label: str = None,
                     x_limit: Tuple[float] = None,
                     y_limit: Tuple[float] = None,
+                    widget: bool = False,
                     **kwargs
                     ) -> Union[go.Figure, go.FigureWidget]:
         """
@@ -811,6 +825,8 @@ class PlotHelper:
         :param y_limit: Initial limits for the y-axis. Can be changed if
             the plot is saved as an HTML object. Only applies if orientation
             is veritcal.
+        :param widget: If True, returns a go.FigureWidget object instead of
+            a go.Figure object.
         :param kwargs: Depending on name, passed to go.Violin or to
             go.Figure.update_traces(). The following kwargs are passed to
             go.Violin: 'bandwidth', 'fillcolor', 'hoverinfo', 'jitter', 'line',
@@ -850,7 +866,10 @@ class PlotHelper:
                   if k not in self._violin_kwargs}
         meanline_kw = {'visible': show_mean, 'width': 3}
 
-        fig = figure if figure else go.Figure()
+        # Build the figure and start plotting
+        if figure: fig = figure
+        elif widget: fig = go.FigureWidget()
+        else: fig = go.Figure()
         for idx, (arr, key) in enumerate(itertools.zip_longest(arrays, keys)):
             # Get the key
             if not key:
@@ -928,13 +947,14 @@ class PlotHelper:
                        show_points: Union[str, bool] = False,
                        show_mean: bool = True,
                        legend: bool = True,
-                       figure: go.Figure = None,
+                       figure: Union[go.Figure, go.FigureWidget] = None,
                        size: Tuple[int] = (None, None),
                        title: str = None,
                        x_label: str = None,
                        y_label: str = None,
                        x_limit: Tuple[float] = None,
                        y_limit: Tuple[float] = None,
+                       widget: bool = False,
                        **kwargs
                        ) -> Union[go.Figure, go.FigureWidget]:
         """
@@ -976,6 +996,8 @@ class PlotHelper:
         :param y_limit: Initial limits for the y-axis. Can be changed if
             the plot is saved as an HTML object. Only applies if orientation
             is veritcal.
+        :param widget: If True, returns a go.FigureWidget object instead of
+            a go.Figure object.
         :param kwargs: Depending on name, passed to go.Violin or to
             go.Figure.update_traces(). The following kwargs are passed to
             go.Violin: 'bandwidth', 'fillcolor', 'hoverinfo', 'jitter', 'line',
@@ -988,7 +1010,7 @@ class PlotHelper:
         fig = self.violin_plot(arrays, keys=keys, colors=colors,
                                spanmode=spanmode, legend=legend,
                                show_box=show_box, show_points=show_points,
-                               show_mean=show_mean, figure=figure,
+                               show_mean=show_mean, figure=figure, widget=widget,
                                side='positive', orientation='h', **kwargs)
 
         # Some settings for making a ridgeline out of the violin plot
@@ -1015,13 +1037,14 @@ class PlotHelper:
                      zmid: float = None,
                      zmax: float = None,
                      reverse: bool = False,
-                     figure: go.Figure = None,
+                     figure: Union[go.Figure, go.FigureWidget] = None,
                      size: Tuple[int] = (None, None),
                      title: str = None,
                      x_label: str = None,
                      y_label: str = None,
                      x_limit: Tuple[float] = None,
                      y_limit: Tuple[float] = None,
+                     widget: bool = False,
                      **kwargs
                      ) -> Union[go.Figure, go.FigureWidget]:
         """
@@ -1054,6 +1077,8 @@ class PlotHelper:
         :param y_limit: Initial limits for the y-axis. Can be changed if
             the plot is saved as an HTML object. Only applies if orientation
             is veritcal.
+        :param widget: If True, returns a go.FigureWidget object instead of
+            a go.Figure object.
         :param kwargs: Passed to go.Heatmap.
 
         :return: Figure object.
@@ -1064,7 +1089,10 @@ class PlotHelper:
         assert array.ndim == 2
         assert len(size) == 2
 
-        fig = figure if figure else go.Figure()
+        # Build the figure and make the heatmap
+        if figure: fig = figure
+        elif widget: fig = go.FigureWidget()
+        else: fig = go.Figure()
         trace = go.Heatmap(z=array, zmin=zmin, zmax=zmax,
                            zmid=zmid, colorscale=colorscale,
                            reversescale=reverse, **kwargs)
@@ -1094,13 +1122,14 @@ class PlotHelper:
                        ybinsize: float = None,
                        histfunc: str = 'count',
                        histnorm: str = "",
-                       figure: go.Figure = None,
+                       figure: Union[go.Figure, go.FigureWidget] = None,
                        size: Tuple[int] = (None, None),
                        title: str = None,
                        x_label: str = None,
                        y_label: str = None,
                        x_limit: Tuple[float] = None,
                        y_limit: Tuple[float] = None,
+                       widget: bool = False,
                        **kwargs
                        ) -> Union[go.Figure, go.FigureWidget]:
         """
@@ -1155,6 +1184,8 @@ class PlotHelper:
         :param y_limit: Initial limits for the y-axis. Can be changed if
             the plot is saved as an HTML object. Only applies if orientation
             is veritcal.
+        :param widget: If True, returns a go.FigureWidget object instead of
+            a go.Figure object.
         :param kwargs: Passed to go.Histogram2d.
 
         :return: Figure object
@@ -1167,7 +1198,10 @@ class PlotHelper:
         assert np.squeeze(y_array).ndim in (1, 0)
         assert len(size) == 2
 
-        fig = figure if figure else go.Figure()
+        # Build the figure and plot the density histogram
+        if figure: fig = figure
+        elif widget: fig = go.FigureWidget()
+        else: fig = go.Figure()
         trace = go.Histogram2d(x=x_array, y=y_array,
                                colorscale=colorscale,
                                histfunc=histfunc,
@@ -1202,13 +1236,14 @@ class PlotHelper:
                        ybinsize: float = None,
                        histfunc: str = 'count',
                        histnorm: str = "",
-                       figure: go.Figure = None,
+                       figure: Union[go.Figure, go.FigureWidget] = None,
                        size: Tuple[int] = (None, None),
                        title: str = None,
                        x_label: str = None,
                        y_label: str = None,
                        x_limit: Tuple[float] = None,
                        y_limit: Tuple[float] = None,
+                       widget: bool = False,
                        **kwargs
                        ) -> Union[go.Figure, go.FigureWidget]:
         """
@@ -1263,6 +1298,8 @@ class PlotHelper:
         :param y_limit: Initial limits for the y-axis. Can be changed if
             the plot is saved as an HTML object. Only applies if orientation
             is veritcal.
+        :param widget: If True, returns a go.FigureWidget object instead of
+            a go.Figure object.
         :param kwargs: Passed to go.Heatmap2dContour
 
         :return: Figure object
@@ -1275,7 +1312,10 @@ class PlotHelper:
         assert np.squeeze(y_array).ndim in (1, 0)
         assert len(size) == 2
 
-        fig = figure if figure else go.Figure()
+        # Build the figure and plot the contours
+        if figure: fig = figure
+        elif widget: fig = go.FigureWidget()
+        else: fig = go.Figure()
         trace = go.Histogram2dContour(x=x_array, y=y_array,
                                       colorscale=colorscale,
                                       histfunc=histfunc,
