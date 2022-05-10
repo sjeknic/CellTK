@@ -625,8 +625,7 @@ class PlotHelper:
         :param ax_labels: Labels for the categorical axis.
         :param orientation: Orientation of the bar plot.
         :param barmode: Keyword argument describing how to group the bars.
-            Options are 'group', 'overlay', 'relative', and .... See Plotly
-            documentation for more details.
+            Options are 'group', 'overlay', 'relative', and 'stack'.
         :param legend: If False, no legend is made on the plot.
         :param figure: If a go.Figure object is given, will be used to make
             the plot instead of a blank figure.
@@ -737,6 +736,156 @@ class PlotHelper:
         fig.update_traces(**kwargs)
         fig.update_layout(template=self._template, barmode=barmode,
                           title=title)
+        fig.update_xaxes(**self._default_axis_layout)
+        fig.update_xaxes(title=x_label, range=x_limit)
+        fig.update_yaxes(**self._default_axis_layout)
+        fig.update_yaxes(title=y_label, range=y_limit)
+
+        # Set size only if not None, so as to not overwrite previous changes
+        h, w = size
+        if h: fig.update_layout(height=h)
+        if w: fig.update_layout(width=w)
+
+        return fig
+
+    def histogram_plot(self,
+                     arrays: Collection[np.ndarray],
+                     keys: Collection[str] = [],
+                     histfunc: str = 'count',
+                     histnorm: str = "",
+                     nbins: int = None,
+                     binsize: float = None,
+                     bargap: float = None,
+                     bargroupgap: float = None,
+                     cumulative: bool = False,
+                     colors: Union[str, Collection[str]] = None,
+                     alpha: float = 1.0,
+                     orientation: str = 'v',
+                     barmode: str = 'group',
+                     legend: bool = True,
+                     figure: Union[go.Figure, go.FigureWidget] = None,
+                     size: Tuple[int] = (None, None),
+                     title: str = None,
+                     x_label: str = None,
+                     y_label: str = None,
+                     x_limit: Tuple[float] = None,
+                     y_limit: Tuple[float] = None,
+                     widget: bool = False,
+                     **kwargs
+                     ) -> Union[go.Figure, go.FigureWidget]:
+        """Builds a Plotly Figure object plotting a histogram of each of the
+        given arrays. Each array is interpreted as a separate condition and
+        is plotted in a different color.
+
+        :param arrays: List of arrays to plot histograms.
+        :param keys: Names corresponding to the data arrays. If not provided,
+            the keys will be integers.
+        :param histfunc: Specifies the binning function used for
+            this histogram trace. If “count”, the histogram values
+            are computed by counting the number of values lying
+            inside each bin. Can also be “sum”, “avg”, “min”, “max”.
+        :param histnorm: Specifies the type of normalization used
+            for this histogram trace. If “”, the span of each bar
+            corresponds to the number of occurrences  If “percent” /
+            “probability”, the span of each bar corresponds to the
+            percentage / fraction of occurrences with respect to
+            the total number of sample points (here, the sum of
+            all bin HEIGHTS equals 100% / 1). If “density”, the
+            span of each bar corresponds to the number of
+            occurrences in a bin divided by the size of the bin
+            interval. If probability density, the area of each
+            bar corresponds to the probability that an event will
+            fall into the corresponding bin (here, the sum of all
+            bin AREAS equals 1).
+        :param nbins: Maximum number of bins allowed. Ignored if
+            binsize is set.
+        :param binsize: Size of each bin.
+        :param bargap: Gap between bars in adjacent locations.
+        :param bargroupgap: Gap between bars in the same location.
+        :param cumulative: If True, the histogram will plot cumulative
+            occurances.
+        :param colors: Name of a color palette or map to use. Searches first
+            in seaborn/matplotlib, then in Plotly to find the color map. If
+            not provided, the color map will be glasbey. Can also be list
+            of named CSS colors or hexadecimal or RGBA strings.
+        :param alpha: Opacity of the fill color of the histogram as a float
+            in the range [0, 1].
+        :param orientation: Orientation of the bar plot.
+        :param barmode: Keyword argument describing how to group the bars.
+            Options are 'group', 'overlay', 'stack', and 'relative'.
+        :param legend: If False, no legend is made on the plot.
+        :param figure: If a go.Figure object is given, will be used to make
+            the plot instead of a blank figure.
+        :param size: Height and width of the plot in pixels. Must be a tuple of
+            length two. To leave height or width unchanged, set as None.
+        :param title: Title to add to the plot
+        :param x_label: Label of the x-axis
+        :param y_label: Label of the y-axis
+        :param x_limit: Initial limits for the x-axis. Can be changed if
+            the plot is saved as an HTML object. Only applies if orientation
+            is horizontal.
+        :param y_limit: Initial limits for the y-axis. Can be changed if
+            the plot is saved as an HTML object. Only applies if orientation
+            is vertical.
+        :param widget: If True, returns a go.FigureWidget object instead of
+            a go.Figure object.
+        :param kwargs: Depending on name, passed to go.Bar or to
+            go.Figure.update_traces(). The following kwargs are passed to
+            go.Bar: 'hoverinfo', 'marker', 'width'.
+
+        :return: Figure object
+
+        :raises AssertionError: If not all items in arrays are np.ndarray.
+        :raises AssertionError: If orientation is a disallowed value.
+        :raises AssertionError: If size is not a tuple of length two.
+        """
+        # Format data
+        assert all([isinstance(a, np.ndarray) for a in arrays])
+        assert orientation in ('v', 'h', 'horizontal', 'vertical')
+        assert len(size) == 2
+
+        # Convert any inputs that need converting
+        colors = self._build_colormap(colors, len(arrays), alpha)
+
+        # Build the figure and start plotting
+        if figure: fig = figure
+        elif widget: fig = go.FigureWidget()
+        else: fig = go.Figure()
+
+        for idx, (arr, key) in enumerate(itertools.zip_longest(arrays, keys)):
+            # Get the key
+            if not key:
+                key = f'bar_{idx}'
+            key += f' | n={arr.shape[0]}'
+
+            if orientation in ('v', 'vertical'):
+                y = None
+                x = arr
+            elif orientation in ('h', 'horizontal'):
+                y = arr
+                x = None
+
+            # Set up the colors
+            _c = next(colors)
+            marker_kwargs = {'color': _c, 'line': {'color': _c}}
+            cum_kwargs = {'enabled': cumulative}
+
+            # Make individual distributions on the plot
+            trace = go.Histogram(x=x, y=y, name=key, legendgroup=key,
+                                 histfunc=histfunc, histnorm=histnorm,
+                                 orientation=orientation,
+                                 cumulative=cum_kwargs,
+                                 nbinsx=nbins, nbinsy=nbins,
+                                 xbins=dict(size=binsize),
+                                 ybins=dict(size=binsize),
+                                 marker=marker_kwargs,
+                                 **kwargs)
+            fig.add_trace(trace)
+
+        # Format plot on the way out
+        fig.update_traces(**kwargs)
+        fig.update_layout(template=self._template, barmode=barmode,
+                          title=title, bargap=bargap, bargroupgap=bargroupgap)
         fig.update_xaxes(**self._default_axis_layout)
         fig.update_xaxes(title=x_label, range=x_limit)
         fig.update_yaxes(**self._default_axis_layout)
