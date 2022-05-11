@@ -225,7 +225,7 @@ class PlotHelper:
                   err_estimator: Union[Callable, str, functools.partial] = None,
                   normalizer: Union[Callable, str] = None,
                   colors: Union[str, Collection[str]] = None,
-                  time: np.ndarray = None,
+                  time: Union[Collection[np.ndarray], np.ndarray] = None,
                   legend: bool = True,
                   figure: Union[go.Figure, go.FigureWidget] = None,
                   figsize: Tuple[int] = (None, None),
@@ -295,6 +295,8 @@ class PlotHelper:
         :raises AssertionError: If not all items in arrays are np.ndarray.
         :raises AssertionError: If any item in arrays is not two dimensional.
         :raises AssertionError: If figsize is not a tuple of length two.
+        :raises TypeError: If time is not an np.ndarray or collection of
+            np.ndarray.
         """
         # Format inputs
         assert all([isinstance(a, np.ndarray) for a in arrays])
@@ -341,7 +343,16 @@ class PlotHelper:
                         err_arr.reshape(-1, 1), scale_only=True
                     ).reshape(err_arr.shape)
 
-            x = time if time is not None else np.arange(arr.shape[1])
+            if time is None:
+                x = np.arange(arr.shape[1])
+            elif isinstance(time, (tuple, list)):
+                x = time[idx]
+            elif isinstance(time, np.ndarray):
+                x = time
+            else:
+                raise TypeError('Did not understand time of '
+                                f'type {type(time)}')
+
             lines = []
             _legend = True
             for a, y in enumerate(arr):
