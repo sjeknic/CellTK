@@ -228,7 +228,7 @@ class PlotHelper:
                   time: np.ndarray = None,
                   legend: bool = True,
                   figure: Union[go.Figure, go.FigureWidget] = None,
-                  size: Tuple[int] = (None, None),
+                  figsize: Tuple[int] = (None, None),
                   title: str = None,
                   x_label: str = None,
                   y_label: str = None,
@@ -274,7 +274,7 @@ class PlotHelper:
         :param legend: If False, no legend is made on the plot.
         :param figure: If a go.Figure object is given, will be used to make
             the plot instead of a blank figure.
-        :param size: Height and width of the plot in pixels. Must be a tuple of
+        :param figsize: Height and width of the plot in pixels. Must be a tuple of
             length two. To leave height or width unchanged, set as None.
         :param title: Title to add to the plot
         :param x_label: Label of the x-axis
@@ -294,12 +294,12 @@ class PlotHelper:
 
         :raises AssertionError: If not all items in arrays are np.ndarray.
         :raises AssertionError: If any item in arrays is not two dimensional.
-        :raises AssertionError: If size is not a tuple of length two.
+        :raises AssertionError: If figsize is not a tuple of length two.
         """
         # Format inputs
         assert all([isinstance(a, np.ndarray) for a in arrays])
         assert all([a.ndim == 2 for a in arrays])
-        assert len(size) == 2
+        assert len(figsize) == 2
 
         # Convert any inputs that need converting
         colors = self._build_colormap(colors, len(arrays))
@@ -385,7 +385,7 @@ class PlotHelper:
                           yaxis_range=y_limit)
 
         # Set size only if not None, so as to not overwrite previous changes
-        h, w = size
+        h, w = figsize
         if h: fig.update_layout(height=h)
         if w: fig.update_layout(width=w)
 
@@ -403,7 +403,7 @@ class PlotHelper:
                      symbols: Union[str, Collection[str]] = None,
                      legend: bool = True,
                      figure: Union[go.Figure, go.FigureWidget] = None,
-                     size: Tuple[int] = (None, None),
+                     figsize: Tuple[int] = (None, None),
                      title: str = None,
                      x_label: str = None,
                      y_label: str = None,
@@ -451,7 +451,7 @@ class PlotHelper:
         :param legend: If False, no legend is made on the plot.
         :param figure: If a go.Figure object is given, will be used to make
             the plot instead of a blank figure.
-        :param size: Height and width of the plot in pixels. Must be a tuple of
+        :param figsize: Height and width of the plot in pixels. Must be a tuple of
             length two. To leave height or width unchanged, set as None.
         :param title: Title to add to the plot
         :param x_label: Label of the x-axis
@@ -476,13 +476,13 @@ class PlotHelper:
         :raises AssertionError: If not all items in arrays have the same
             number of columns.
         :raises AssertionError: If any item in arrays has more than 3 columns.
-        :raises AssertionError: If size is not a tuple of length two.
+        :raises AssertionError: If figsize is not a tuple of length two.
         """
         # Format inputs - should be cells x features
         if x_arrays and y_arrays: assert len(x_arrays) == len(y_arrays)
         assert all(isinstance(a, np.ndarray) for a in x_arrays)
         assert all(isinstance(a, np.ndarray) for a in y_arrays)
-        assert len(size) == 2
+        assert len(figsize) == 2
 
         # Convert any inputs that need converting
         colors = self._build_colormap(colors,
@@ -568,7 +568,7 @@ class PlotHelper:
                           yaxis_range=y_limit)
 
         # Set size only if not None, so as to not overwrite previous changes
-        h, w = size
+        h, w = figsize
         if h: fig.update_layout(height=h)
         if w: fig.update_layout(width=w)
 
@@ -585,7 +585,7 @@ class PlotHelper:
                  barmode: str = 'group',
                  legend: bool = True,
                  figure: Union[go.Figure, go.FigureWidget] = None,
-                 size: Tuple[int] = (None, None),
+                 figsize: Tuple[int] = (None, None),
                  title: str = None,
                  x_label: str = None,
                  y_label: str = None,
@@ -629,7 +629,7 @@ class PlotHelper:
         :param legend: If False, no legend is made on the plot.
         :param figure: If a go.Figure object is given, will be used to make
             the plot instead of a blank figure.
-        :param size: Height and width of the plot in pixels. Must be a tuple of
+        :param figsize: Height and width of the plot in pixels. Must be a tuple of
             length two. To leave height or width unchanged, set as None.
         :param title: Title to add to the plot
         :param x_label: Label of the x-axis
@@ -650,12 +650,12 @@ class PlotHelper:
 
         :raises AssertionError: If not all items in arrays are np.ndarray.
         :raises AssertionError: If orientation is a disallowed value.
-        :raises AssertionError: If size is not a tuple of length two.
+        :raises AssertionError: If figsize is not a tuple of length two.
         """
         # Format data
         assert all([isinstance(a, np.ndarray) for a in arrays])
         assert orientation in ('v', 'h', 'horizontal', 'vertical')
-        assert len(size) == 2
+        assert len(figsize) == 2
 
         # Convert any inputs that need converting
         colors = self._build_colormap(colors, len(arrays))
@@ -742,7 +742,7 @@ class PlotHelper:
         fig.update_yaxes(title=y_label, range=y_limit)
 
         # Set size only if not None, so as to not overwrite previous changes
-        h, w = size
+        h, w = figsize
         if h: fig.update_layout(height=h)
         if w: fig.update_layout(width=w)
 
@@ -764,7 +764,7 @@ class PlotHelper:
                      barmode: str = 'group',
                      legend: bool = True,
                      figure: Union[go.Figure, go.FigureWidget] = None,
-                     size: Tuple[int] = (None, None),
+                     figsize: Tuple[int] = (None, None),
                      title: str = None,
                      x_label: str = None,
                      y_label: str = None,
@@ -816,7 +816,7 @@ class PlotHelper:
         :param legend: If False, no legend is made on the plot.
         :param figure: If a go.Figure object is given, will be used to make
             the plot instead of a blank figure.
-        :param size: Height and width of the plot in pixels. Must be a tuple of
+        :param figsize: Height and width of the plot in pixels. Must be a tuple of
             length two. To leave height or width unchanged, set as None.
         :param title: Title to add to the plot
         :param x_label: Label of the x-axis
@@ -837,12 +837,12 @@ class PlotHelper:
 
         :raises AssertionError: If not all items in arrays are np.ndarray.
         :raises AssertionError: If orientation is a disallowed value.
-        :raises AssertionError: If size is not a tuple of length two.
+        :raises AssertionError: If figsize is not a tuple of length two.
         """
         # Format data
         assert all([isinstance(a, np.ndarray) for a in arrays])
         assert orientation in ('v', 'h', 'horizontal', 'vertical')
-        assert len(size) == 2
+        assert len(figsize) == 2
 
         # Convert any inputs that need converting
         colors = self._build_colormap(colors, len(arrays), alpha)
@@ -892,7 +892,7 @@ class PlotHelper:
         fig.update_yaxes(title=y_label, range=y_limit)
 
         # Set size only if not None, so as to not overwrite previous changes
-        h, w = size
+        h, w = figsize
         if h: fig.update_layout(height=h)
         if w: fig.update_layout(width=w)
 
@@ -914,7 +914,7 @@ class PlotHelper:
                     side: str = None,
                     legend: bool = True,
                     figure: Union[go.Figure, go.FigureWidget] = None,
-                    size: Tuple[int] = (None, None),
+                    figsize: Tuple[int] = (None, None),
                     title: str = None,
                     x_label: str = None,
                     y_label: str = None,
@@ -963,7 +963,7 @@ class PlotHelper:
         :param legend: If False, no legend is made on the plot.
         :param figure: If a go.Figure object is given, will be used to make
             the plot instead of a blank figure.
-        :param size: Height and width of the plot in pixels. Must be a tuple of
+        :param figsize: Height and width of the plot in pixels. Must be a tuple of
             length two. To leave height or width unchanged, set as None.
         :param title: Title to add to the plot
         :param x_label: Label of the x-axis
@@ -990,7 +990,7 @@ class PlotHelper:
             than one dimension.
         :raises AssertionError: If neg_arrays is given, and
             len(arrays) != len(neg_arrays)
-        :raises AssertionError: If size is not a tuple of length two.
+        :raises AssertionError: If figsize is not a tuple of length two.
         """
         # Format inputs
         violinmode = None
@@ -1004,7 +1004,7 @@ class PlotHelper:
             violinmode = 'overlay'
             side = 'positive'
         assert orientation in ('v', 'h', 'horizontal', 'vertical')
-        assert len(size) == 2
+        assert len(figsize) == 2
 
         # Convert any inputs that need converting
         colors = self._build_colormap(colors, len(arrays), alpha)
@@ -1080,7 +1080,7 @@ class PlotHelper:
         fig.update_yaxes(title=y_label, range=y_limit)
 
         # Set size only if not None, so as to not overwrite previous changes
-        h, w = size
+        h, w = figsize
         if h: fig.update_layout(height=h)
         if w: fig.update_layout(width=w)
 
@@ -1097,7 +1097,7 @@ class PlotHelper:
                        show_mean: bool = True,
                        legend: bool = True,
                        figure: Union[go.Figure, go.FigureWidget] = None,
-                       size: Tuple[int] = (None, None),
+                       figsize: Tuple[int] = (None, None),
                        title: str = None,
                        x_label: str = None,
                        y_label: str = None,
@@ -1134,7 +1134,7 @@ class PlotHelper:
         :param legend: If False, no legend is made on the plot.
         :param figure: If a go.Figure object is given, will be used to make
             the plot instead of a blank figure.
-        :param size: Height and width of the plot in pixels. Must be a tuple of
+        :param figsize: Height and width of the plot in pixels. Must be a tuple of
             length two. To leave height or width unchanged, set as None.
         :param title: Title to add to the plot
         :param x_label: Label of the x-axis
@@ -1173,7 +1173,7 @@ class PlotHelper:
         fig.update_yaxes(title=y_label, range=y_limit)
 
         # Set size only if not None, so as to not overwrite previous changes
-        h, w = size
+        h, w = figsize
         if h: fig.update_layout(height=h)
         if w: fig.update_layout(width=w)
 
@@ -1187,7 +1187,7 @@ class PlotHelper:
                      zmax: float = None,
                      reverse: bool = False,
                      figure: Union[go.Figure, go.FigureWidget] = None,
-                     size: Tuple[int] = (None, None),
+                     figsize: Tuple[int] = (None, None),
                      title: str = None,
                      x_label: str = None,
                      y_label: str = None,
@@ -1215,7 +1215,7 @@ class PlotHelper:
         :param reverse: If True, the color mapping is reversed.
         :param figure: If a go.Figure object is given, will be used to make
             the plot instead of a blank figure.
-        :param size: Height and width of the plot in pixels. Must be a tuple of
+        :param figsize: Height and width of the plot in pixels. Must be a tuple of
             length two. To leave height or width unchanged, set as None.
         :param title: Title to add to the plot
         :param x_label: Label of the x-axis
@@ -1233,10 +1233,10 @@ class PlotHelper:
         :return: Figure object.
 
         :raises AssertionError: If array is not two-dimensional.
-        :raises AssertionError: If size is not a tuple of length two.
+        :raises AssertionError: If figsize is not a tuple of length two.
         """
         assert array.ndim == 2
-        assert len(size) == 2
+        assert len(figsize) == 2
 
         # Build the figure and make the heatmap
         if figure: fig = figure
@@ -1254,7 +1254,7 @@ class PlotHelper:
         fig.update_yaxes(title=y_label, range=y_limit)
 
         # Set size only if not None, so as to not overwrite previous changes
-        h, w = size
+        h, w = figsize
         if h: fig.update_layout(height=h)
         if w: fig.update_layout(width=w)
 
@@ -1272,7 +1272,7 @@ class PlotHelper:
                        histfunc: str = 'count',
                        histnorm: str = "",
                        figure: Union[go.Figure, go.FigureWidget] = None,
-                       size: Tuple[int] = (None, None),
+                       figsize: Tuple[int] = (None, None),
                        title: str = None,
                        x_label: str = None,
                        y_label: str = None,
@@ -1322,7 +1322,7 @@ class PlotHelper:
             bin AREAS equals 1).
         :param figure: If a go.Figure object is given, will be used to make
             the plot instead of a blank figure.
-        :param size: Height and width of the plot in pixels. Must be a tuple of
+        :param figsize: Height and width of the plot in pixels. Must be a tuple of
             length two. To leave height or width unchanged, set as None.
         :param title: Title to add to the plot.
         :param x_label: Label of the x-axis
@@ -1341,11 +1341,11 @@ class PlotHelper:
 
         :raises AssertionError: If x_array or y_array are more than one
             dimensional.
-        :raises AssertionError: If size is not a tuple of length two.
+        :raises AssertionError: If figsize is not a tuple of length two.
         """
         assert np.squeeze(x_array).ndim in (1, 0)
         assert np.squeeze(y_array).ndim in (1, 0)
-        assert len(size) == 2
+        assert len(figsize) == 2
 
         # Build the figure and plot the density histogram
         if figure: fig = figure
@@ -1368,7 +1368,7 @@ class PlotHelper:
         fig.update_yaxes(title=y_label, range=y_limit)
 
         # Set size only if not None, so as to not overwrite previous changes
-        h, w = size
+        h, w = figsize
         if h: fig.update_layout(height=h)
         if w: fig.update_layout(width=w)
 
@@ -1386,7 +1386,7 @@ class PlotHelper:
                        histfunc: str = 'count',
                        histnorm: str = "",
                        figure: Union[go.Figure, go.FigureWidget] = None,
-                       size: Tuple[int] = (None, None),
+                       figsize: Tuple[int] = (None, None),
                        title: str = None,
                        x_label: str = None,
                        y_label: str = None,
@@ -1436,7 +1436,7 @@ class PlotHelper:
             bin AREAS equals 1).
         :param figure: If a go.Figure object is given, will be used to make
             the plot instead of a blank figure.
-        :param size: Height and width of the plot in pixels. Must be a tuple of
+        :param figsize: Height and width of the plot in pixels. Must be a tuple of
             length two. To leave height or width unchanged, set as None.
         :param title: Title to add to the plot
         :param x_label: Label of the x-axis
@@ -1455,11 +1455,11 @@ class PlotHelper:
 
         :raises AssertionError: If x_array or y_array are more than one
             dimensional.
-        :raises AssertionError: If size is not a tuple of length two.
+        :raises AssertionError: If figsize is not a tuple of length two.
         """
         assert np.squeeze(x_array).ndim in (1, 0)
         assert np.squeeze(y_array).ndim in (1, 0)
-        assert len(size) == 2
+        assert len(figsize) == 2
 
         # Build the figure and plot the contours
         if figure: fig = figure
@@ -1482,7 +1482,7 @@ class PlotHelper:
         fig.update_yaxes(title=y_label, range=y_limit)
 
         # Set size only if not None, so as to not overwrite previous changes
-        h, w = size
+        h, w = figsize
         if h: fig.update_layout(height=h)
         if w: fig.update_layout(width=w)
 
