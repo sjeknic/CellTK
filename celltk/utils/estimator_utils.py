@@ -6,6 +6,26 @@ import scipy.stats as stats
 from celltk.utils.info_utils import get_bootstrap_population
 
 """None of these estimators need to be wrapped in partial or anything"""
+def confidence_interval(arr: np.ndarray,
+                        ci: float = 0.95,
+                        ) -> np.ndarray:
+    """
+    NOTE:
+        - Only works on axis 0 for now
+    """
+    assert ci <= 1 and ci >= 0
+
+    out = np.zeros([2, arr.shape[1]], dtype=float)
+    dof = arr.shape[1] - 1
+    # Calculate at each time point - so iterate columns
+    for a in range(arr.shape[1]):
+        col = arr[:, a]
+        out[:, a] = stats.t.interval(ci, dof,
+                                     loc=np.nanmean(col),
+                                     scale=stats.sem(col, nan_policy='omit'))
+    return out
+
+
 def bootstrap_estimator(arr: np.ndarray,
                         reps: int = 1000,
                         ci: float = 0.95,
