@@ -33,11 +33,13 @@ def fraction_of_total(arr: np.ndarray,
                       ignore_nans: bool = True,
                       ax: int = 0
                       ) -> np.ndarray:
-    """"""
+    """
+    """
     if ignore_nans:
-        return np.nansum(arr, axis=ax, keepdims=True) / arr.shape[ax]
+        return np.count_nonzero(arr[~np.isnan(arr)],
+                                axis=ax, keepdims=True) / arr.shape[ax]
     else:
-        return np.sum(arr, axis=ax, keepdims=True) / arr.shape[ax]
+        return np.count_nonzero(arr, axis=ax, keepdims=True) / arr.shape[ax]
 
 
 def wilson_score(arr: np.ndarray,
