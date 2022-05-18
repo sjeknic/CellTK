@@ -542,12 +542,14 @@ class PlotHelper:
             if estimator:
                 yarr = estimator(yarr)
 
-            # normalizer is used to get data onto the same scale
+            # Normalizer is used to get data onto the same scale
             if normalizer:
                 yarr = normalizer(yarr.reshape(-1, 1)).reshape(yarr.shape)
+                # If err_arr is only 1 dim, scale only, otherwise shift too
+                scale_only = err_arr.ndim == 1
                 if err_arr is not None:
                     err_arr = normalizer(
-                        err_arr.reshape(-1, 1), scale_only=True
+                        err_arr.reshape(-1, 1), scale_only=scale_only
                 ).reshape(err_arr.shape)
 
             # Assign to x and y:
@@ -564,8 +566,9 @@ class PlotHelper:
                     # Assume symmetric
                     error_y.update({'array': err_arr, 'symmetric': True})
                 elif err_arr.ndim == 2:
-                    err_plus = y - err_arr[0, :]
-                    err_minus = err_arr[-1, :] - y
+                    # If 2-dimensions, assume it represents high and low bounds
+                    err_plus = err_arr[0, :] - y
+                    err_minus = y - err_arr[-1, :]
                     error_y.update({'array': err_plus,
                                     'arrayminus': err_minus})
 
