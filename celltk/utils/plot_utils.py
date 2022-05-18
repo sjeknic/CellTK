@@ -770,30 +770,31 @@ class PlotHelper:
         return fig
 
     def histogram_plot(self,
-                     arrays: Collection[np.ndarray],
-                     keys: Collection[str] = [],
-                     histfunc: str = 'count',
-                     histnorm: str = "",
-                     nbins: int = None,
-                     binsize: float = None,
-                     bargap: float = None,
-                     bargroupgap: float = None,
-                     cumulative: bool = False,
-                     colors: Union[str, Collection[str]] = None,
-                     alpha: float = 1.0,
-                     orientation: str = 'v',
-                     barmode: str = 'group',
-                     legend: bool = True,
-                     figure: Union[go.Figure, go.FigureWidget] = None,
-                     figsize: Tuple[int] = (None, None),
-                     title: str = None,
-                     x_label: str = None,
-                     y_label: str = None,
-                     x_limit: Tuple[float] = None,
-                     y_limit: Tuple[float] = None,
-                     widget: bool = False,
-                     **kwargs
-                     ) -> Union[go.Figure, go.FigureWidget]:
+                       arrays: Collection[np.ndarray],
+                       keys: Collection[str] = [],
+                       histfunc: str = 'count',
+                       histnorm: str = "",
+                       normalizer: Union[Callable, str] = None,
+                       nbins: int = None,
+                       binsize: float = None,
+                       bargap: float = None,
+                       bargroupgap: float = None,
+                       cumulative: bool = False,
+                       colors: Union[str, Collection[str]] = None,
+                       alpha: float = 1.0,
+                       orientation: str = 'v',
+                       barmode: str = 'group',
+                       legend: bool = True,
+                       figure: Union[go.Figure, go.FigureWidget] = None,
+                       figsize: Tuple[int] = (None, None),
+                       title: str = None,
+                       x_label: str = None,
+                       y_label: str = None,
+                       x_limit: Tuple[float] = None,
+                       y_limit: Tuple[float] = None,
+                       widget: bool = False,
+                       **kwargs
+                       ) -> Union[go.Figure, go.FigureWidget]:
         """Builds a Plotly Figure object plotting a histogram of each of the
         given arrays. Each array is interpreted as a separate condition and
         is plotted in a different color.
@@ -818,6 +819,10 @@ class PlotHelper:
             bar corresponds to the probability that an event will
             fall into the corresponding bin (here, the sum of all
             bin AREAS equals 1).
+        :param normalizer: If given, used to normalize the data after applying
+            the estimators. Normalizes the error as well. Can be 'minmax' or
+            'maxabs', or a callable that inputs an array and outputs an array
+            of the same shape.
         :param nbins: Maximum number of bins allowed. Ignored if
             binsize is set.
         :param binsize: Size of each bin.
@@ -867,6 +872,7 @@ class PlotHelper:
 
         # Convert any inputs that need converting
         colors = self._build_colormap(colors, len(arrays), alpha)
+        if normalizer: normalizer = self._build_normalizer_func(normalizer)
 
         # Build the figure and start plotting
         if figure: fig = figure
@@ -885,6 +891,12 @@ class PlotHelper:
             elif orientation in ('h', 'horizontal'):
                 y = arr
                 x = None
+
+            if normalizer:
+                if x is not None:
+                    x = normalizer(x.reshape(-1, 1)).reshape(x.shape)
+                if y is not None:
+                    y = normalizer(y.reshape(-1, 1)).reshape(y.shape)
 
             # Set up the colors
             _c = next(colors)
