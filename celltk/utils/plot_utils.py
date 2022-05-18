@@ -545,9 +545,9 @@ class PlotHelper:
             # Normalizer is used to get data onto the same scale
             if normalizer:
                 yarr = normalizer(yarr.reshape(-1, 1)).reshape(yarr.shape)
-                # If err_arr is only 1 dim, scale only, otherwise shift too
-                scale_only = err_arr.ndim == 1
                 if err_arr is not None:
+                    # If err_arr is only 1 dim, scale only, otherwise shift too
+                    scale_only = err_arr.ndim == 1
                     err_arr = normalizer(
                         err_arr.reshape(-1, 1), scale_only=scale_only
                 ).reshape(err_arr.shape)
