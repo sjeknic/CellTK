@@ -491,8 +491,16 @@ class PlotHelper:
         :raises AssertionError: If any item in arrays has more than 3 columns.
         :raises AssertionError: If figsize is not a tuple of length two.
         """
-        # Format inputs - should be cells x features
+        # Format inputs - cast to np.ndarray as needed
         if x_arrays and y_arrays: assert len(x_arrays) == len(y_arrays)
+        # Plotly will not accept int or float for go.Scatter
+        _t = (np.integer, np.float, int, float)
+        if any(isinstance(a, _t) for a in x_arrays):
+            x_arrays = [np.array(x) for x in x_arrays
+                        if not isinstance(x, np.ndarray)]
+        if any(isinstance(a, _t) for a in y_arrays):
+            y_arrays = [np.array(y) for y in y_arrays
+                        if not isinstance(y, np.ndarray)]
         assert all(isinstance(a, np.ndarray) for a in x_arrays)
         assert all(isinstance(a, np.ndarray) for a in y_arrays)
         assert len(figsize) == 2
