@@ -121,7 +121,7 @@ def _idxs_to_labels(trace: np.ndarray,
 
 
 def _labels_to_idxs(labels: np.ndarray) -> List[np.ndarray]:
-    """"""
+    """Idxs """
     if labels.ndim == 1: labels = labels[None, :]
     out = []
     for lab in labels:
@@ -190,7 +190,17 @@ class PeakHelper:
                    labels: np.ndarray,
                    tracts: List[List[int]] = []
                    ) -> List[List[float]]:
-        """"""
+        """Returns the difference between the maximum value in
+        a peak and the base of the peak. If tracts are provided
+        adjusts the base of each peak in the tract to be the base
+        of the tract.
+
+        :param traces:
+        :param labels:
+        :param tracts:
+
+        :return:
+        """
         idxs = _labels_to_idxs(labels)
         amps = self.amplitude(traces, labels)
 
@@ -204,7 +214,13 @@ class PeakHelper:
                traces: np.ndarray,
                labels: np.ndarray
                ) -> List[List[int]]:
-        """Total peak length"""
+        """Returns the length of each peak.
+
+        :param traces:
+        :param labels:
+
+        :return:
+        """
         out = []
         for lab in labels:
             out.append(self._length(lab))
@@ -218,7 +234,16 @@ class PeakHelper:
               relative: float = 0.5,
               absolute: float = None
               ) -> List[List[float]]:
-        """"""
+        """Not yet complete.
+
+        :param traces:
+        :param labels:
+        :param tracts:
+        :param relative:
+        :param absolute:
+
+        :return:
+        """
         raise NotImplementedError
         idxs = _labels_to_idxs(labels)
         amps = self.amplitude(traces, labels)
@@ -234,9 +259,14 @@ class PeakHelper:
                      traces: np.ndarray,
                      labels: np.ndarray,
                      ) -> List[List[float]]:
-        """
-        Inverse of the absolute value of the Pearson's correlation
-        coefficient.
+        """Returns inverse of the absolute value of the
+        Pearson's correlation coefficient. Higher values
+        mean the peak is less linear.
+
+        :param traces:
+        :param labels:
+
+        :return:
         """
         out = []
         for trace, label in zip(traces, labels):
@@ -309,7 +339,7 @@ class PeakHelper:
         # # Relabel peaks to be sequential
         for i, lab in enumerate(labels):
             _lab = np.unique(lab[lab > 0])
-            if len(_lab) > 0 and (np.diff(_lab) > 1).any():
+            if len(_lab) > 0:
                 for n, l in enumerate(_lab):
                     n += 1  # peaks are 1-indexed
                     labels[i, lab == l] = n
@@ -367,7 +397,7 @@ class PeakHelper:
                     amplitude: List[float],
                     tract: List[List[int]]
                     ) -> List[float]:
-        """TODO: This doesn't work without tracts!!"""
+        """"""
         _edge_dist = 4
         out = []
         if tract:
@@ -435,7 +465,6 @@ class PeakHelper:
             else:
                 # Calculate crossing points
                 pass
-
 
     @staticmethod
     def _area_under_curve(trace: np.ndarray,
