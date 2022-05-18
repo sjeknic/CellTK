@@ -225,6 +225,7 @@ class PlotHelper:
                   err_estimator: Union[Callable, str, functools.partial] = None,
                   normalizer: Union[Callable, str] = None,
                   colors: Union[str, Collection[str]] = None,
+                  alpha: float = 1.0,
                   time: Union[Collection[np.ndarray], np.ndarray] = None,
                   legend: bool = True,
                   figure: Union[go.Figure, go.FigureWidget] = None,
@@ -269,6 +270,7 @@ class PlotHelper:
         :param colors: Name of a color palette or map to use. Searches first
             in seaborn/matplotlib, then in Plotly to find the color map. If
             not provided, the color map will be glasbey.
+        :param alpha: Opacity of the line colors.
         :param time: Time axis for the plot. Must be the same size as the
             second dimension of arrays.
         :param legend: If False, no legend is made on the plot.
@@ -304,7 +306,7 @@ class PlotHelper:
         assert len(figsize) == 2
 
         # Convert any inputs that need converting
-        colors = self._build_colormap(colors, len(arrays))
+        colors = self._build_colormap(colors, len(arrays), alpha)
         if normalizer: normalizer = self._build_normalizer_func(normalizer)
         if estimator: estimator = self._build_estimator_func(estimator)
         if err_estimator: err_estimator = self._build_estimator_func(err_estimator)
