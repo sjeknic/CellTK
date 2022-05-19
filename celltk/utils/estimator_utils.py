@@ -36,6 +36,7 @@ def bootstrap_estimator(arr: np.ndarray,
     assert ci <= 1 and ci >= 0
     ci *= 100
 
+    # Sample the boostrap population
     boot = get_bootstrap_population(arr, reps)
 
     if ignore_nans:
@@ -43,10 +44,11 @@ def bootstrap_estimator(arr: np.ndarray,
     else:
         func = np.percentile
 
+    # Calculate bounds
     low_end = func(boot, 50. - ci / 2., axis=ax, keepdims=True)
     hi_end = func(boot, 50. + ci / 2., axis=ax, keepdims=True)
 
-    return np.vstack((low_end, hi_end))
+    return np.vstack((hi_end, low_end))
 
 
 def fraction_of_total(arr: np.ndarray,
