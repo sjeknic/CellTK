@@ -32,7 +32,7 @@ class TestUPeak():
         arr = np.load(os.path.abspath(self.data_path))
 
         # Predict and plot
-        out = upeak.predict(arr, roi=(0, 1, 2))
+        upeak.predict(arr, roi=(1))
 
 
 class TestPeakSegmentation():
@@ -48,10 +48,7 @@ class TestPeakSegmentation():
 
         assert self.arr.shape[:2] == self.pred.shape[:2]
 
-        out = segment_peaks_agglomeration(self.arr, self.pred)
+        # Only pass the peak value
+        out = segment_peaks_agglomeration(self.arr, self.pred[..., 1])
 
         assert out.shape == self.arr.shape
-
-if __name__ == '__main__':
-    #TestUPeak().test_upeak_model_creation()
-    TestPeakSegmentation()

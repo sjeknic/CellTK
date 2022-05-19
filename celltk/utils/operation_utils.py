@@ -1,5 +1,5 @@
 import warnings
-from typing import Dict, Generator, Tuple, List, Iterable, Union
+from typing import Dict, Generator, Tuple, List, Iterable, Union, Collection
 
 import numpy as np
 import pywt
@@ -20,7 +20,7 @@ from celltk.utils._types import Mask, Track
 
 def gray_fill_holes(labels: np.ndarray) -> np.ndarray:
     """
-    Faster (but hopefully identical) to the CellTK version
+    Fills holes in a non-binary image.
     """
     fil = sitk.GrayscaleFillholeImageFilter()
     filled = sitk.GetArrayFromImage(
@@ -36,7 +36,7 @@ def gray_fill_holes(labels: np.ndarray) -> np.ndarray:
 
 def dilate_sitk(labels: np.ndarray, radius: int) -> np.ndarray:
     """
-    Direct copy from CellTK. Should dilate images
+    Grayscale dilation of images.
     """
     slabels = sitk.GetImageFromArray(labels)
     gd = sitk.GrayscaleDilateImageFilter()
@@ -129,7 +129,8 @@ def _casting_up(inp: Union[str, int], out: Union[str, int]) -> bool:
 
 
 def get_image_pixel_type(image: Union[np.ndarray, sitk.Image]) -> str:
-    """"""
+    """Returns the numpy data type or SimpleITK pixel type of the
+    input image as a string."""
     _np_dtypes = _np_types()
     _sitk_dtypes = _sitk_types()
 
@@ -155,7 +156,11 @@ def cast_sitk(image: sitk.Image,
               req_type: str,
               cast_up: bool = False
               ) -> sitk.Image:
-    """"""
+    """Casts a SimpleITK image to a different pixel type.
+
+    :param req_type: Desired SimpleITK pixel type.
+    :param cast_up: If True, pixels can be cast to a type with
+        higher precision (i.e. sitk.sitkInt16 -> sitk.sitkInt32)"""
     # Get the relevant types
     # This returns an integer of the required type
     input_type = _sitk_enum_to_string(image.GetPixelIDValue())
@@ -194,9 +199,6 @@ def _close_border_holes(array: np.ndarray,
         if len(holes):
             # Find holes split them up to be unique
             diffs = np.ediff1d(holes, to_begin=1)
-            nonzero_diffs = np.ediff1d(holes, to_begin=1)
-
-
             hole_idxs = np.split(holes, np.where(diffs > 1)[0])
 
             # Fill them in
@@ -216,7 +218,10 @@ def sitk_binary_fill_holes(labels: np.ndarray,
                            in_place: bool = True,
                            **kwargs
                            ) -> np.ndarray:
-    """
+    """Fills holes in a binary image. If fill border is true, uses an iterative
+    heuristic strategy to determine if border holes belong to an object and
+    fills them if they do.
+
     TODO:
         - Add lots of options
         - Add VoteIterativeHoleFilling
@@ -267,7 +272,9 @@ def ndi_binary_fill_holes(labels: np.ndarray,
                           max_length: int = 45,
                           in_place: bool = False,
                           ) -> np.ndarray:
-    """"""
+    """Fills holes in a binary image. If fill border is true, uses an iterative
+    heuristic strategy to determine if border holes belong to an object and
+    fills them if they do."""
     labels = ndi.binary_fill_holes(labels, get_binary_footprint(kernel_radius))
 
     if fill_border:
@@ -288,10 +295,10 @@ def mask_to_seeds(mask: np.ndarray,
                   output: str = 'mask',
                   binary: bool = True
                   ) -> Union[np.ndarray, list]:
-    """Find centroid of all objects and return, either as list of points or labeled mask
-    If binary, all seeds are 1, otherwise, preserve labels
+    """Find centroid of all objects and return, either as list of points
+    or labeled mask. If binary, all seeds are 1, otherwise, preserves labels.
 
-    TOOD:
+    TODO:
         - Make the input options actually do something
     """
     if method == 'sitk':
@@ -317,12 +324,10 @@ def mask_to_seeds(mask: np.ndarray,
 
 
 def track_to_mask(track: Track, idx: np.ndarray = None) -> Mask:
-    """
-    Gives Track with parent values filled in by closest neighbor
+    """Gives Track with parent values filled in by closest neighbor.
 
-    Args:
-        - track
-        - idx: locations of parent values to fill in
+    :param track:
+    :param idx: locations of parent values to fill in
     """
     if idx is None: idx = track < 0
     ind = ndi.distance_transform_edt(idx,
@@ -333,8 +338,8 @@ def track_to_mask(track: Track, idx: np.ndarray = None) -> Mask:
 
 
 def parents_from_track(track: Track) -> Dict[int, int]:
-    """
-    Returns dictionary of {daughter_id: parent_id}
+    """Returns dictionary of {daughter_id: parent_id} from the
+    input Track.
     """
     # Parents are negative
     div_mask = (track * -1) > 0
@@ -348,8 +353,8 @@ def parents_from_track(track: Track) -> Dict[int, int]:
 
 
 def track_to_lineage(track: Track) -> np.ndarray:
-    """
-    Given a set of track images, reconstruct all the lineages
+    """Given a set of track images, reconstruct all the
+    cell lineages.
     """
     # Use cells to fill in info in lineage
     cells = np.unique(track[track > 0])
@@ -377,8 +382,8 @@ def track_to_lineage(track: Track) -> np.ndarray:
 def lineage_to_track(mask: Mask,
                      lineage: np.ndarray
                      ) -> Track:
-    """
-    Each mask in each frame should have a pixel == -1 * parent
+    """Given a Mask and a cell lineage, marks pixels in the Mask
+    to create the representative Track.
 
     TODO:
         - This won't work if area(region) <= ~6, depending on shape
@@ -399,7 +404,7 @@ def lineage_to_track(mask: Mask,
 
 
 def label_by_parent(mask: Mask, lineage: np.ndarray) -> Mask:
-    """Replaces daughter cell labels with their parent label
+    """Replaces daughter cell labels with their parent label.
 
     TODO:
         - This could be substantially sped up using a 1D search
@@ -417,7 +422,7 @@ def get_cell_index(cell_id: int,
                    position_id: int = None,
                    position_array: np.ndarray = None
                    ) -> int:
-    """"""
+    """Returns the index of the centroid of a specific cell."""
     cell_index = np.where(label_array == cell_id)[0]
     if len(np.unique(cell_index)) > 1:
         # Greater than one instance found
@@ -440,14 +445,18 @@ def get_cell_index(cell_id: int,
 
 
 def sliding_window_generator(arr: np.ndarray, overlap: int = 0) -> Generator:
-    """
-    overlap: int(amount of frames to overlap between passing)
-    e.g. overlap = 1: [0, 1], [1, 2], [2, 3], [3, 4]
-         overlap = 2: [0, 1, 2], [1, 2, 3], [2, 3, 4]
+    """Creates a generator for slices from array with an arbitrary amount
+    of overlap for successive slices.
 
-    NOTE: Overlaps get passed as a stack, not as separate args.
+    :param overlap: Number of slices to overlap in each returned array.
+        e.g. overlap = 1: [0, 1], [1, 2], [2, 3], [3, 4],
+        overlap = 2: [0, 1, 2], [1, 2, 3], [2, 3, 4]
+
+    NOTE:
+        - Overlaps get passed as a stack, not as separate args.
           i.e. if overlap = 1, image.shape = (2, h, w)
-    NOTE: If memory is an issue here, can probably manually count the indices
+    NOTE:
+        - If memory is an issue here, can probably manually count the indices
           and make a generator that way, but it will be much slower.
 
     TODO:
@@ -470,7 +479,7 @@ def data_from_regionprops_table(regionprops: Dict[int, dict],
                                 frames: List[int] = None,
                                 ) -> Union[np.ndarray, float]:
     """Given a list of regionprops data, return data for specified metrics
-    at certain label, frame indices"""
+    at specific label, frame indices"""
     if labels is not None or frames is not None:
         assert len(labels) == len(frames)
         out = []
@@ -500,11 +509,13 @@ def data_from_regionprops_table(regionprops: Dict[int, dict],
 def paired_dot_distance(par_xy: np.ndarray,
                         dau_xy: np.ndarray
                         ) -> Tuple[np.ndarray]:
-    """Calculates error for normalized dot distance and error along line
-
+    """Calculates error for normalized dot distance and error along line.
+    Used by ``Tracker.detect_cell_division`` to evaluate possible parent,
+    daughter combinations based on the final position of the cells.
 
     NOTE:
         - x, y are switched in this function relative to the image.
+
     TODO:
         - Better docstring
     """
@@ -561,10 +572,8 @@ def shift_array(array: np.ndarray,
                 shift: tuple,
                 fill: float = np.nan,
                 ) -> np.ndarray:
-    """
-    Shifts an array and fills in the values or crops to size
-
-    See: https://stackoverflow.com/questions/30399534/shift-elements-in-a-numpy-array
+    """Shifts an array and fills in the values or crops to size.
+    See: https://stackoverflow.com/questions/30399534/
     """
     result = np.empty_like(array)
 
@@ -606,11 +615,10 @@ def crop_array(array: np.ndarray,
                crop_vals: Tuple[int] = None,
                crop_area: float = 0.6
                ) -> np.ndarray:
-    """
-    Crops an image to the specified dimensions
-    if crop_vals is None - use crop area to calc crop vals
+    """Crops an image to the specified dimensions.
 
     TODO:
+        - crop_vals is None - use crop area to calc crop vals
         - There must be a much neater way to write this function
         - Incorporate crop_area
     """
@@ -643,8 +651,8 @@ def crop_array(array: np.ndarray,
 def voronoi_boundaries(seed: np.ndarray,
                        thin: bool = False,
                        thick: bool = False,) -> np.ndarray:
-    """
-    Calculate voronoi boundaries, and return as mask to set pixels to 0.
+    """Calculate voronoi boundaries for the given seed array
+    and return as binary mask.
     """
     bound = segm.find_boundaries(mahotas_seg.gvoronoi(seed))
 
@@ -661,10 +669,10 @@ def skimage_level_set(shape: Tuple[int],
                       size: (float, int) = None,
                       center: Tuple[int] = None,
                       ) -> np.ndarray:
-    """
-    Wrapper for levelset functions in skimage.segmentation
+    """Wrapper for levelset functions in skimage.segmentation
 
-    size refers to square_size for checkerboard or radius for disk
+    :params size: Refers to ``square_size`` for checkerboard or
+        ``radius`` for disk
     """
     if levelset == 'checkerboard':
         size = int(size) if size else 5  # default for skimage
@@ -684,8 +692,8 @@ def get_binary_footprint(rank: int = 2, connectivity: int = 1) -> np.ndarray:
 
 
 def match_labels_linear(source: np.ndarray, dest: np.ndarray) -> np.ndarray:
-    """
-    Should transfer labels from source to dest based on area overlap
+    """Transfers labels from source to dest based on area overlap between
+    objects
 
     TODO:
         - Should there be a threshold of the overlapping amount?
@@ -741,7 +749,8 @@ def wavelet_background_estimate(image: np.ndarray,
                                 blur: bool = False,
                                 axes: Tuple[int] = (-2, -1)
                                 ) -> np.ndarray:
-    """"""
+    """Uses wavelet reconstruction of the image to estimate
+    the background."""
     # Get approximation and detail coeffecients
     coeffs = pywt.wavedec2(image, wavelet, mode=mode,
                            level=level, axes=axes)
@@ -772,7 +781,7 @@ def wavelet_noise_estimate(image: np.ndarray,
                            thres: int = 2,
                            axes: Tuple[int] = (-2, -1),
                            ) -> np.ndarray:
-    """"""
+    """Uses wavelet reconstruction of the image to estimate noise."""
     # Get approximation and detail coeffecients
     coeffs = pywt.wavedec2(image, wavelet, mode=mode,
                            level=level, axes=axes)
@@ -795,7 +804,9 @@ def wavelet_noise_estimate(image: np.ndarray,
 
 
 class PadHelper():
-    """
+    """Pads images to be even for wavelet reconstruction. In the future,
+    may include more generalizeable padding.
+
     TODO:
         - Add more complex padding options (e.g. pad both side, etc)
         - Move this function to utils or something
@@ -871,11 +882,31 @@ class PadHelper():
         return pads_r
 
 
+def stack_pad(arrays: Collection[np.ndarray],
+              axis: int = 0,
+              pad_value: float = np.nan
+              ) -> np.ndarray:
+    """Stacks arrays along axis, padding shorter arrays with ``pad_value``.
+
+    TODO:
+        - Expand to work for arbitrary dimensional arrays
+    """
+    # axis = 0 is row stack, axis = 1 is column stack
+    # assume all input arrays only need to be padded on one dimension
+    arrays = [np.squeeze(a) for a in arrays]
+    assert all(a.ndim in (0, 1) for a in arrays)
+    max_len = max(len(a) for a in arrays)
+    arrays = [np.pad(a, (0, max_len-len(a)),
+                     constant_values=pad_value)
+              for a in arrays]
+
+    return np.stack(arrays, axis=axis)
+
+
 def _remove_small_holes_keep_labels(image: np.ndarray,
                                     size: float
                                     ) -> np.ndarray:
-    """
-    Wrapper for skimage.morphology.remove_small_holes
+    """Wrapper for skimage.morphology.remove_small_holes
     to keep the same labels on the images.
 
     Probably is not a good way to do this, but kept for
@@ -891,8 +922,7 @@ def _remove_small_holes_keep_labels(image: np.ndarray,
 
 
 def _gray_fill_holes_celltk(labels):
-    """
-    Direct copy from CellTK. Should not be used in Pipeline.
+    """Direct copy from CellTK. Should not be used in Pipeline.
     Kept for now for debugging purposes.
     """
     fil = sitk.GrayscaleFillholeImageFilter()

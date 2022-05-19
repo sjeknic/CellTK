@@ -13,7 +13,7 @@ import celltk.utils.filter_utils as filtu
 from celltk.utils.info_utils import nan_helper_2d, get_split_idxs, split_array
 from celltk.utils.unet_model import UPeakModel
 from celltk.utils.peak_utils import (segment_peaks_agglomeration,
-                                     PeakMetrics)
+                                     PeakHelper)
 from celltk.utils.metric_utils import active_cells, cumulative_active
 
 
@@ -531,9 +531,9 @@ class ConditionArray():
 
         :param mask: A boolean mask to filter cells with. Can be 1D, 2D or 5D.
         :param key: Name of a saved mask to use for filtering cells. Overwrites
-            msak if provided.
+            mask if provided.
         :param delete: If True, cells are removed in the base array. Otherwise
-        they are only removed in the array that is returned.
+            they are only removed in the array that is returned.
 
         :return: array with cells designated by maks or key removed.
         :rtype: np.ndarray
@@ -680,7 +680,7 @@ class ConditionArray():
             many frames from start of trace. If tuple, uses passed
             frames.
         :param key: If given, saves the mask in ConditionArray as key.
-        :param *args: passed to function
+        :param args: passed to function
         :param kwargs: passed to function
 
         :return: 2D boolean array that masks cells outside filter
@@ -864,7 +864,7 @@ class ConditionArray():
         assert data.ndim == 2
 
         # Make the destination metric slots and keys
-        slots = ['slope_prob', 'plateau_prob']
+        slots = ['peak_prob']
         if segment:
             # Add the extra slot here
             self.add_metric_slots(slots + ['peaks'])
@@ -872,17 +872,16 @@ class ConditionArray():
             self.add_metric_slots(slots)
 
         base = self._get_key_components(key, 'metrics')
-        dest_keys = [base + tuple([s]) for s in slots]
+        dest_key = base + tuple(slots)
 
         # Initialize the UPeak model if needed
         if not model:
             model = UPeakModel(weight_path)
 
         # Get predictions of where peaks exist
-        predictions = model.predict(data, roi=(1, 2))  # slope, plateau
-        for i, d in enumerate(dest_keys):
-            self[d] = predictions[..., i]
-            if propagate: self.propagate_values(d, prop_to=propagate)
+        predictions = model.predict(data, roi=1)
+        self[dest_key] = predictions
+        if propagate: self.propagate_values(dest_key, prop_to=propagate)
 
         # Segment peaks if needed
         if segment:
@@ -906,7 +905,7 @@ class ConditionArray():
         :param value_key: Key to the traces used to calculate the peak
             metrics.
         :param metrics: Names of the metrics to use for segmentation. See
-            PeakMetrics in celltk.utils.peak_utils.
+            PeakHelper in celltk.utils.peak_utils.
         :param thresholds: Lower threshold for the metrics given. If a peak
             metric is less than the threshold, it will be removed. Must be the
             same length as metrics.
@@ -927,8 +926,8 @@ class ConditionArray():
         traces = self[value_key]
         labels = self[peak_key]
 
-        # Filter the peaks with PeakMetrics
-        filtered = PeakMetrics().filter_peaks(traces, labels, metrics,
+        # Filter the peaks with PeakHelper
+        filtered = PeakHelper().filter_peaks(traces, labels, metrics,
                                               thresholds, kwargs)
 
         # Apply the values
@@ -1134,7 +1133,7 @@ class ExperimentArray():
                 pass
 
     def load_condition(self,
-                       path: str,
+                       array: Union[str, ConditionArray],
                        name: str = None,
                        pos_id: int = None,
                        ) -> None:
@@ -1142,7 +1141,7 @@ class ExperimentArray():
         The new ConditionArray gets saved as name + pos_id if provided, otherwise
         uses the name saved in the hdf5 file.
 
-        :param path: Path to the hdf5 file to load
+        :param array: ConditionArray or path to the hdf5 file with ConditionArray
         :param name: Name of the ConditionArray to be loaded.
         :param pos_id: Unique identifier for the ConditionArray.
 
@@ -1150,10 +1149,14 @@ class ExperimentArray():
 
         TODO:
             - Add function to walk dirs, and load hdf5 files, with uniq names
-            See Orchestrator.build_experiment_file()
+              See Orchestrator.build_experiment_file()
         """
-        # Get array and key
-        arr = ConditionArray.load(path)
+        if isinstance(array, str):
+            # Get array and key
+            arr = ConditionArray.load(array)
+        else:
+            arr = array
+
         name = name if name else arr.name
         pos_id = pos_id if pos_id else arr.pos_id
         if pos_id:
@@ -1315,7 +1318,7 @@ class ExperimentArray():
 
         :param mask: A boolean mask to filter cells with. Can be 1D, 2D or 5D.
         :param key: Name of a saved mask to use for filtering cells. Overwrites
-            msak if provided.
+            mask if provided.
         :param delete: If True, cells are removed in the base array. Otherwise
             they are only removed in the array that is returned.
         :param args: Passed to filtering function.
@@ -1378,7 +1381,7 @@ class ExperimentArray():
 
         NOTE:
             - Any masks that have been saved in the individual
-            ConditionArrays will be lost.
+              ConditionArrays will be lost.
 
         TODO:
             - Add a way to pass lists of keys to merge
@@ -1480,7 +1483,8 @@ class ExperimentArray():
         '''
         model = UPeakModel(weight_path)
         for v in self.sites.values():
-            v.predict_peaks(key, model, propagate=propagate)
+            v.predict_peaks(key, model, propagate=propagate,
+                            segment=segment, **kwargs)
 
     def filter_peaks(self,
                      value_key: Tuple[int, str],
@@ -1497,7 +1501,7 @@ class ExperimentArray():
         :param value_key: Key to the traces used to calculate the peak
             metrics.
         :param metrics: Names of the metrics to use for segmentation. See
-            PeakMetrics in celltk.utils.peak_utils.
+            PeakHelper in celltk.utils.peak_utils.
         :param thresholds: Lower threshold for the metrics given. If a peak
             metric is less than the threshold, it will be removed. Must be the
             same length as metrics.

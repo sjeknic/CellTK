@@ -52,7 +52,7 @@ def predict_peaks(array: np.ndarray,
                   segment: bool = True,
                   roi: Union[int, Tuple[int]] = (1, 2),
                   save_path: str = None,
-                  ) -> None:
+                  ) -> np.ndarray:
     """Predicts peaks in arbitrary data using UPeak.
 
     :param array: Data of shape n_samples x n_timepoints. Each sample will

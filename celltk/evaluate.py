@@ -17,7 +17,8 @@ class Evaluator(BaseEvaluator):
                         track: Track,
                         array: Arr
                         ) -> Track:
-        """"""
+        """Creates a track from the input track
+        that only includes the cells that are present in array."""
         # Figure out all the cells that were kept
         kept_cells = np.unique(array[:, :, 'label']).astype(int)
 
@@ -46,10 +47,8 @@ class Evaluator(BaseEvaluator):
                                channel: str = None
                                ) -> Image:
         """
-        Should make a montage and follow the centroid of a single cell
-
-        NOTE:
-            - Cells very close to edge might raise IndexError
+        Crops a window around the coordinates of a single cell
+        in array.
         """
         # Simpler if it's limited to even numbers only
         assert all([not (w % 2) for w in window_size])
@@ -58,7 +57,10 @@ class Evaluator(BaseEvaluator):
         region = array.regions[0] if not region else region
         channel = array.channels[0] if not channel else channel
         label_array = array[region, channel, 'label']
-        position_array = array[region, channel, 'position_id']
+        if position_id is not None:
+            position_array = array[region, channel, 'position_id']
+        else:
+            position_array = None
         cell_index = get_cell_index(cell_id, label_array,
                                     position_id, position_array)
 
@@ -92,7 +94,7 @@ class Evaluator(BaseEvaluator):
                        boundaries: bool = False,
                        mode: str = 'inner'
                        ) -> Image:
-        """"""
+        """Overlays the labels of objects over the reference image."""
         if (track < 0).any():
             track = track_to_mask(track)
         if boundaries:

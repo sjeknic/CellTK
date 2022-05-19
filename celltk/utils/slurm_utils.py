@@ -81,7 +81,7 @@ class SlurmController(JobController):
     TODO:
         - Add ability to set maximum number of submissions
         - Add ability to re-submit failed jobs
-        - Add output of summary statistics regularly.
+        - Save current status and pick up from left off
     """
     __name__ = 'SlurmController'
     _submit_delay = 5  # Wait between commands in sec

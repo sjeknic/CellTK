@@ -38,8 +38,22 @@ class Processor(BaseProcessor):
                                    align_with: str = 'image',
                                    crop: bool = True
                                    ) -> Same:
-        """
-        Shifts and crops images based on regi.phase_cross_correlation.
+        """Uses phase cross-correlation to shift the images to align them.
+        Optionally can crop the images to align. Align with can be used
+        to specify which of the inputs to use. Uses the first stack in the
+        given list.
+
+        :param image: List of image stacks to be aligned.
+        :param mask: List of mask stacks to be aligned.
+        :param track: List of track stacks to be aligned:
+        :param align_with: Can be one of 'image', 'mask', or 'track'. Defines
+            which of the input stacks should be used for alignment.
+        :param crop: If True, the aligned stacks are cropped based on the largest
+            frame to frame shifts.
+
+        :return: Aligned input stack.
+
+        :raises AssertionError: If input stacks have different shapes.
 
         TODO:
             - Needs to confirm image shapes match before cropping,
@@ -96,7 +110,16 @@ class Processor(BaseProcessor):
                     layout: Tuple[int] = None,
                     border_value: Union[int, float] = 0.,
                     ) -> Image:
-        """"""
+        """Tiles image stacks side by side to produced a single image. Attempts
+        to do some rescaling to match intensities first, but likely will not
+        produce good results for images with large differences in intensity.
+
+        :param image: List of image stacks to be tiled.
+        :param mask: List of mask stacks to be tiled.
+        :param track: List of track stacks to be tiled:
+        :param layout:
+        :param border_value: Value of the default pixels.
+        """
         # TODO: Add scaling of intensity and dimension
         # TODO: Add crop
         fil = sitk.TileImageFilter()
@@ -125,7 +148,13 @@ class Processor(BaseProcessor):
                         dtype: type = np.float32
                         ) -> Image:
         """
-        Multidimensional Gaussian filter.
+        Applies a multidimensional Gaussian filter to the image.
+
+        :param image:
+        :param sigma:
+        :param dtype:
+
+        :return:
 
         TODO:
             - Test applying to a stack with sigma = (s1, s1, 0)
@@ -139,7 +168,7 @@ class Processor(BaseProcessor):
                       image: Image,
                       iterations: int = 7
                       ) -> Image:
-        """"""
+        """Applies a binomial blur to the image."""
         fil = sitk.BinomialBlurImageFilter()
         fil.SetRepetitions(iterations)
 
@@ -167,7 +196,7 @@ class Processor(BaseProcessor):
                        mode: str = 'reflect',
                        cval: int = 0
                        ) -> Image:
-        """"""
+        """Applies a multidimensional uniform filter to the input image."""
         return ndi.uniform_filter(image, size=size,
                                   mode=mode, cval=cval)
 
@@ -179,10 +208,8 @@ class Processor(BaseProcessor):
                                          nansafe: bool = False
                                          ) -> Image:
         """
-        Estimate background intensity by rolling/translating a kernel.
-
-        TODO:
-            - Check CellTK, this function did a lot more for some reason
+        Estimate background intensity by rolling/translating a kernel, and
+        subtract from the input image.
         """
         bg = rest.rolling_ball(image, radius=radius,
                                kernel=kernel, nansafe=nansafe)
@@ -200,10 +227,9 @@ class Processor(BaseProcessor):
                                         save_bias_field: bool = False
                                         ) -> Image:
         """
-        Downsampling image first decreases computation time.
-
-        TODO:
-            - Add subsampling of the image
+        Applies N4 bias field correction to the image. Can optionally return
+        the calculated log bias field, which can be applied to the image with
+        ``Processor.apply_log_bias_field``.
         """
         # Check the inputs
         if (image < 1).any():
@@ -273,7 +299,8 @@ class Processor(BaseProcessor):
                              image: Image,
                              bias_field: Image
                              ) -> Image:
-        """Basically N4 without the calculation"""
+        """Applies a log bias field (for example, calculated using N4
+        bias illumination correction) to the input image."""
         return image / np.exp(bias_field)
 
     @ImageHelper(by_frame=True)
@@ -283,7 +310,8 @@ class Processor(BaseProcessor):
                                         time_step: float = 0.125,
                                         conductance: float = 1.
                                         ) -> Image:
-        """"""
+        """Applies curvature anisotropic diffusion blurring to the image. Useful
+        for smoothing out noise, while preserving the edges of objects."""
         # Set up the filter
         fil = sitk.CurvatureAnisotropicDiffusionImageFilter()
         fil.SetNumberOfIterations(iterations)
@@ -308,6 +336,9 @@ class Processor(BaseProcessor):
                                   sigma: float = 5.0
                                   ) -> Image:
         """
+        Calculates gradients and inverts them on the range [0, 1],
+        such that pixels close to borders have values close to 0, while
+        all other pixels have values close to 1.
         """
         return util.img_as_uint(
             segm.inverse_gaussian_gradient(image, alpha, sigma)
@@ -319,9 +350,9 @@ class Processor(BaseProcessor):
                              orientation: str = 'both'
                              ) -> Image:
         """
-        Applies Sobel filter
-
-        orientation can be 'h', 'v', or 'both'
+        Applies Sobel filter for edge detection. Can detect
+        edges in only one dimension by using the orientation
+        argument.
 
         TODO:
             - Could be run faster on whole stack
@@ -348,14 +379,18 @@ class Processor(BaseProcessor):
     def sobel_edge_magnitude(self,
                              image: Image,
                              ) -> Image:
-        """"""
+        """
+        Similar to ``Processor.sobel_edge_detection``, but returns
+        the magnitude of the gradient at each pixel, without regard
+        for direction.
+        """
         y = ndi.sobel(image, axis=1)
         x = ndi.sobel(image, axis=0)
         return np.hypot(x, y)
 
     @ImageHelper(by_frame=True)
     def roberts_edge_detection(self, image: Image) -> Image:
-        """"""
+        """Applies Roberts filter for edge detection."""
         return filt.roberts(image)
 
     @ImageHelper(by_frame=True)
@@ -364,7 +399,7 @@ class Processor(BaseProcessor):
                                   sigma: float = 1.,
                                   use_direction: bool = True
                                   ) -> Image:
-        """"""
+        """Applies recursive Gaussian filters to detect edges."""
         # Set up the filter
         fil = sitk.GradientRecursiveGaussianImageFilter()
         fil.SetSigma(sigma)
@@ -385,7 +420,8 @@ class Processor(BaseProcessor):
                                    image: Image,
                                    sigma: float = 1.,
                                    ) -> Image:
-        """"""
+        """Applies recursive Gaussian filters to detect edges
+        and returns the gradient magnitude at each pixel."""
         # Only constraint on type is to be Real
         fil = sitk.GradientMagnitudeRecursiveGaussianImageFilter()
         fil.SetSigma(sigma)
@@ -405,14 +441,17 @@ class Processor(BaseProcessor):
                                   k2: float = None
                                   ) -> Image:
         """
-        method = sigmoid, exp, reciprocal
-
-        K1 is the minimum value along the contour
-        K2 is the avg value inside the countour
-        K1 should be > K2
-
-        alpha should be (K2 - K1) / 6
-        beta should be (K1 + K2) / 2
+        Calculates an edge potential image from images with
+        edges highlighted. An edge potential image has values
+        close to 0 at edges, and values close to 1 else where.
+        The quality of the edge potential image depends highly on the
+        input image and the function/parameters used. The default
+        function is 'sigmoid', which accepts two parameters to
+        define the sigmoid function, alpha and beta. If you don't
+        already know good values, heuristics can be used to estimate
+        alpha and beta based on the minimum value along an edge (k1)
+        and the average value away from an edge (k2). If no parameters
+        are supplied, this function will attempt to guess.
         """
         # Cast to float first to avoid precision errors
         image = util.img_as_float32(image)
@@ -470,7 +509,8 @@ class Processor(BaseProcessor):
                                  use_euclidian: bool = False,
                                  use_image_spacing: bool = False
                                  ) -> Image:
-        """"""
+        """Applies a filter to calculate the distance map of a binary
+        image with objects. The distance inside objects is negative."""
         # Needs to be integer image in most cases
         img = sitk.GetImageFromArray(image)
         img = cast_sitk(img, 'sitkUInt16')
@@ -488,6 +528,9 @@ class Processor(BaseProcessor):
                            ref_frame: int = 0,
                            ) -> Image:
         """
+        Rescales input image frames to match the intensity
+        of a reference image. By default, the reference image
+        is the first frame of the input image stack.
         """
         # Get frame that will set the histogram
         reference_frame = image[ref_frame]
@@ -520,6 +563,8 @@ class Processor(BaseProcessor):
                                     blur: bool = False,
                                     ) -> Image:
         """
+        Uses discrete wavelet transformation to estimate and remove
+        the background from an image.
         """
         # Pad image to even before starting
         padder = PadHelper(target='even', axis=[1, 2], mode='edge')
@@ -549,6 +594,8 @@ class Processor(BaseProcessor):
                                level: int = None,
                                ) -> Image:
         """
+        Uses discrete wavelet transformation to estimate and remove
+        noise from an image.
         """
         # Pad image to even before starting
         padder = PadHelper(target='even', axis=[1, 2], mode='edge')
@@ -577,9 +624,17 @@ class Processor(BaseProcessor):
                      classes: int = 3,
                      ) -> Image:
         """
-        roi - the prediction values are returned only for the roi
-        batch - number of frames passed to model. None is all of them.
-        classes - number of output categories from the model (has to match weights)
+        Uses a UNet-based neural net to predict the label of each pixel in the
+        input image. This function returns the probability of a specific region
+        of interest, not a labeled mask.
+
+        :param image:
+        :param weight_path:
+        :param roi:
+        :param batch:
+        :param classes:
+
+        :return:
         """
         _roi_dict = {'background': 0, 'bg': 0, 'edge': 1,
                      'interior': 2, 'nuc': 2, 'cyto': 2}
@@ -603,7 +658,7 @@ class Processor(BaseProcessor):
                                         weight_path=weight_path)
 
         # Pre-allocate output memory
-        if batch is None or batch <= image.shape[0]:
+        if batch is None or batch >= image.shape[0]:
             output = self.model.predict(image[:, :, :], roi=roi)
         else:
             arrs = np.array_split(image, image.shape[0] // batch, axis=0)

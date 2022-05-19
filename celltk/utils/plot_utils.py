@@ -3,6 +3,8 @@ import functools
 from typing import Collection, Union, Callable, Generator, Tuple
 
 import numpy as np
+import sklearn.base as base
+import sklearn.preprocessing as preproc
 import matplotlib.colors as mcolors
 import seaborn as sns
 import plotly.graph_objects as go
@@ -61,6 +63,29 @@ class PlotHelper:
                       'marker', 'opacity', 'pointpos', 'points', 'span',
                       'width', 'hoverinfo')
     _bar_kwargs = ('hoverinfo', 'marker', 'width')
+
+    class _Normalizer:
+        def __init__(self, fitter: base.BaseEstimator) -> None:
+            self._fitter = fitter()
+            self._fitter_type = self._fitter.__str__().split('(')[0]
+            self._fit = False
+
+        def __call__(self, array: np.ndarray, scale_only: bool = False):
+            """Fits the scaler on the first call and only applies
+            on all subsequent calls."""
+            if array is None:
+                return
+            elif self._fit:
+                if scale_only:
+                    if self._fitter_type in ('MinMaxScaler'):
+                        return array * self._fitter.scale_
+                    else:
+                        return array / self._fitter.scale_
+                else:
+                    return self._fitter.transform(array)
+            else:
+                self._fit = True
+                return self._fitter.fit_transform(array)
 
     def _build_colormap(self,
                         colors: Union[str, Collection[str]],
@@ -159,6 +184,7 @@ class PlotHelper:
                               func: Union[Callable, str, functools.partial],
                               *args, **kwargs
                               ) -> functools.partial:
+        """"""
         if isinstance(func, functools.partial):
             # Assume user already made the estimator
             return func
@@ -175,20 +201,41 @@ class PlotHelper:
                 except AttributeError:
                     raise ValueError(f'Did not understand estimator {func}')
 
+    def _build_normalizer_func(self,
+                               func: Union[str, Callable]
+                               ) -> functools.partial:
+        """"""
+        if isinstance(func, Callable):
+            return func
+        elif isinstance(func, str):
+            if func == 'minmax': fitter = 'MinMax'
+            elif func == 'maxabs': fitter = 'MaxAbs'
+            elif func == 'standard': fitter = 'Standard'
+            elif func == 'robust': fitter = 'Robust'
+            else: raise ValueError(f'Did not understand normalizer {func}.')
+            fitter += 'Scaler'
+
+            fitter = getattr(preproc, fitter)
+            return self._Normalizer(fitter)
+
     def line_plot(self,
                   arrays: Collection[np.ndarray],
                   keys: Collection[str] = [],
                   estimator: Union[Callable, str, functools.partial] = None,
                   err_estimator: Union[Callable, str, functools.partial] = None,
+                  normalizer: Union[Callable, str] = None,
                   colors: Union[str, Collection[str]] = None,
-                  time: np.ndarray = None,
+                  alpha: float = 1.0,
+                  time: Union[Collection[np.ndarray], np.ndarray] = None,
                   legend: bool = True,
-                  figure: go.Figure = None,
+                  figure: Union[go.Figure, go.FigureWidget] = None,
+                  figsize: Tuple[int] = (None, None),
                   title: str = None,
                   x_label: str = None,
                   y_label: str = None,
                   x_limit: Tuple[float] = None,
                   y_limit: Tuple[float] = None,
+                  widget: bool = False,
                   **kwargs
                   ) -> Union[go.Figure, go.FigureWidget]:
         """
@@ -216,14 +263,21 @@ class PlotHelper:
             1D or 2D array. If output is 1D, errors will be symmetric
             If output is 2D, the first dimension is used for the high
             error and second dimension is used for the low error.
+        :param normalizer: If given, used to normalize the data after applying
+            the estimators. Normalizes the error as well. Can be 'minmax',
+            'maxabs', 'standard', 'robust', or a callable that inputs an array
+            and outputs an array of the same shape.
         :param colors: Name of a color palette or map to use. Searches first
             in seaborn/matplotlib, then in Plotly to find the color map. If
             not provided, the color map will be glasbey.
+        :param alpha: Opacity of the line colors.
         :param time: Time axis for the plot. Must be the same size as the
             second dimension of arrays.
         :param legend: If False, no legend is made on the plot.
         :param figure: If a go.Figure object is given, will be used to make
             the plot instead of a blank figure.
+        :param figsize: Height and width of the plot in pixels. Must be a tuple of
+            length two. To leave height or width unchanged, set as None.
         :param title: Title to add to the plot
         :param x_label: Label of the x-axis
         :param y_label: Label of the y-axis
@@ -231,6 +285,8 @@ class PlotHelper:
             the plot is saved as an HTML object.
         :param y_limit: Initial limits for the y-axis. Can be changed if
             the plot is saved as an HTML object.
+        :param widget: If True, returns a go.FigureWidget object instead of
+            a go.Figure object.
         :param kwargs: Depending on name, passed to the "line" keyword
             argument of go.Scatter or as keyword arguments for go.Scatter.
             The following kwargs are passed to "line": 'color', 'dash',
@@ -240,13 +296,18 @@ class PlotHelper:
 
         :raises AssertionError: If not all items in arrays are np.ndarray.
         :raises AssertionError: If any item in arrays is not two dimensional.
+        :raises AssertionError: If figsize is not a tuple of length two.
+        :raises TypeError: If time is not an np.ndarray or collection of
+            np.ndarray.
         """
         # Format inputs
         assert all([isinstance(a, np.ndarray) for a in arrays])
         assert all([a.ndim == 2 for a in arrays])
+        assert len(figsize) == 2
 
         # Convert any inputs that need converting
-        colors = self._build_colormap(colors, len(arrays))
+        colors = self._build_colormap(colors, len(arrays), alpha)
+        if normalizer: normalizer = self._build_normalizer_func(normalizer)
         if estimator: estimator = self._build_estimator_func(estimator)
         if err_estimator: err_estimator = self._build_estimator_func(err_estimator)
         line_kwargs = {k: v for k, v in kwargs.items()
@@ -255,7 +316,10 @@ class PlotHelper:
                   if k not in self._line_kwargs}
 
         # Build the figure and start plotting
-        fig = figure if figure else go.Figure()
+        if figure: fig = figure
+        elif widget: fig = go.FigureWidget()
+        else: fig = go.Figure()
+
         for idx, (arr, key) in enumerate(itertools.zip_longest(arrays, keys)):
             # Get the key
             if not key:
@@ -272,7 +336,24 @@ class PlotHelper:
             if estimator:
                 arr = estimator(arr)
                 if arr.ndim == 1: arr = arr[None, :]
-            x = time if time is not None else np.arange(arr.shape[1])
+
+            # normalizer can be used to set the range of arr and err_arr
+            if normalizer:
+                arr = normalizer(arr.reshape(-1, 1)).reshape(arr.shape)
+                if err_arr is not None:
+                    err_arr = normalizer(
+                        err_arr.reshape(-1, 1), scale_only=True
+                    ).reshape(err_arr.shape)
+
+            if time is None:
+                x = np.arange(arr.shape[1])
+            elif isinstance(time, (tuple, list)):
+                x = time[idx]
+            elif isinstance(time, np.ndarray):
+                x = time
+            else:
+                raise TypeError('Did not understand time of '
+                                f'type {type(time)}')
 
             lines = []
             _legend = True
@@ -302,10 +383,11 @@ class PlotHelper:
                                    showlegend=False, legendgroup=key,
                                    name=key, line=dict(color='rgba(255,255,255,0)'),
                                    hoverinfo='skip')
-                        )
+                    )
 
             fig.add_traces(lines)
 
+        # Upate the axes and figure layout
         self._default_axis_layout['title'].update({'text': x_label})
         fig.update_xaxes(**self._default_axis_layout)
         self._default_axis_layout['title'].update({'text': y_label})
@@ -314,22 +396,33 @@ class PlotHelper:
                           title=title,
                           xaxis_range=x_limit,
                           yaxis_range=y_limit)
+
+        # Set size only if not None, so as to not overwrite previous changes
+        h, w = figsize
+        if h: fig.update_layout(height=h)
+        if w: fig.update_layout(width=w)
+
         return fig
 
     def scatter_plot(self,
-                     arrays: Collection[np.ndarray],
+                     x_arrays: Collection[np.ndarray] = [],
+                     y_arrays: Collection[np.ndarray] = [],
                      keys: Collection[str] = [],
                      estimator: Union[Callable, str, functools.partial] = None,
                      err_estimator: Union[Callable, str, functools.partial] = None,
+                     normalizer: Union[Callable, str] = None,
                      colors: Union[str, Collection[str]] = None,
+                     alpha: float = 1.0,
                      symbols: Union[str, Collection[str]] = None,
                      legend: bool = True,
-                     figure: go.Figure = None,
+                     figure: Union[go.Figure, go.FigureWidget] = None,
+                     figsize: Tuple[int] = (None, None),
                      title: str = None,
                      x_label: str = None,
                      y_label: str = None,
                      x_limit: Tuple[float] = None,
                      y_limit: Tuple[float] = None,
+                     widget: bool = False,
                      **kwargs
                      ) -> Union[go.Figure, go.FigureWidget]:
         """
@@ -337,11 +430,10 @@ class PlotHelper:
         arrays. Each array is interpreted as a separate condition and is
         plotted in a different color or with a different marker.
 
-        :param arrays: List of arrays to plot. Assumed structure is n_cells x
-            n_features. If two features, first feature is plotted on the x-axis
-            and second feature on the y-axis. If one feature, data are plotted
-            on the y-axis and the x-axis is categorical. More than two features
-            is not currently supported.
+        :param x_arrays: List of arrays that set the x-coordinates to plot.
+            Each array is assumed to be a different condition.
+        :param y_arrays: List of arrays that set the y-coordinates to plot.
+            Each array is assumed to be a different condition.
         :param keys: Names corresponding to the data arrays. If not provided,
             the keys will be integers.
         :param estimator: Function for aggregating observations from multiple
@@ -360,13 +452,20 @@ class PlotHelper:
             error and second dimension is used for the low error. Only
             applies to the y-dimension. Horizontal error bars not currrently
             implemented.
+        :param normalizer: If given, used to normalize the data after applying
+            the estimators. Normalizes the error as well. Can be 'minmax' or
+            'maxabs', or a callable that inputs an array and outputs an array
+            of the same shape.
         :param colors: Name of a color palette or map to use. Searches first
             in seaborn/matplotlib, then in Plotly to find the color map. If
             not provided, the color map will be glasbey. Can also be list
             of named CSS colors or hexadecimal or RGBA strings.
+        :param alpha: Opacity of the marker fill colors.
         :param legend: If False, no legend is made on the plot.
         :param figure: If a go.Figure object is given, will be used to make
             the plot instead of a blank figure.
+        :param figsize: Height and width of the plot in pixels. Must be a tuple of
+            length two. To leave height or width unchanged, set as None.
         :param title: Title to add to the plot
         :param x_label: Label of the x-axis
         :param y_label: Label of the y-axis
@@ -374,6 +473,8 @@ class PlotHelper:
             the plot is saved as an HTML object.
         :param y_limit: Initial limits for the y-axis. Can be changed if
             the plot is saved as an HTML object.
+        :param widget: If True, returns a go.FigureWidget object instead of
+            a go.Figure object.
         :param kwargs: Depending on name, passed to the "marker" keyword
             argument of go.Scatter or as keyword arguments for go.Scatter.
             The following kwargs are passed to "marker": 'color', 'line',
@@ -381,54 +482,81 @@ class PlotHelper:
 
         :return: Figure object
 
-        :raises AssertionError: If not all items in arrays are np.ndarray.
+        :raises AssertionError: If both x_arrays and y_arrays are given,
+            but have different lengths.
+        :raises AssertionError: If not all items in either array are
+            np.ndarray.
         :raises AssertionError: If not all items in arrays have the same
             number of columns.
         :raises AssertionError: If any item in arrays has more than 3 columns.
+        :raises AssertionError: If figsize is not a tuple of length two.
         """
-        # Format inputs - should be cells x features
-        assert all(isinstance(a, np.ndarray) for a in arrays)
-        assert all(a.shape[1] == arrays[0].shape[1] for a in arrays)
-        assert arrays[0].shape[1] < 3
+        # Format inputs - cast to np.ndarray as needed
+        if x_arrays and y_arrays: assert len(x_arrays) == len(y_arrays)
+        # Plotly will not accept int or float for go.Scatter
+        _t = (np.integer, np.float, int, float)
+        if any(isinstance(a, _t) for a in x_arrays):
+            x_arrays = [np.array(x) for x in x_arrays
+                        if not isinstance(x, np.ndarray)]
+        if any(isinstance(a, _t) for a in y_arrays):
+            y_arrays = [np.array(y) for y in y_arrays
+                        if not isinstance(y, np.ndarray)]
+        assert all(isinstance(a, np.ndarray) for a in x_arrays)
+        assert all(isinstance(a, np.ndarray) for a in y_arrays)
+        assert len(figsize) == 2
 
         # Convert any inputs that need converting
-        colors = self._build_colormap(colors, len(arrays))
+        colors = self._build_colormap(colors,
+                                      max(len(x_arrays), len(y_arrays)),
+                                      alpha)
         symbols = self._build_symbolmap(symbols)
         if estimator: estimator = self._build_estimator_func(estimator)
         if err_estimator: err_estimator = self._build_estimator_func(err_estimator)
+        if normalizer: normalizer = self._build_normalizer_func(normalizer)
         marker_kwargs = {k: v for k, v in kwargs.items()
                          if k in self._marker_kwargs}
         kwargs = {k: v for k, v in kwargs.items()
                   if k not in self._marker_kwargs}
 
         # Build the figure and start plotting
-        fig = figure if figure else go.Figure()
+        if figure: fig = figure
+        elif widget: fig = go.FigureWidget()
+        else: fig = go.Figure()
         traces = []
-        for idx, (arr, key) in enumerate(itertools.zip_longest(arrays, keys)):
+        zipped = itertools.zip_longest(x_arrays, y_arrays, keys,
+                                       fillvalue=None)
+        for idx, (xarr, yarr, key) in enumerate(zipped):
             # Get the key
             if not key:
                 key = f'group_{idx}'
-            key += f' | n={arr.shape[0]}'
+            n = yarr.shape[0] if yarr is not None else xarr.shape[0]
+            key += f' | n={n}'
 
             # err_estimator is used to set error bars
             if err_estimator:
-                err_arr = err_estimator(arr)
+                err_arr = err_estimator(yarr)
             else:
                 err_arr = None
 
             # estimator is used to condense all the cells to a single point
             if estimator:
-                arr = estimator(arr)
-                if arr.ndim == 1: arr = arr[None, :]
+                yarr = estimator(yarr)
+
+            # Normalizer is used to get data onto the same scale
+            if normalizer:
+                yarr = normalizer(yarr.reshape(-1, 1)).reshape(yarr.shape)
+                if err_arr is not None:
+                    # If err_arr is only 1 dim, scale only, otherwise shift too
+                    scale_only = err_arr.ndim == 1
+                    err_arr = normalizer(
+                        err_arr.reshape(-1, 1), scale_only=scale_only
+                ).reshape(err_arr.shape)
 
             # Assign to x and y:
-            if arr.ndim in (0, 1):
-                x = None
-                y = arr
-            if arr.ndim == 2:
-                x = arr[:, 0]
-                y = arr[:, 1]
+            x = np.squeeze(xarr) if xarr is not None else None
+            y = np.squeeze(yarr) if yarr is not None else None
 
+            # Calculate error bars for y axis
             error_x = None
             error_y = None
             if err_arr is not None:
@@ -438,8 +566,9 @@ class PlotHelper:
                     # Assume symmetric
                     error_y.update({'array': err_arr, 'symmetric': True})
                 elif err_arr.ndim == 2:
-                    err_plus = arr - err_arr[0, :]
-                    err_minus = err_arr[-1, :] - arr
+                    # If 2-dimensions, assume it represents high and low bounds
+                    err_plus = err_arr[0, :] - y
+                    err_minus = y - err_arr[-1, :]
                     error_y.update({'array': err_plus,
                                     'arrayminus': err_minus})
 
@@ -462,6 +591,11 @@ class PlotHelper:
                           xaxis_range=x_limit,
                           yaxis_range=y_limit)
 
+        # Set size only if not None, so as to not overwrite previous changes
+        h, w = figsize
+        if h: fig.update_layout(height=h)
+        if w: fig.update_layout(width=w)
+
         return fig
 
     def bar_plot(self,
@@ -474,12 +608,14 @@ class PlotHelper:
                  orientation: str = 'v',
                  barmode: str = 'group',
                  legend: bool = True,
-                 figure: go.Figure = None,
+                 figure: Union[go.Figure, go.FigureWidget] = None,
+                 figsize: Tuple[int] = (None, None),
                  title: str = None,
                  x_label: str = None,
                  y_label: str = None,
                  x_limit: Tuple[float] = None,
                  y_limit: Tuple[float] = None,
+                 widget: bool = False,
                  **kwargs
                  ) -> Union[go.Figure, go.FigureWidget]:
         """Builds a Plotly Figure object plotting bars from the given arrays. Each
@@ -510,13 +646,15 @@ class PlotHelper:
             in seaborn/matplotlib, then in Plotly to find the color map. If
             not provided, the color map will be glasbey. Can also be list
             of named CSS colors or hexadecimal or RGBA strings.
+        :param ax_labels: Labels for the categorical axis.
         :param orientation: Orientation of the bar plot.
         :param barmode: Keyword argument describing how to group the bars.
-            Options are 'group', 'overlay', 'relative', and .... See Plotly
-            documentation for more details.
+            Options are 'group', 'overlay', 'relative', and 'stack'.
         :param legend: If False, no legend is made on the plot.
         :param figure: If a go.Figure object is given, will be used to make
             the plot instead of a blank figure.
+        :param figsize: Height and width of the plot in pixels. Must be a tuple of
+            length two. To leave height or width unchanged, set as None.
         :param title: Title to add to the plot
         :param x_label: Label of the x-axis
         :param y_label: Label of the y-axis
@@ -526,6 +664,8 @@ class PlotHelper:
         :param y_limit: Initial limits for the y-axis. Can be changed if
             the plot is saved as an HTML object. Only applies if orientation
             is vertical.
+        :param widget: If True, returns a go.FigureWidget object instead of
+            a go.Figure object.
         :param kwargs: Depending on name, passed to go.Bar or to
             go.Figure.update_traces(). The following kwargs are passed to
             go.Bar: 'hoverinfo', 'marker', 'width'.
@@ -534,10 +674,12 @@ class PlotHelper:
 
         :raises AssertionError: If not all items in arrays are np.ndarray.
         :raises AssertionError: If orientation is a disallowed value.
+        :raises AssertionError: If figsize is not a tuple of length two.
         """
         # Format data
         assert all([isinstance(a, np.ndarray) for a in arrays])
         assert orientation in ('v', 'h', 'horizontal', 'vertical')
+        assert len(figsize) == 2
 
         # Convert any inputs that need converting
         colors = self._build_colormap(colors, len(arrays))
@@ -548,7 +690,10 @@ class PlotHelper:
         kwargs = {k: v for k, v in kwargs.items()
                   if k not in self._bar_kwargs}
 
-        fig = figure if figure else go.Figure()
+        # Build the figure and start plotting
+        if figure: fig = figure
+        elif widget: fig = go.FigureWidget()
+        else: fig = go.Figure()
         for idx, (arr, key) in enumerate(itertools.zip_longest(arrays, keys)):
             # Get the key
             if not key:
@@ -558,14 +703,10 @@ class PlotHelper:
             # err_estimator is used to calculate errorbars
             if err_estimator:
                 err_arr = err_estimator(arr)
-
-                # If one dimensional, it's the error relative to the mean
-                # that's how Plotly wants it
-                # if if it is 2D, need to subtract from the mean
             else:
                 err_arr = None
 
-            # estimator is used to condense all the lines to a single line
+            # estimator is used to condense all the data to a single point
             if estimator:
                 arr = np.squeeze(estimator(arr))
 
@@ -617,11 +758,179 @@ class PlotHelper:
 
         # Format plot on the way out
         fig.update_traces(**kwargs)
-        fig.update_layout(template=self._template, barmode=barmode)
+        fig.update_layout(template=self._template, barmode=barmode,
+                          title=title)
         fig.update_xaxes(**self._default_axis_layout)
         fig.update_xaxes(title=x_label, range=x_limit)
         fig.update_yaxes(**self._default_axis_layout)
         fig.update_yaxes(title=y_label, range=y_limit)
+
+        # Set size only if not None, so as to not overwrite previous changes
+        h, w = figsize
+        if h: fig.update_layout(height=h)
+        if w: fig.update_layout(width=w)
+
+        return fig
+
+    def histogram_plot(self,
+                       arrays: Collection[np.ndarray],
+                       keys: Collection[str] = [],
+                       histfunc: str = 'count',
+                       histnorm: str = "",
+                       normalizer: Union[Callable, str] = None,
+                       nbins: int = None,
+                       binsize: float = None,
+                       bargap: float = None,
+                       bargroupgap: float = None,
+                       cumulative: bool = False,
+                       colors: Union[str, Collection[str]] = None,
+                       alpha: float = 1.0,
+                       orientation: str = 'v',
+                       barmode: str = 'group',
+                       legend: bool = True,
+                       figure: Union[go.Figure, go.FigureWidget] = None,
+                       figsize: Tuple[int] = (None, None),
+                       title: str = None,
+                       x_label: str = None,
+                       y_label: str = None,
+                       x_limit: Tuple[float] = None,
+                       y_limit: Tuple[float] = None,
+                       widget: bool = False,
+                       **kwargs
+                       ) -> Union[go.Figure, go.FigureWidget]:
+        """Builds a Plotly Figure object plotting a histogram of each of the
+        given arrays. Each array is interpreted as a separate condition and
+        is plotted in a different color.
+
+        :param arrays: List of arrays to plot histograms.
+        :param keys: Names corresponding to the data arrays. If not provided,
+            the keys will be integers.
+        :param histfunc: Specifies the binning function used for
+            this histogram trace. If “count”, the histogram values
+            are computed by counting the number of values lying
+            inside each bin. Can also be “sum”, “avg”, “min”, “max”.
+        :param histnorm: Specifies the type of normalization used
+            for this histogram trace. If “”, the span of each bar
+            corresponds to the number of occurrences  If “percent” /
+            “probability”, the span of each bar corresponds to the
+            percentage / fraction of occurrences with respect to
+            the total number of sample points (here, the sum of
+            all bin HEIGHTS equals 100% / 1). If “density”, the
+            span of each bar corresponds to the number of
+            occurrences in a bin divided by the size of the bin
+            interval. If probability density, the area of each
+            bar corresponds to the probability that an event will
+            fall into the corresponding bin (here, the sum of all
+            bin AREAS equals 1).
+        :param normalizer: If given, used to normalize the data after applying
+            the estimators. Normalizes the error as well. Can be 'minmax' or
+            'maxabs', or a callable that inputs an array and outputs an array
+            of the same shape.
+        :param nbins: Maximum number of bins allowed. Ignored if
+            binsize is set.
+        :param binsize: Size of each bin.
+        :param bargap: Gap between bars in adjacent locations.
+        :param bargroupgap: Gap between bars in the same location.
+        :param cumulative: If True, the histogram will plot cumulative
+            occurances.
+        :param colors: Name of a color palette or map to use. Searches first
+            in seaborn/matplotlib, then in Plotly to find the color map. If
+            not provided, the color map will be glasbey. Can also be list
+            of named CSS colors or hexadecimal or RGBA strings.
+        :param alpha: Opacity of the fill color of the histogram as a float
+            in the range [0, 1].
+        :param orientation: Orientation of the bar plot.
+        :param barmode: Keyword argument describing how to group the bars.
+            Options are 'group', 'overlay', 'stack', and 'relative'.
+        :param legend: If False, no legend is made on the plot.
+        :param figure: If a go.Figure object is given, will be used to make
+            the plot instead of a blank figure.
+        :param figsize: Height and width of the plot in pixels. Must be a tuple of
+            length two. To leave height or width unchanged, set as None.
+        :param title: Title to add to the plot
+        :param x_label: Label of the x-axis
+        :param y_label: Label of the y-axis
+        :param x_limit: Initial limits for the x-axis. Can be changed if
+            the plot is saved as an HTML object. Only applies if orientation
+            is horizontal.
+        :param y_limit: Initial limits for the y-axis. Can be changed if
+            the plot is saved as an HTML object. Only applies if orientation
+            is vertical.
+        :param widget: If True, returns a go.FigureWidget object instead of
+            a go.Figure object.
+        :param kwargs: Depending on name, passed to go.Bar or to
+            go.Figure.update_traces(). The following kwargs are passed to
+            go.Bar: 'hoverinfo', 'marker', 'width'.
+
+        :return: Figure object
+
+        :raises AssertionError: If not all items in arrays are np.ndarray.
+        :raises AssertionError: If orientation is a disallowed value.
+        :raises AssertionError: If figsize is not a tuple of length two.
+        """
+        # Format data
+        assert all([isinstance(a, np.ndarray) for a in arrays])
+        assert orientation in ('v', 'h', 'horizontal', 'vertical')
+        assert len(figsize) == 2
+
+        # Convert any inputs that need converting
+        colors = self._build_colormap(colors, len(arrays), alpha)
+        if normalizer: normalizer = self._build_normalizer_func(normalizer)
+
+        # Build the figure and start plotting
+        if figure: fig = figure
+        elif widget: fig = go.FigureWidget()
+        else: fig = go.Figure()
+
+        for idx, (arr, key) in enumerate(itertools.zip_longest(arrays, keys)):
+            # Get the key
+            if not key:
+                key = f'bar_{idx}'
+            key += f' | n={arr.shape[0]}'
+
+            if orientation in ('v', 'vertical'):
+                y = None
+                x = arr
+            elif orientation in ('h', 'horizontal'):
+                y = arr
+                x = None
+
+            if normalizer:
+                if x is not None:
+                    x = normalizer(x.reshape(-1, 1)).reshape(x.shape)
+                if y is not None:
+                    y = normalizer(y.reshape(-1, 1)).reshape(y.shape)
+
+            # Set up the colors
+            _c = next(colors)
+            marker_kwargs = {'color': _c, 'line': {'color': _c}}
+            cum_kwargs = {'enabled': cumulative}
+
+            # Make individual distributions on the plot
+            trace = go.Histogram(x=x, y=y, name=key, legendgroup=key,
+                                 histfunc=histfunc, histnorm=histnorm,
+                                 orientation=orientation,
+                                 cumulative=cum_kwargs,
+                                 nbinsx=nbins, nbinsy=nbins,
+                                 xbins=dict(size=binsize),
+                                 ybins=dict(size=binsize),
+                                 marker=marker_kwargs,
+                                 **kwargs)
+            fig.add_trace(trace)
+
+        # Format plot on the way out
+        fig.update_traces(**kwargs)
+        fig.update_layout(template=self._template, barmode=barmode,
+                          title=title, bargap=bargap, bargroupgap=bargroupgap)
+        fig.update_xaxes(**self._default_axis_layout)
+        fig.update_xaxes(title=x_label, range=x_limit)
+        fig.update_yaxes(**self._default_axis_layout)
+        fig.update_yaxes(title=y_label, range=y_limit)
+
+        # Set size only if not None, so as to not overwrite previous changes
+        h, w = figsize
+        if h: fig.update_layout(height=h)
+        if w: fig.update_layout(width=w)
 
         return fig
 
@@ -636,15 +945,18 @@ class PlotHelper:
                     orientation: str = 'v',
                     show_box: bool = False,
                     show_points: Union[str, bool] = False,
+                    show_mean: bool = False,
                     spanmode: str = 'soft',
                     side: str = None,
                     legend: bool = True,
-                    figure: go.Figure = None,
+                    figure: Union[go.Figure, go.FigureWidget] = None,
+                    figsize: Tuple[int] = (None, None),
                     title: str = None,
                     x_label: str = None,
                     y_label: str = None,
                     x_limit: Tuple[float] = None,
                     y_limit: Tuple[float] = None,
+                    widget: bool = False,
                     **kwargs
                     ) -> Union[go.Figure, go.FigureWidget]:
         """
@@ -687,6 +999,8 @@ class PlotHelper:
         :param legend: If False, no legend is made on the plot.
         :param figure: If a go.Figure object is given, will be used to make
             the plot instead of a blank figure.
+        :param figsize: Height and width of the plot in pixels. Must be a tuple of
+            length two. To leave height or width unchanged, set as None.
         :param title: Title to add to the plot
         :param x_label: Label of the x-axis
         :param y_label: Label of the y-axis
@@ -696,6 +1010,8 @@ class PlotHelper:
         :param y_limit: Initial limits for the y-axis. Can be changed if
             the plot is saved as an HTML object. Only applies if orientation
             is veritcal.
+        :param widget: If True, returns a go.FigureWidget object instead of
+            a go.Figure object.
         :param kwargs: Depending on name, passed to go.Violin or to
             go.Figure.update_traces(). The following kwargs are passed to
             go.Violin: 'bandwidth', 'fillcolor', 'hoverinfo', 'jitter', 'line',
@@ -710,6 +1026,7 @@ class PlotHelper:
             than one dimension.
         :raises AssertionError: If neg_arrays is given, and
             len(arrays) != len(neg_arrays)
+        :raises AssertionError: If figsize is not a tuple of length two.
         """
         # Format inputs
         violinmode = None
@@ -723,6 +1040,7 @@ class PlotHelper:
             violinmode = 'overlay'
             side = 'positive'
         assert orientation in ('v', 'h', 'horizontal', 'vertical')
+        assert len(figsize) == 2
 
         # Convert any inputs that need converting
         colors = self._build_colormap(colors, len(arrays), alpha)
@@ -731,8 +1049,12 @@ class PlotHelper:
                          if k in self._violin_kwargs}
         kwargs = {k: v for k, v in kwargs.items()
                   if k not in self._violin_kwargs}
+        meanline_kw = {'visible': show_mean, 'width': 3}
 
-        fig = figure if figure else go.Figure()
+        # Build the figure and start plotting
+        if figure: fig = figure
+        elif widget: fig = go.FigureWidget()
+        else: fig = go.Figure()
         for idx, (arr, key) in enumerate(itertools.zip_longest(arrays, keys)):
             # Get the key
             if not key:
@@ -762,7 +1084,8 @@ class PlotHelper:
             trace = go.Violin(x=x, y=y, name=key, legendgroup=key, side=side,
                               spanmode=spanmode, box_visible=show_box,
                               points=show_points, hoverinfo='skip',
-                              line=line, **violin_kwargs)
+                              line=line, meanline=meanline_kw,
+                              **violin_kwargs)
             fig.add_trace(trace)
 
             # Add the other half of the distributions if needed
@@ -778,7 +1101,8 @@ class PlotHelper:
                                       name=key, legendgroup=nkey,
                                       spanmode=spanmode, box_visible=show_box,
                                       points=show_points, hoverinfo='skip',
-                                      line=line, **violin_kwargs)
+                                      line=line, meanline=meanline_kw,
+                                      **violin_kwargs)
                 fig.add_trace(neg_trace)
 
         # Format plot on the way out
@@ -791,6 +1115,11 @@ class PlotHelper:
         fig.update_yaxes(**self._default_axis_layout)
         fig.update_yaxes(title=y_label, range=y_limit)
 
+        # Set size only if not None, so as to not overwrite previous changes
+        h, w = figsize
+        if h: fig.update_layout(height=h)
+        if w: fig.update_layout(width=w)
+
         return fig
 
     def ridgeline_plot(self,
@@ -801,13 +1130,16 @@ class PlotHelper:
                        overlap: float = 3,
                        show_box: bool = False,
                        show_points: Union[str, bool] = False,
+                       show_mean: bool = True,
                        legend: bool = True,
-                       figure: go.Figure = None,
+                       figure: Union[go.Figure, go.FigureWidget] = None,
+                       figsize: Tuple[int] = (None, None),
                        title: str = None,
                        x_label: str = None,
                        y_label: str = None,
                        x_limit: Tuple[float] = None,
                        y_limit: Tuple[float] = None,
+                       widget: bool = False,
                        **kwargs
                        ) -> Union[go.Figure, go.FigureWidget]:
         """
@@ -838,6 +1170,8 @@ class PlotHelper:
         :param legend: If False, no legend is made on the plot.
         :param figure: If a go.Figure object is given, will be used to make
             the plot instead of a blank figure.
+        :param figsize: Height and width of the plot in pixels. Must be a tuple of
+            length two. To leave height or width unchanged, set as None.
         :param title: Title to add to the plot
         :param x_label: Label of the x-axis
         :param y_label: Label of the y-axis
@@ -847,6 +1181,8 @@ class PlotHelper:
         :param y_limit: Initial limits for the y-axis. Can be changed if
             the plot is saved as an HTML object. Only applies if orientation
             is veritcal.
+        :param widget: If True, returns a go.FigureWidget object instead of
+            a go.Figure object.
         :param kwargs: Depending on name, passed to go.Violin or to
             go.Figure.update_traces(). The following kwargs are passed to
             go.Violin: 'bandwidth', 'fillcolor', 'hoverinfo', 'jitter', 'line',
@@ -859,11 +1195,11 @@ class PlotHelper:
         fig = self.violin_plot(arrays, keys=keys, colors=colors,
                                spanmode=spanmode, legend=legend,
                                show_box=show_box, show_points=show_points,
-                               figure=figure, side='positive',
-                               orientation='h', **kwargs)
+                               show_mean=show_mean, figure=figure, widget=widget,
+                               side='positive', orientation='h', **kwargs)
 
         # Some settings for making a ridgeline out of the violin plot
-        fig.update_traces(width=spacing)
+        fig.update_traces(width=overlap)
         fig.update_layout(template=self._template,
                           title=title, xaxis_showgrid=False,
                           xaxis_zeroline=False)
@@ -871,6 +1207,11 @@ class PlotHelper:
         fig.update_xaxes(title=x_label, range=x_limit)
         fig.update_yaxes(**self._default_axis_layout)
         fig.update_yaxes(title=y_label, range=y_limit)
+
+        # Set size only if not None, so as to not overwrite previous changes
+        h, w = figsize
+        if h: fig.update_layout(height=h)
+        if w: fig.update_layout(width=w)
 
         return fig
 
@@ -881,12 +1222,14 @@ class PlotHelper:
                      zmid: float = None,
                      zmax: float = None,
                      reverse: bool = False,
-                     figure: go.Figure = None,
+                     figure: Union[go.Figure, go.FigureWidget] = None,
+                     figsize: Tuple[int] = (None, None),
                      title: str = None,
                      x_label: str = None,
                      y_label: str = None,
                      x_limit: Tuple[float] = None,
                      y_limit: Tuple[float] = None,
+                     widget: bool = False,
                      **kwargs
                      ) -> Union[go.Figure, go.FigureWidget]:
         """
@@ -908,6 +1251,8 @@ class PlotHelper:
         :param reverse: If True, the color mapping is reversed.
         :param figure: If a go.Figure object is given, will be used to make
             the plot instead of a blank figure.
+        :param figsize: Height and width of the plot in pixels. Must be a tuple of
+            length two. To leave height or width unchanged, set as None.
         :param title: Title to add to the plot
         :param x_label: Label of the x-axis
         :param y_label: Label of the y-axis
@@ -917,14 +1262,22 @@ class PlotHelper:
         :param y_limit: Initial limits for the y-axis. Can be changed if
             the plot is saved as an HTML object. Only applies if orientation
             is veritcal.
+        :param widget: If True, returns a go.FigureWidget object instead of
+            a go.Figure object.
         :param kwargs: Passed to go.Heatmap.
 
         :return: Figure object.
 
         :raises AssertionError: If array is not two-dimensional.
+        :raises AssertionError: If figsize is not a tuple of length two.
         """
         assert array.ndim == 2
-        fig = figure if figure else go.Figure()
+        assert len(figsize) == 2
+
+        # Build the figure and make the heatmap
+        if figure: fig = figure
+        elif widget: fig = go.FigureWidget()
+        else: fig = go.Figure()
         trace = go.Heatmap(z=array, zmin=zmin, zmax=zmax,
                            zmid=zmid, colorscale=colorscale,
                            reversescale=reverse, **kwargs)
@@ -935,6 +1288,11 @@ class PlotHelper:
         fig.update_xaxes(title=x_label, range=x_limit)
         fig.update_yaxes(**self._no_line_axis)
         fig.update_yaxes(title=y_label, range=y_limit)
+
+        # Set size only if not None, so as to not overwrite previous changes
+        h, w = figsize
+        if h: fig.update_layout(height=h)
+        if w: fig.update_layout(width=w)
 
         return fig
 
@@ -949,12 +1307,14 @@ class PlotHelper:
                        ybinsize: float = None,
                        histfunc: str = 'count',
                        histnorm: str = "",
-                       figure: go.Figure = None,
+                       figure: Union[go.Figure, go.FigureWidget] = None,
+                       figsize: Tuple[int] = (None, None),
                        title: str = None,
                        x_label: str = None,
                        y_label: str = None,
                        x_limit: Tuple[float] = None,
                        y_limit: Tuple[float] = None,
+                       widget: bool = False,
                        **kwargs
                        ) -> Union[go.Figure, go.FigureWidget]:
         """
@@ -998,7 +1358,9 @@ class PlotHelper:
             bin AREAS equals 1).
         :param figure: If a go.Figure object is given, will be used to make
             the plot instead of a blank figure.
-        :param title: Title to add to the plot
+        :param figsize: Height and width of the plot in pixels. Must be a tuple of
+            length two. To leave height or width unchanged, set as None.
+        :param title: Title to add to the plot.
         :param x_label: Label of the x-axis
         :param y_label: Label of the y-axis
         :param x_limit: Initial limits for the x-axis. Can be changed if
@@ -1007,17 +1369,24 @@ class PlotHelper:
         :param y_limit: Initial limits for the y-axis. Can be changed if
             the plot is saved as an HTML object. Only applies if orientation
             is veritcal.
+        :param widget: If True, returns a go.FigureWidget object instead of
+            a go.Figure object.
         :param kwargs: Passed to go.Histogram2d.
 
         :return: Figure object
 
         :raises AssertionError: If x_array or y_array are more than one
             dimensional.
+        :raises AssertionError: If figsize is not a tuple of length two.
         """
         assert np.squeeze(x_array).ndim in (1, 0)
         assert np.squeeze(y_array).ndim in (1, 0)
+        assert len(figsize) == 2
 
-        fig = figure if figure else go.Figure()
+        # Build the figure and plot the density histogram
+        if figure: fig = figure
+        elif widget: fig = go.FigureWidget()
+        else: fig = go.Figure()
         trace = go.Histogram2d(x=x_array, y=y_array,
                                colorscale=colorscale,
                                histfunc=histfunc,
@@ -1034,6 +1403,11 @@ class PlotHelper:
         fig.update_yaxes(**self._no_line_axis)
         fig.update_yaxes(title=y_label, range=y_limit)
 
+        # Set size only if not None, so as to not overwrite previous changes
+        h, w = figsize
+        if h: fig.update_layout(height=h)
+        if w: fig.update_layout(width=w)
+
         return fig
 
     def contour2d_plot(self,
@@ -1047,12 +1421,14 @@ class PlotHelper:
                        ybinsize: float = None,
                        histfunc: str = 'count',
                        histnorm: str = "",
-                       figure: go.Figure = None,
+                       figure: Union[go.Figure, go.FigureWidget] = None,
+                       figsize: Tuple[int] = (None, None),
                        title: str = None,
                        x_label: str = None,
                        y_label: str = None,
                        x_limit: Tuple[float] = None,
                        y_limit: Tuple[float] = None,
+                       widget: bool = False,
                        **kwargs
                        ) -> Union[go.Figure, go.FigureWidget]:
         """
@@ -1096,6 +1472,8 @@ class PlotHelper:
             bin AREAS equals 1).
         :param figure: If a go.Figure object is given, will be used to make
             the plot instead of a blank figure.
+        :param figsize: Height and width of the plot in pixels. Must be a tuple of
+            length two. To leave height or width unchanged, set as None.
         :param title: Title to add to the plot
         :param x_label: Label of the x-axis
         :param y_label: Label of the y-axis
@@ -1105,17 +1483,24 @@ class PlotHelper:
         :param y_limit: Initial limits for the y-axis. Can be changed if
             the plot is saved as an HTML object. Only applies if orientation
             is veritcal.
+        :param widget: If True, returns a go.FigureWidget object instead of
+            a go.Figure object.
         :param kwargs: Passed to go.Heatmap2dContour
 
         :return: Figure object
 
         :raises AssertionError: If x_array or y_array are more than one
             dimensional.
+        :raises AssertionError: If figsize is not a tuple of length two.
         """
         assert np.squeeze(x_array).ndim in (1, 0)
         assert np.squeeze(y_array).ndim in (1, 0)
+        assert len(figsize) == 2
 
-        fig = figure if figure else go.Figure()
+        # Build the figure and plot the contours
+        if figure: fig = figure
+        elif widget: fig = go.FigureWidget()
+        else: fig = go.Figure()
         trace = go.Histogram2dContour(x=x_array, y=y_array,
                                       colorscale=colorscale,
                                       histfunc=histfunc,
@@ -1131,6 +1516,11 @@ class PlotHelper:
         fig.update_xaxes(title=x_label, range=x_limit)
         fig.update_yaxes(**self._no_line_axis)
         fig.update_yaxes(title=y_label, range=y_limit)
+
+        # Set size only if not None, so as to not overwrite previous changes
+        h, w = figsize
+        if h: fig.update_layout(height=h)
+        if w: fig.update_layout(width=w)
 
         return fig
 
@@ -1190,12 +1580,17 @@ class PlotHelper:
             The following kwargs are passed to "line": 'color', 'dash',
             'shape', 'simplify', 'smoothing', 'width', 'hoverinfo'
 
-        :return: Figure object
+        :return: Generator that produces go.Figure objects
 
+        :raises AssertionError: If any array in color_arrays does not
+            have the same shape as trace array.
+        :raises AssertionError: If length of color_arrays does not
+            equal length of color_thres.
         """
         # Check inputs
         assert all([trace_array.shape == c.shape for c in color_arrays])
         assert len(color_arrays) == len(color_thres)
+
         colors = self._build_colormap(colors, len(color_arrays) + 1)
         time = time if time else np.arange(trace_array.shape[1])
         line_kwargs = {k: v for k, v in kwargs.items()

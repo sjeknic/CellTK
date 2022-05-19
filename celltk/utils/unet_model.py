@@ -351,15 +351,11 @@ class UPeakModel(_UNetStructure):
     Regions of interest:
     0 - Background
     1 - Slope
-    2 - Plateau
-
-    Current model requires 64 different iterations of cwt to be added to the
-    input
     """
     _norm_methods = ['amplitude', 'zscore']
     _norm_kwargs = [{}, {}]
     _norm_inplace = [True, False]
-    _model_kws = dict(classes=3, kernel=4, steps=2, layers=2,
+    _model_kws = dict(classes=2, kernel=4, steps=2, layers=2,
                       init_filters=64, transfer=False, activation='leaky',
                       padding='same', mode=0, momentum=0.9)
 
@@ -387,14 +383,14 @@ class UPeakModel(_UNetStructure):
 
     def predict(self,
                 array: np.ndarray,
-                roi: Tuple[int] = (1, 2),
+                roi: Tuple[int] = 1,
                 min_nonnan: int = 2
                 ) -> np.ndarray:
         """
         By default, returns slope and plateau summed
         """
         # Create default output - all nans
-        out = np.empty((*array.shape, len(roi)))
+        out = np.empty(array.shape)
         out[:] = np.nan
 
         # Cells with all or nearly all nans need to be removed
@@ -418,7 +414,7 @@ class UPeakModel(_UNetStructure):
         preds = self.undo_padding(preds, pads)
 
         # Add predictions back to out
-        out[~nan_mask, ...] = preds[..., roi]
+        out[~nan_mask, :] = preds[..., roi]
 
         # Returns a 3D arr...
         return out

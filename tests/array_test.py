@@ -27,7 +27,6 @@ class TestArray():
         # TODO: Make this no longer possible
         ExperimentArray.load(self._cond_array_path)
 
-
         # Load the arrays properly
         self.cond_arr = ConditionArray.load(self._cond_array_path)
         self.exp_arr = ExperimentArray.load(self._exp_array_path)
@@ -35,6 +34,13 @@ class TestArray():
         # Assert that the arrays are the full dimension
         assert all(self.cond_arr.shape)
         assert all([all(s) for s in self.exp_arr.shape])
+
+    def test_indexing(self):
+        self._test_load_array()
+        for c in self.exp_arr.conditions:
+            assert isinstance(self.exp_arr[c], ConditionArray)
+            assert isinstance(self.exp_arr[c]['nuc', 'fitc', 'median_intensity'],
+                              np.ndarray)
 
     def test_filter_condition(self):
         self._test_load_array()

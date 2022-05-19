@@ -4,25 +4,20 @@ from typing import List, Collection
 import numpy as np
 import skimage.segmentation as segm
 import scipy.integrate as integrate
+import scipy.stats as stats
 
 from celltk.utils.filter_utils import outside, inside
 
 def segment_peaks_agglomeration(traces: np.ndarray,
                                 probabilities: np.ndarray,
                                 steps: int = 15,
-                                min_seed_prob: float = 0.8,
-                                min_peak_prob: float = 0.5,
+                                min_seed_prob: float = 0.9,
+                                min_peak_prob: float = 0.3,
                                 min_seed_length: int = 2,
                                 **kwargs  # Messy fix for running this from derived metrics
                                 ) -> np.ndarray:
-    """Returns an array with peaks incrementally counted in each trace
-
-    I think I want to just track peaks with a label/mask.
-    As in the labels will be [0, 0, 1, 1,...0, 2, 2, ... 0, 3 ..]
-    And the mask can just be labels > 0
-    That should work for everything...
-
-    0 - BG, 1 - slope, 2 - plateau
+    """Returns an array with peaks incrementally counted in each trace,
+    i.e. the labels will be [0, 0, 1, 1,...0, 2, 2, ... 0, 3 ..].
 
     TODO:
         - Add option for user-passed seeds
@@ -30,42 +25,31 @@ def segment_peaks_agglomeration(traces: np.ndarray,
     # Make sure traces and probabilities match
     assert traces.shape[:2] == probabilities.shape[:2]
 
-    # Probabilities should be 3D. If 2D, assume slope + plateau
-    assert probabilities.ndim == 3
-    if probabilities.shape[-1] == 3:
-        # Background probability is not needed
-        probabilities = probabilities[..., 1:]
-    elif probabilities.shape[-1] < 2 or probabilities.shape[-1] > 3:
-        raise ValueError('Expected 2 or 3 classes in probabilities. '
-                         f'Got {probabilities.shape[-1]}.')
-
-    # Extract individual probabilities
-    slope, plateau = (probabilities[..., 0], probabilities[..., 1])
     # Apply to each trace
     out = np.zeros(traces.shape, dtype=np.uint8)
-    for n, (t, s, p) in enumerate(zip(traces, slope, plateau)):
-        out[n] = _peak_labeler(t, s, p)
+    for n, (t, p) in enumerate(zip(traces, probabilities)):
+        out[n] = _peak_labeler(t, p)
 
     return out
 
 
 def _peak_labeler(trace: np.ndarray,
-                  slope: np.ndarray,
-                  plateau: np.ndarray,
+                  probability: np.ndarray,
                   steps: int = 15,
-                  min_seed_prob: float = 0.8,
-                  min_peak_prob: float = 0.5,
+                  min_seed_prob: float = 0.9,
+                  min_peak_prob: float = 0.3,
                   min_seed_length: int = 2
                   ) -> np.ndarray:
     """Gets 1D trace and returns with peaks labeled
     """
     # Get seeds based on constant probability
     seeds = _idxs_to_labels(
-        trace, _constant_thres_peaks(plateau, min_seed_prob, min_seed_length)
+        trace, _constant_thres_peaks(probability, min_seed_prob,
+                                     min_seed_length)
     )
 
     # Use iterative watershed to segment
-    peaks = _agglom_watershed_peaks(trace, seeds, slope + plateau,
+    peaks = _agglom_watershed_peaks(trace, seeds, probability,
                                     steps, min_peak_prob)
 
     return peaks
@@ -131,7 +115,7 @@ def _idxs_to_labels(trace: np.ndarray,
 
 
 def _labels_to_idxs(labels: np.ndarray) -> List[np.ndarray]:
-    """"""
+    """Idxs """
     if labels.ndim == 1: labels = labels[None, :]
     out = []
     for lab in labels:
@@ -141,13 +125,55 @@ def _labels_to_idxs(labels: np.ndarray) -> List[np.ndarray]:
     return out
 
 
-class PeakMetrics:
-    """Helper class for getting data from peak labels"""
+class PeakHelper:
+    """Helper class for getting data from traces and peak labels"""
+    def first_time(self,
+                   traces: np.ndarray,
+                   labels: np.ndarray,
+                   ) -> List[List[float]]:
+        """Returns the first time point belonging to each peak"""
+        idxs = _labels_to_idxs(labels)
+        out = []
+        for trace, idx in zip(traces, idxs):
+            out.append(self._times(trace, idx, 'first'))
+        return out
+
+    def last_time(self,
+                  traces: np.ndarray,
+                  labels: np.ndarray
+                  ) -> List[List[float]]:
+        """Returns the last time point belonging to each peak"""
+        idxs = _labels_to_idxs(labels)
+        out = []
+        for trace, idx in zip(traces, idxs):
+            out.append(self._times(trace, idx, 'last'))
+        return out
+
+    def max_time(self,
+                 traces: np.ndarray,
+                 labels: np.ndarray
+                 ) -> List[List[float]]:
+        """Returns the time that a peak reaches it's maximum amplitude."""
+        idxs = _labels_to_idxs(labels)
+        out = []
+        for trace, idx in zip(traces, idxs):
+            out.append(self._times(trace, idx, 'max'))
+        return out
+
     def amplitude(self,
                   traces: np.ndarray,
                   labels: np.ndarray
                   ) -> List[List[float]]:
-        """"""
+        """Returns the maximum value in each peak for each trace.
+        Each cell has an empty list if no peaks are labeled.
+
+        :param traces: Array of shape n_cells x n_features with values
+            to use for calculating amplitude.
+        :param labels: Array of same shape as traces with peaks labeled
+            with unique integers in each cell trace.
+
+        :return: List of amplitudes for each cell trace.
+        """
         out = []
         for trace, label in zip(traces, labels):
             out.append(self._amplitude(trace, label))
@@ -158,7 +184,17 @@ class PeakMetrics:
                    labels: np.ndarray,
                    tracts: List[List[int]] = []
                    ) -> List[List[float]]:
-        """"""
+        """Returns the difference between the maximum value in
+        a peak and the base of the peak. If tracts are provided
+        adjusts the base of each peak in the tract to be the base
+        of the tract.
+
+        :param traces:
+        :param labels:
+        :param tracts:
+
+        :return:
+        """
         idxs = _labels_to_idxs(labels)
         amps = self.amplitude(traces, labels)
 
@@ -172,7 +208,13 @@ class PeakMetrics:
                traces: np.ndarray,
                labels: np.ndarray
                ) -> List[List[int]]:
-        """Total peak length"""
+        """Returns the length of each peak.
+
+        :param traces:
+        :param labels:
+
+        :return:
+        """
         out = []
         for lab in labels:
             out.append(self._length(lab))
@@ -186,7 +228,16 @@ class PeakMetrics:
               relative: float = 0.5,
               absolute: float = None
               ) -> List[List[float]]:
-        """"""
+        """Not yet complete.
+
+        :param traces:
+        :param labels:
+        :param tracts:
+        :param relative:
+        :param absolute:
+
+        :return:
+        """
         raise NotImplementedError
         idxs = _labels_to_idxs(labels)
         amps = self.amplitude(traces, labels)
@@ -202,9 +253,14 @@ class PeakMetrics:
                      traces: np.ndarray,
                      labels: np.ndarray,
                      ) -> List[List[float]]:
-        """
-        Inverse of the absolute value of the Pearson's correlation
-        coefficient.
+        """Returns inverse of the absolute value of the
+        Pearson's correlation coefficient. Higher values
+        mean the peak is less linear.
+
+        :param traces:
+        :param labels:
+
+        :return:
         """
         out = []
         for trace, label in zip(traces, labels):
@@ -277,7 +333,7 @@ class PeakMetrics:
         # # Relabel peaks to be sequential
         for i, lab in enumerate(labels):
             _lab = np.unique(lab[lab > 0])
-            if len(_lab) > 0 and (np.diff(_lab) > 1).any():
+            if len(_lab) > 0:
                 for n, l in enumerate(_lab):
                     n += 1  # peaks are 1-indexed
                     labels[i, lab == l] = n
@@ -300,6 +356,24 @@ class PeakMetrics:
         return out
 
     @staticmethod
+    def _times(trace: np.ndarray,
+               index: np.ndarray,
+               time: str,
+               ) -> List[float]:
+        """"""
+        if time == 'first':
+            return [idx[0] for idx in index]
+        elif time == 'last':
+            return [idx[-1] for idx in index]
+        elif time == 'max':
+            out = []
+            for idx in index:
+                _tr = np.zeros_like(trace)
+                _tr[idx] = trace[idx]
+                out.append(np.argmax(trace[idx]))
+            return out
+
+    @staticmethod
     def _amplitude(trace: np.ndarray,
                    label: np.ndarray,
                    ) -> List[float]:
@@ -307,7 +381,7 @@ class PeakMetrics:
         out = []
         for l in np.unique(label[label > 0]):
             mask = np.where(label == l, trace, 0)
-            out.append(np.max(mask))
+            out.append(np.nanmax(mask))
 
         return out
 
@@ -318,30 +392,43 @@ class PeakMetrics:
                     tract: List[List[int]]
                     ) -> List[float]:
         """"""
+        _edge_dist = 4
         out = []
-        for t in tract:
-            # Peaks are 1-indexed
-            frst_pk = t[0] - 1
-            last_pk = t[-1] - 1
+        if tract:
+            for t in tract:
+                # Peaks are 1-indexed
+                frst_pk = t[0] - 1
+                last_pk = t[-1] - 1
 
-            # Get first and last point in tract
-            x = [index[frst_pk][0], index[last_pk][-1]]
-            y = [trace[x[0]], trace[x[-1]]]
+                # Get first and last point in tract
+                x = [index[frst_pk][0], index[last_pk][-1]]
+                y = [trace[x[0]], trace[x[-1]]]
 
-            # Adjust heights if close to edge
-            _edge_dist = 4
-            if abs(x[0] - 0) <= _edge_dist:
-                y[0] = y[-1]
-            if abs(x[1] - len(trace) - 1) <= _edge_dist:
-                y[-1] = y[0]
+                # Adjust heights if close to edge
+                if abs(x[0] - 0) <= _edge_dist:
+                    y[0] = y[-1]
+                if abs(x[1] - len(trace) - 1) <= _edge_dist:
+                    y[-1] = y[0]
+                _base = np.mean(y)
 
-            _base = np.mean(y)
+                # For each peak in the tract, take amp - base
+                for pk in t:
+                    pk -= 1  # peaks are 1-indexed
+                    out.append(amplitude[pk] - _base)
+        else:
+            for amp, idx in zip(amplitude, index):
+                # Get edge points of peak
+                x = [idx[0], idx[-1]]
+                y = [trace[x[0]], trace[x[-1]]]
 
-            # For each peak in the tract, take amp - base
-            for pk in t:
-                pk -= 1  # peaks are 1-indexed
-                out.append(amplitude[pk] - _base)
+                # Adjust heights if close to edge
+                if abs(x[0] - 0) <= _edge_dist:
+                    y[0] = y[-1]
+                if abs(x[1] - len(trace) - 1) <= _edge_dist:
+                    y[-1] = y[0]
+                _base = np.mean(y)
 
+                out.append(amp - _base)
         return out
 
     @staticmethod
@@ -372,7 +459,6 @@ class PeakMetrics:
             else:
                 # Calculate crossing points
                 pass
-
 
     @staticmethod
     def _area_under_curve(trace: np.ndarray,
