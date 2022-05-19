@@ -133,9 +133,10 @@ class Tracker(BaseTracker):
                                     displacement_thres: float = 30,
                                     mass_thres: float = 0.15,
                                     ) -> Track:
-        """Like simple_linear_tracker, but with the ability
-        to specify specific properties to use in the cost
-        function
+        """Tracks objects from frame to frame by optimizing the cost
+        defined by an arbitrary list of properties. By default, includes
+        thresholds on the distance and difference in intensity for
+        two linked objects.
 
         TODO:
             - Include custom thresholds for the properties
@@ -463,18 +464,16 @@ class Tracker(BaseTracker):
 
         NOTE:
             - Objects can change in this algorithm, so the output is
-            not guaranteed to have the exact same objects as the input
-            mask.
+              not guaranteed to have the exact same objects as the input
+              mask.
 
         NOTE:
             - A current Gurobi license is required to use this algorithm.
-            Personal licenses are free for academics. Please see _________
-            if you need help installing or using a license. If you run into
-            issues, please open an issue on Github. ______________
+              Personal licenses are free for academics.
 
         NOTE:
-            - The underlying tracking algorithm was developed by ____________
-            and can be found at _______________.
+            - The underlying tracking algorithm was developed by
+              `Katharina Loeffler and colleagues`_.
 
         :param image: Image with intensity information
         :param mask: Mask with objects to be tracked
@@ -490,6 +489,8 @@ class Tracker(BaseTracker):
         TODO:
             - Add citation for kit sch ge
             - Add saving of lineage file (probably in a separate run_operation function)
+
+        .. _Katharina Loeffler and colleagues: https://git.scc.kit.edu/KIT-Sch-GE/2021-cell-tracking
         """
         # If nothing is in mask, return an empty stack
         if not mask.sum():
@@ -549,6 +550,7 @@ class Tracker(BaseTracker):
             exact is taking too long or utilizing excessive resources.
 
         :return: Track with objects linked
+
         TODO:
             - Add citation.and expand documentation
             - Set values in config_file

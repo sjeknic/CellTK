@@ -158,7 +158,6 @@ class Segmenter(BaseSegmenter):
         :return:
 
         TODO:
-            - functools.reduce raises TypeError if list is empty
             - Add using an intensity image too
         """
         # User must provide both low and high bound

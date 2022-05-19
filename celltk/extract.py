@@ -1,7 +1,6 @@
 import warnings
 from typing import Collection, Tuple, Union, Callable
 
-
 import numpy as np
 
 from celltk.core.operation import BaseExtractor
@@ -10,6 +9,7 @@ from celltk.utils._types import Image, Mask, Track, Arr, RandomNameProperty
 from celltk.core.arrays import ConditionArray
 from celltk.utils.operation_utils import lineage_to_track, parents_from_track
 import celltk.utils.metric_utils as metric_utils
+
 
 class Extractor(BaseExtractor):
     _metrics = ['label', 'area', 'convex_area', 'filled_area', 'bbox',

@@ -531,9 +531,9 @@ class ConditionArray():
 
         :param mask: A boolean mask to filter cells with. Can be 1D, 2D or 5D.
         :param key: Name of a saved mask to use for filtering cells. Overwrites
-            msak if provided.
+            mask if provided.
         :param delete: If True, cells are removed in the base array. Otherwise
-        they are only removed in the array that is returned.
+            they are only removed in the array that is returned.
 
         :return: array with cells designated by maks or key removed.
         :rtype: np.ndarray
@@ -680,7 +680,7 @@ class ConditionArray():
             many frames from start of trace. If tuple, uses passed
             frames.
         :param key: If given, saves the mask in ConditionArray as key.
-        :param *args: passed to function
+        :param args: passed to function
         :param kwargs: passed to function
 
         :return: 2D boolean array that masks cells outside filter
@@ -1133,7 +1133,7 @@ class ExperimentArray():
                 pass
 
     def load_condition(self,
-                       path: str,
+                       array: Union[str, ConditionArray],
                        name: str = None,
                        pos_id: int = None,
                        ) -> None:
@@ -1141,7 +1141,7 @@ class ExperimentArray():
         The new ConditionArray gets saved as name + pos_id if provided, otherwise
         uses the name saved in the hdf5 file.
 
-        :param path: Path to the hdf5 file to load
+        :param array: ConditionArray or path to the hdf5 file with ConditionArray
         :param name: Name of the ConditionArray to be loaded.
         :param pos_id: Unique identifier for the ConditionArray.
 
@@ -1149,10 +1149,14 @@ class ExperimentArray():
 
         TODO:
             - Add function to walk dirs, and load hdf5 files, with uniq names
-            See Orchestrator.build_experiment_file()
+              See Orchestrator.build_experiment_file()
         """
-        # Get array and key
-        arr = ConditionArray.load(path)
+        if isinstance(array, str):
+            # Get array and key
+            arr = ConditionArray.load(array)
+        else:
+            arr = array
+
         name = name if name else arr.name
         pos_id = pos_id if pos_id else arr.pos_id
         if pos_id:
@@ -1314,7 +1318,7 @@ class ExperimentArray():
 
         :param mask: A boolean mask to filter cells with. Can be 1D, 2D or 5D.
         :param key: Name of a saved mask to use for filtering cells. Overwrites
-            msak if provided.
+            mask if provided.
         :param delete: If True, cells are removed in the base array. Otherwise
             they are only removed in the array that is returned.
         :param args: Passed to filtering function.
@@ -1377,7 +1381,7 @@ class ExperimentArray():
 
         NOTE:
             - Any masks that have been saved in the individual
-            ConditionArrays will be lost.
+              ConditionArrays will be lost.
 
         TODO:
             - Add a way to pass lists of keys to merge

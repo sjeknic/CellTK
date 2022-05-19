@@ -95,6 +95,18 @@ You can also index multiple items in each axis using a ``list`` or ``tuple``. Fo
     print(data.shape)
     > (2, 42, 6)
 
+For an ``ExperimentArray`` you can index in a couple different ways. One way is to index exactly as above, and pass the keys that you would like from each ``ConditionArray``. This will return a list of ``np.ndarray``, one for each ``ConditionArray`` in the ``ExperimentArray``. You can also first index a list of conditions from the ``ExperimentArray`` and then index that list as above.
 
+::
+
+    array = celltk.ExperimentArray.load('example/example_experiment.hdf5')
+
+TODO
+
+
+Plotting
+--------
+
+CellTK includes a ``PlotHelepr`` class to helpp quickly generate plots from the data received by indexing an ``ExperimentArray``. All functions return a ``go.Figure`` object, so customization of the plot and traces after it is produced is possible.
 
 .. _Katharina Loeffler and colleagues: https://git.scc.kit.edu/KIT-Sch-GE/2021-cell-tracking

@@ -28,6 +28,7 @@ That's it! You should be good to go. If you run into any problems, please open a
    opers
    arrays
    plots
+   utils
 
 
 Indices and tables
