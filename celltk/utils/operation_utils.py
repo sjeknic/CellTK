@@ -1,5 +1,5 @@
 import warnings
-from typing import Dict, Generator, Tuple, List, Iterable, Union
+from typing import Dict, Generator, Tuple, List, Iterable, Union, Collection
 
 import numpy as np
 import pywt
@@ -445,9 +445,11 @@ def sliding_window_generator(arr: np.ndarray, overlap: int = 0) -> Generator:
     e.g. overlap = 1: [0, 1], [1, 2], [2, 3], [3, 4]
          overlap = 2: [0, 1, 2], [1, 2, 3], [2, 3, 4]
 
-    NOTE: Overlaps get passed as a stack, not as separate args.
+    NOTE:
+        - Overlaps get passed as a stack, not as separate args.
           i.e. if overlap = 1, image.shape = (2, h, w)
-    NOTE: If memory is an issue here, can probably manually count the indices
+    NOTE:
+        - If memory is an issue here, can probably manually count the indices
           and make a generator that way, but it will be much slower.
 
     TODO:
@@ -869,6 +871,27 @@ class PadHelper():
             pads_r[n] = tuple([int(-1 * p) for p in pad])
 
         return pads_r
+
+
+def stack_pad(arrays: Collection[np.ndarray],
+              axis: int = 0,
+              pad_value: float = np.nan
+              ) -> np.ndarray:
+    """Stacks arrays along axis, padding shorter arrays with pad_value
+
+    TODO:
+        - Expand to work for arbitrary dimensional arrays
+    """
+    # axis = 0 is row stack, axis = 1 is column stack
+    # assume all input arrays only need to be padded on one dimension
+    arrays = [np.squeeze(a) for a in arrays]
+    assert all(a.ndim in (0, 1) for a in arrays)
+    max_len = max(len(a) for a in arrays)
+    arrays = [np.pad(a, (0, max_len-len(a)),
+                     constant_values=pad_value)
+              for a in arrays]
+
+    return np.stack(arrays, axis=axis)
 
 
 def _remove_small_holes_keep_labels(image: np.ndarray,
