@@ -37,7 +37,7 @@ class TestUPeak():
 
 class TestPeakSegmentation():
     arr_path = "examples/example_traces.npy"
-    pred_path = "examples/new_example_predictions.npy"
+    pred_path = "examples/example_predictions.npy"
 
     def _run(self) -> None:
         self.test_peak_segmentation()
