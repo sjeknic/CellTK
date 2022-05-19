@@ -879,7 +879,7 @@ class ConditionArray():
             model = UPeakModel(weight_path)
 
         # Get predictions of where peaks exist
-        predictions = model.predict(data, roi=1)  # slope, plateau
+        predictions = model.predict(data, roi=1)
         self[dest_key] = predictions
         if propagate: self.propagate_values(dest_key, prop_to=propagate)
 

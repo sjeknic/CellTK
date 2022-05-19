@@ -16,14 +16,8 @@ def segment_peaks_agglomeration(traces: np.ndarray,
                                 min_seed_length: int = 2,
                                 **kwargs  # Messy fix for running this from derived metrics
                                 ) -> np.ndarray:
-    """Returns an array with peaks incrementally counted in each trace
-
-    I think I want to just track peaks with a label/mask.
-    As in the labels will be [0, 0, 1, 1,...0, 2, 2, ... 0, 3 ..]
-    And the mask can just be labels > 0
-    That should work for everything...
-
-    0 - BG, 1 - peak
+    """Returns an array with peaks incrementally counted in each trace,
+    i.e. the labels will be [0, 0, 1, 1,...0, 2, 2, ... 0, 3 ..].
 
     TODO:
         - Add option for user-passed seeds
@@ -137,7 +131,7 @@ class PeakHelper:
                    traces: np.ndarray,
                    labels: np.ndarray,
                    ) -> List[List[float]]:
-        """"""
+        """Returns the first time point belonging to each peak"""
         idxs = _labels_to_idxs(labels)
         out = []
         for trace, idx in zip(traces, idxs):
@@ -148,7 +142,7 @@ class PeakHelper:
                   traces: np.ndarray,
                   labels: np.ndarray
                   ) -> List[List[float]]:
-        """"""
+        """Returns the last time point belonging to each peak"""
         idxs = _labels_to_idxs(labels)
         out = []
         for trace, idx in zip(traces, idxs):
@@ -159,7 +153,7 @@ class PeakHelper:
                  traces: np.ndarray,
                  labels: np.ndarray
                  ) -> List[List[float]]:
-        """"""
+        """Returns the time that a peak reaches it's maximum amplitude."""
         idxs = _labels_to_idxs(labels)
         out = []
         for trace, idx in zip(traces, idxs):
