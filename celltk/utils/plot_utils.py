@@ -613,6 +613,7 @@ class PlotHelper:
                  err_estimator: Union[Callable, str, functools.partial] = None,
                  ax_labels: Collection[str] = None,
                  colors: Union[str, Collection[str]] = None,
+                 alpha: float = 1.0,
                  orientation: str = 'v',
                  barmode: str = 'group',
                  add_cell_numbers: bool = True,
@@ -655,6 +656,7 @@ class PlotHelper:
             in seaborn/matplotlib, then in Plotly to find the color map. If
             not provided, the color map will be glasbey. Can also be list
             of named CSS colors or hexadecimal or RGBA strings.
+        :param alpha: Opacity of the marker fill colors.
         :param ax_labels: Labels for the categorical axis.
         :param orientation: Orientation of the bar plot.
         :param barmode: Keyword argument describing how to group the bars.
@@ -693,7 +695,7 @@ class PlotHelper:
         assert len(figsize) == 2
 
         # Convert any inputs that need converting
-        colors = self._build_colormap(colors, len(arrays))
+        colors = self._build_colormap(colors, len(arrays), alpha)
         if estimator: estimator = self._build_estimator_func(estimator)
         if err_estimator: err_estimator = self._build_estimator_func(err_estimator)
         bar_kwargs = {k: v for k, v in kwargs.items()
