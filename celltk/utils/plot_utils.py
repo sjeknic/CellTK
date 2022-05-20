@@ -227,6 +227,7 @@ class PlotHelper:
                   colors: Union[str, Collection[str]] = None,
                   alpha: float = 1.0,
                   time: Union[Collection[np.ndarray], np.ndarray] = None,
+                  add_cell_numbers: bool = True,
                   legend: bool = True,
                   figure: Union[go.Figure, go.FigureWidget] = None,
                   figsize: Tuple[int] = (None, None),
@@ -273,11 +274,13 @@ class PlotHelper:
         :param alpha: Opacity of the line colors.
         :param time: Time axis for the plot. Must be the same size as the
             second dimension of arrays.
+        :param add_cell_numbers: If True, adds the number of cells to each key
+            in keys.
         :param legend: If False, no legend is made on the plot.
         :param figure: If a go.Figure object is given, will be used to make
             the plot instead of a blank figure.
-        :param figsize: Height and width of the plot in pixels. Must be a tuple of
-            length two. To leave height or width unchanged, set as None.
+        :param figsize: Height and width of the plot in pixels. Must be a tuple
+            of length two. To leave height or width unchanged, set as None.
         :param title: Title to add to the plot
         :param x_label: Label of the x-axis
         :param y_label: Label of the y-axis
@@ -324,7 +327,8 @@ class PlotHelper:
             # Get the key
             if not key:
                 key = f'line_{idx}'
-            key += f' | n={arr.shape[0]}'
+            if add_cell_numbers and arr is not None:
+                key += f' | n={arr.shape[0]}'
 
             # err_estimator is used to set the bounds for the shaded region
             if err_estimator:
@@ -414,6 +418,7 @@ class PlotHelper:
                      colors: Union[str, Collection[str]] = None,
                      alpha: float = 1.0,
                      symbols: Union[str, Collection[str]] = None,
+                     add_cell_numbers: bool = True,
                      legend: bool = True,
                      figure: Union[go.Figure, go.FigureWidget] = None,
                      figsize: Tuple[int] = (None, None),
@@ -461,11 +466,13 @@ class PlotHelper:
             not provided, the color map will be glasbey. Can also be list
             of named CSS colors or hexadecimal or RGBA strings.
         :param alpha: Opacity of the marker fill colors.
+        :param add_cell_numbers: If True, adds the number of cells to each key
+            in keys.
         :param legend: If False, no legend is made on the plot.
         :param figure: If a go.Figure object is given, will be used to make
             the plot instead of a blank figure.
-        :param figsize: Height and width of the plot in pixels. Must be a tuple of
-            length two. To leave height or width unchanged, set as None.
+        :param figsize: Height and width of the plot in pixels. Must be a tuple
+            of length two. To leave height or width unchanged, set as None.
         :param title: Title to add to the plot
         :param x_label: Label of the x-axis
         :param y_label: Label of the y-axis
@@ -529,8 +536,9 @@ class PlotHelper:
             # Get the key
             if not key:
                 key = f'group_{idx}'
-            n = yarr.shape[0] if yarr is not None else xarr.shape[0]
-            key += f' | n={n}'
+            if add_cell_numbers and (yarr is not None or xarr is not None):
+                n = yarr.shape[0] if yarr is not None else xarr.shape[0]
+                key += f' | n={n}'
 
             # err_estimator is used to set error bars
             if err_estimator:
@@ -607,6 +615,7 @@ class PlotHelper:
                  colors: Union[str, Collection[str]] = None,
                  orientation: str = 'v',
                  barmode: str = 'group',
+                 add_cell_numbers: bool = True,
                  legend: bool = True,
                  figure: Union[go.Figure, go.FigureWidget] = None,
                  figsize: Tuple[int] = (None, None),
@@ -650,11 +659,13 @@ class PlotHelper:
         :param orientation: Orientation of the bar plot.
         :param barmode: Keyword argument describing how to group the bars.
             Options are 'group', 'overlay', 'relative', and 'stack'.
+        :param add_cell_numbers: If True, adds the number of cells to each key
+            in keys.
         :param legend: If False, no legend is made on the plot.
         :param figure: If a go.Figure object is given, will be used to make
             the plot instead of a blank figure.
-        :param figsize: Height and width of the plot in pixels. Must be a tuple of
-            length two. To leave height or width unchanged, set as None.
+        :param figsize: Height and width of the plot in pixels. Must be a tuple
+            of length two. To leave height or width unchanged, set as None.
         :param title: Title to add to the plot
         :param x_label: Label of the x-axis
         :param y_label: Label of the y-axis
@@ -698,7 +709,8 @@ class PlotHelper:
             # Get the key
             if not key:
                 key = f'bar_{idx}'
-            key += f' | n={arr.shape[0]}'
+            if add_cell_numbers and arr is not None:
+                key += f' | n={arr.shape[0]}'
 
             # err_estimator is used to calculate errorbars
             if err_estimator:
@@ -787,6 +799,7 @@ class PlotHelper:
                        alpha: float = 1.0,
                        orientation: str = 'v',
                        barmode: str = 'group',
+                       add_cell_numbers: bool = True,
                        legend: bool = True,
                        figure: Union[go.Figure, go.FigureWidget] = None,
                        figsize: Tuple[int] = (None, None),
@@ -842,11 +855,13 @@ class PlotHelper:
         :param orientation: Orientation of the bar plot.
         :param barmode: Keyword argument describing how to group the bars.
             Options are 'group', 'overlay', 'stack', and 'relative'.
+        :param add_cell_numbers: If True, adds the number of cells to each key
+            in keys.
         :param legend: If False, no legend is made on the plot.
         :param figure: If a go.Figure object is given, will be used to make
             the plot instead of a blank figure.
-        :param figsize: Height and width of the plot in pixels. Must be a tuple of
-            length two. To leave height or width unchanged, set as None.
+        :param figsize: Height and width of the plot in pixels. Must be a tuple
+            of length two. To leave height or width unchanged, set as None.
         :param title: Title to add to the plot
         :param x_label: Label of the x-axis
         :param y_label: Label of the y-axis
@@ -885,8 +900,9 @@ class PlotHelper:
         for idx, (arr, key) in enumerate(itertools.zip_longest(arrays, keys)):
             # Get the key
             if not key:
-                key = f'bar_{idx}'
-            key += f' | n={arr.shape[0]}'
+                key = f'dist_{idx}'
+            if add_cell_numbers and arr is not None:
+                key += f' | n={arr.shape[0]}'
 
             if orientation in ('v', 'vertical'):
                 y = None
@@ -948,6 +964,7 @@ class PlotHelper:
                     show_mean: bool = False,
                     spanmode: str = 'soft',
                     side: str = None,
+                    add_cell_numbers: bool = True,
                     legend: bool = True,
                     figure: Union[go.Figure, go.FigureWidget] = None,
                     figsize: Tuple[int] = (None, None),
@@ -996,11 +1013,13 @@ class PlotHelper:
         :param side: Side to plot the distribution. By default, the
             distribution is plotted on both sides, but can be 'positive'
             or 'negative' to plot on only one side.
+        :param add_cell_numbers: If True, adds the number of cells to each key
+            in keys.
         :param legend: If False, no legend is made on the plot.
         :param figure: If a go.Figure object is given, will be used to make
             the plot instead of a blank figure.
-        :param figsize: Height and width of the plot in pixels. Must be a tuple of
-            length two. To leave height or width unchanged, set as None.
+        :param figsize: Height and width of the plot in pixels. Must be a tuple
+            of length two. To leave height or width unchanged, set as None.
         :param title: Title to add to the plot
         :param x_label: Label of the x-axis
         :param y_label: Label of the y-axis
@@ -1059,7 +1078,8 @@ class PlotHelper:
             # Get the key
             if not key:
                 key = f'dist_{idx}'
-            key += f' | n={arr.shape[0]}'
+            if add_cell_numbers and arr is not None:
+                key += f' | n={arr.shape[0]}'
 
             # Set the data key based on orientation
             if orientation in ('v', 'vertical'):
@@ -1131,6 +1151,7 @@ class PlotHelper:
                        show_box: bool = False,
                        show_points: Union[str, bool] = False,
                        show_mean: bool = True,
+                       add_cell_numbers: bool = True,
                        legend: bool = True,
                        figure: Union[go.Figure, go.FigureWidget] = None,
                        figsize: Tuple[int] = (None, None),
@@ -1167,11 +1188,13 @@ class PlotHelper:
         :param side: Side to plot the distribution. By default, the
             distribution is plotted on both sides, but can be 'positive'
             or 'negative' to plot on only one side.
+        :param add_cell_numbers: If True, adds the number of cells to each key
+            in keys.
         :param legend: If False, no legend is made on the plot.
         :param figure: If a go.Figure object is given, will be used to make
             the plot instead of a blank figure.
-        :param figsize: Height and width of the plot in pixels. Must be a tuple of
-            length two. To leave height or width unchanged, set as None.
+        :param figsize: Height and width of the plot in pixels. Must be a tuple
+            of length two. To leave height or width unchanged, set as None.
         :param title: Title to add to the plot
         :param x_label: Label of the x-axis
         :param y_label: Label of the y-axis
@@ -1196,6 +1219,7 @@ class PlotHelper:
                                spanmode=spanmode, legend=legend,
                                show_box=show_box, show_points=show_points,
                                show_mean=show_mean, figure=figure, widget=widget,
+                               add_cell_numbers=add_cell_numbers,
                                side='positive', orientation='h', **kwargs)
 
         # Some settings for making a ridgeline out of the violin plot
@@ -1251,8 +1275,8 @@ class PlotHelper:
         :param reverse: If True, the color mapping is reversed.
         :param figure: If a go.Figure object is given, will be used to make
             the plot instead of a blank figure.
-        :param figsize: Height and width of the plot in pixels. Must be a tuple of
-            length two. To leave height or width unchanged, set as None.
+        :param figsize: Height and width of the plot in pixels. Must be a tuple
+            of length two. To leave height or width unchanged, set as None.
         :param title: Title to add to the plot
         :param x_label: Label of the x-axis
         :param y_label: Label of the y-axis
@@ -1358,8 +1382,8 @@ class PlotHelper:
             bin AREAS equals 1).
         :param figure: If a go.Figure object is given, will be used to make
             the plot instead of a blank figure.
-        :param figsize: Height and width of the plot in pixels. Must be a tuple of
-            length two. To leave height or width unchanged, set as None.
+        :param figsize: Height and width of the plot in pixels. Must be a tuple
+            of length two. To leave height or width unchanged, set as None.
         :param title: Title to add to the plot.
         :param x_label: Label of the x-axis
         :param y_label: Label of the y-axis
@@ -1472,8 +1496,8 @@ class PlotHelper:
             bin AREAS equals 1).
         :param figure: If a go.Figure object is given, will be used to make
             the plot instead of a blank figure.
-        :param figsize: Height and width of the plot in pixels. Must be a tuple of
-            length two. To leave height or width unchanged, set as None.
+        :param figsize: Height and width of the plot in pixels. Must be a tuple
+            of length two. To leave height or width unchanged, set as None.
         :param title: Title to add to the plot
         :param x_label: Label of the x-axis
         :param y_label: Label of the y-axis
