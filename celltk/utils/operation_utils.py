@@ -423,25 +423,24 @@ def get_cell_index(cell_id: int,
                    position_array: np.ndarray = None
                    ) -> int:
     """Returns the index of the centroid of a specific cell."""
-    cell_index = np.where(label_array == cell_id)[0]
-    if len(np.unique(cell_index)) > 1:
-        # Greater than one instance found
-        if position_id:
-            assert position_array is not None
-            # Get only the index corresponding to the position_id
-            mask = position_array == position_id
-            cell_index = np.where(
-                np.logical_and(label_array == cell_id, mask)
-            )[0]
-            cell_index = cell_index[0]
-        else:
-            warnings.warn('Found more than one matching cell. Using '
-                          f'first instance found at {cell_index[0]}.')
-            cell_index = cell_index[0]
+    if position_id:
+        assert position_array is not None
+        mask = position_array == position_id
     else:
-        cell_index = cell_index[0]
+        mask = np.ones(label_array.shape).astype(bool)
 
-    return int(cell_index)
+    cell_index = np.where(
+        np.logical_and(label_array == cell_id, mask)
+    )[0]
+
+    if len(cell_index) == 0:
+        warnings.warn(f'Cell {cell_id} not found.', UserWarning)
+        return
+    elif len(np.unique(cell_index)) > 1:
+        warnings.warn('Found more than one matching cell. Using '
+                      f'first instance found at {cell_index[0]}.')
+
+    return int(cell_index[0])
 
 
 def sliding_window_generator(arr: np.ndarray, overlap: int = 0) -> Generator:
