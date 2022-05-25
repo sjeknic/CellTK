@@ -734,7 +734,7 @@ class PlotHelper:
                     error_x = None
                     error_y = self._default_error_bar_layout.copy()
                     error_y.update({'type': 'data'})
-                    if err_arr.ndim == 1:
+                    if err_arr.ndim in (0, 1):
                         # Assume symmetric
                         error_y.update({'array': err_arr, 'symmetric': True})
                     elif err_arr.ndim == 2:
@@ -751,7 +751,7 @@ class PlotHelper:
                     error_y = None
                     error_x = self._default_error_bar_layout.copy()
                     error_x.update({'type': 'data'})
-                    if err_arr.ndim == 1:
+                    if err_arr.ndim in (0, 1):
                         # Assume symmetric
                         error_x.update({'array': err_arr, 'symmetric': True})
                     elif err_arr.ndim == 2:
