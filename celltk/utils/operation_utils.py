@@ -423,7 +423,7 @@ def get_cell_index(cell_id: int,
                    position_array: np.ndarray = None
                    ) -> int:
     """Returns the index of the centroid of a specific cell."""
-    if position_id:
+    if position_id is not None:
         assert position_array is not None
         mask = position_array == position_id
     else:
