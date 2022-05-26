@@ -798,30 +798,52 @@ class Segmenter(BaseSegmenter):
 
     @ImageHelper(by_frame=True)
     def expand_to_cytoring(self,
-                           mask: Mask,
+                           labels: Mask,
+                           image: Image = None,
                            distance: float = 1,
-                           margin: int = 0
+                           margin: int = 0,
+                           thres: float = None,
+                           relative: bool = True,
+                           mask: Mask = None,
                            ) -> Mask:
         """
         Expands labels in the given mask by a fixed
         distance.
 
-        :param mask:
+        :param labels:
         :param distance:
         :param margin:
+        :param thres:
+        :param relative:
+        :param mask: If given, only expands labels into indices
+            that are True in mask.
 
         :return:
-
-        TODO:
-            - add thresholding
         """
         # Expand initial seeds before applying expansion
         if margin:
-            mask = segm.expand_labels(mask, margin)
+            labels = segm.expand_labels(labels, margin)
 
-        out = segm.expand_labels(mask, distance)
+        out = segm.expand_labels(labels, distance)
+        out -= labels
 
-        return out - mask
+        # Make threshold mask if needed
+        if thres is not None:
+            assert image is not None, 'No intensity image provided'
+            if relative:
+                # Use 98th percentile instead of max to avoid outliers
+                thres *= np.percentile(image, 98)
+
+            thres_mask = image >= thres
+            if mask is not None:
+                mask *= thres_mask
+            else:
+                mask = thres_mask
+
+        # if mask is not None:
+            out[~mask.astype(bool)] = 0
+
+        return out
 
     @ImageHelper(by_frame=True)
     def remove_nuc_from_cyto(self,
