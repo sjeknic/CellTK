@@ -1089,6 +1089,7 @@ class BaseExtractor(Operation):
                 return
 
             # Get the data and group with the key
+            propagated = False
             arrs = [array[tuple(k)] for k in keys]
             arr_groups = itertools.permutations(zip(keys, arrs))
             func = getattr(np, func)
@@ -1113,8 +1114,9 @@ class BaseExtractor(Operation):
                         raise ValueError(e)
 
                 # Propagate results to other keys
-                if prop:
+                if prop and not propagated:
                     array.propagate_values(tuple(save_key), prop_to=prop)
+                    propagated = True
                 # If not including inverses, skip all remaining
                 if not incl:
                     break
