@@ -469,6 +469,8 @@ class PeakHelper:
         for l in np.unique(label[label > 0]):
             out.append(integrate.simps(trace[label == l]))
 
+        return out
+
     @staticmethod
     def _linearity(trace: np.ndarray,
                    label: np.ndarray

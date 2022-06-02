@@ -180,6 +180,32 @@ class PlotHelper:
                 except ValueError:
                     raise ValueError(f'Did not understand color {color}')
 
+    @staticmethod
+    def _format_arrays(arrays: Union[np.ndarray, Collection[np.ndarray]]
+                       ) -> Collection[np.ndarray]:
+        """"""
+        _t = (np.integer, np.float, np.ndarray, int, float)
+        if isinstance(arrays, np.ndarray):
+            # If the input is an array, put it in a list
+            # Cannot be object array, cannot pass array of arrays
+            assert arrays.dtype != 'object', 'Cannot use object arrays'
+            out = [arrays]
+        elif isinstance(arrays, _t):
+            out = [np.array(arrays)]
+        elif arrays is None or arrays == []:
+            # Empty input is just returned
+            return arrays
+        else:
+            # Basic check is that everything is an array or numeric type
+            if not all(isinstance(a, _t) for a in arrays):
+                raise TypeError('Received non-numeric type')
+
+            # Some plotly functions only take arrays, cast everything to array
+            out = [np.array(a) for a in arrays
+                   if not isinstance(a, np.ndarray)]
+
+        return out
+
     def _build_estimator_func(self,
                               func: Union[Callable, str, functools.partial],
                               *args, **kwargs
@@ -227,6 +253,7 @@ class PlotHelper:
                   colors: Union[str, Collection[str]] = None,
                   alpha: float = 1.0,
                   time: Union[Collection[np.ndarray], np.ndarray] = None,
+                  add_cell_numbers: bool = True,
                   legend: bool = True,
                   figure: Union[go.Figure, go.FigureWidget] = None,
                   figsize: Tuple[int] = (None, None),
@@ -273,11 +300,13 @@ class PlotHelper:
         :param alpha: Opacity of the line colors.
         :param time: Time axis for the plot. Must be the same size as the
             second dimension of arrays.
+        :param add_cell_numbers: If True, adds the number of cells to each key
+            in keys.
         :param legend: If False, no legend is made on the plot.
         :param figure: If a go.Figure object is given, will be used to make
             the plot instead of a blank figure.
-        :param figsize: Height and width of the plot in pixels. Must be a tuple of
-            length two. To leave height or width unchanged, set as None.
+        :param figsize: Height and width of the plot in pixels. Must be a tuple
+            of length two. To leave height or width unchanged, set as None.
         :param title: Title to add to the plot
         :param x_label: Label of the x-axis
         :param y_label: Label of the y-axis
@@ -294,14 +323,13 @@ class PlotHelper:
 
         :return: Figure object
 
-        :raises AssertionError: If not all items in arrays are np.ndarray.
         :raises AssertionError: If any item in arrays is not two dimensional.
         :raises AssertionError: If figsize is not a tuple of length two.
         :raises TypeError: If time is not an np.ndarray or collection of
             np.ndarray.
         """
         # Format inputs
-        assert all([isinstance(a, np.ndarray) for a in arrays])
+        arrays = self._format_arrays(arrays)
         assert all([a.ndim == 2 for a in arrays])
         assert len(figsize) == 2
 
@@ -324,7 +352,8 @@ class PlotHelper:
             # Get the key
             if not key:
                 key = f'line_{idx}'
-            key += f' | n={arr.shape[0]}'
+            if add_cell_numbers and arr is not None:
+                key += f' | n={arr.shape[0]}'
 
             # err_estimator is used to set the bounds for the shaded region
             if err_estimator:
@@ -414,6 +443,7 @@ class PlotHelper:
                      colors: Union[str, Collection[str]] = None,
                      alpha: float = 1.0,
                      symbols: Union[str, Collection[str]] = None,
+                     add_cell_numbers: bool = True,
                      legend: bool = True,
                      figure: Union[go.Figure, go.FigureWidget] = None,
                      figsize: Tuple[int] = (None, None),
@@ -461,11 +491,13 @@ class PlotHelper:
             not provided, the color map will be glasbey. Can also be list
             of named CSS colors or hexadecimal or RGBA strings.
         :param alpha: Opacity of the marker fill colors.
+        :param add_cell_numbers: If True, adds the number of cells to each key
+            in keys.
         :param legend: If False, no legend is made on the plot.
         :param figure: If a go.Figure object is given, will be used to make
             the plot instead of a blank figure.
-        :param figsize: Height and width of the plot in pixels. Must be a tuple of
-            length two. To leave height or width unchanged, set as None.
+        :param figsize: Height and width of the plot in pixels. Must be a tuple
+            of length two. To leave height or width unchanged, set as None.
         :param title: Title to add to the plot
         :param x_label: Label of the x-axis
         :param y_label: Label of the y-axis
@@ -492,17 +524,9 @@ class PlotHelper:
         :raises AssertionError: If figsize is not a tuple of length two.
         """
         # Format inputs - cast to np.ndarray as needed
+        x_arrays = self._format_arrays(x_arrays)
+        y_arrays = self._format_arrays(y_arrays)
         if x_arrays and y_arrays: assert len(x_arrays) == len(y_arrays)
-        # Plotly will not accept int or float for go.Scatter
-        _t = (np.integer, np.float, int, float)
-        if any(isinstance(a, _t) for a in x_arrays):
-            x_arrays = [np.array(x) for x in x_arrays
-                        if not isinstance(x, np.ndarray)]
-        if any(isinstance(a, _t) for a in y_arrays):
-            y_arrays = [np.array(y) for y in y_arrays
-                        if not isinstance(y, np.ndarray)]
-        assert all(isinstance(a, np.ndarray) for a in x_arrays)
-        assert all(isinstance(a, np.ndarray) for a in y_arrays)
         assert len(figsize) == 2
 
         # Convert any inputs that need converting
@@ -529,8 +553,9 @@ class PlotHelper:
             # Get the key
             if not key:
                 key = f'group_{idx}'
-            n = yarr.shape[0] if yarr is not None else xarr.shape[0]
-            key += f' | n={n}'
+            if add_cell_numbers and (yarr is not None or xarr is not None):
+                n = yarr.shape[0] if yarr is not None else xarr.shape[0]
+                key += f' | n={n}'
 
             # err_estimator is used to set error bars
             if err_estimator:
@@ -550,7 +575,7 @@ class PlotHelper:
                     scale_only = err_arr.ndim == 1
                     err_arr = normalizer(
                         err_arr.reshape(-1, 1), scale_only=scale_only
-                ).reshape(err_arr.shape)
+                    ).reshape(err_arr.shape)
 
             # Assign to x and y:
             x = np.squeeze(xarr) if xarr is not None else None
@@ -605,8 +630,10 @@ class PlotHelper:
                  err_estimator: Union[Callable, str, functools.partial] = None,
                  ax_labels: Collection[str] = None,
                  colors: Union[str, Collection[str]] = None,
+                 alpha: float = 1.0,
                  orientation: str = 'v',
                  barmode: str = 'group',
+                 add_cell_numbers: bool = True,
                  legend: bool = True,
                  figure: Union[go.Figure, go.FigureWidget] = None,
                  figsize: Tuple[int] = (None, None),
@@ -646,15 +673,18 @@ class PlotHelper:
             in seaborn/matplotlib, then in Plotly to find the color map. If
             not provided, the color map will be glasbey. Can also be list
             of named CSS colors or hexadecimal or RGBA strings.
+        :param alpha: Opacity of the marker fill colors.
         :param ax_labels: Labels for the categorical axis.
         :param orientation: Orientation of the bar plot.
         :param barmode: Keyword argument describing how to group the bars.
             Options are 'group', 'overlay', 'relative', and 'stack'.
+        :param add_cell_numbers: If True, adds the number of cells to each key
+            in keys.
         :param legend: If False, no legend is made on the plot.
         :param figure: If a go.Figure object is given, will be used to make
             the plot instead of a blank figure.
-        :param figsize: Height and width of the plot in pixels. Must be a tuple of
-            length two. To leave height or width unchanged, set as None.
+        :param figsize: Height and width of the plot in pixels. Must be a tuple
+            of length two. To leave height or width unchanged, set as None.
         :param title: Title to add to the plot
         :param x_label: Label of the x-axis
         :param y_label: Label of the y-axis
@@ -677,12 +707,12 @@ class PlotHelper:
         :raises AssertionError: If figsize is not a tuple of length two.
         """
         # Format data
-        assert all([isinstance(a, np.ndarray) for a in arrays])
+        arrays = self._format_arrays(arrays)
         assert orientation in ('v', 'h', 'horizontal', 'vertical')
         assert len(figsize) == 2
 
         # Convert any inputs that need converting
-        colors = self._build_colormap(colors, len(arrays))
+        colors = self._build_colormap(colors, len(arrays), alpha)
         if estimator: estimator = self._build_estimator_func(estimator)
         if err_estimator: err_estimator = self._build_estimator_func(err_estimator)
         bar_kwargs = {k: v for k, v in kwargs.items()
@@ -698,7 +728,8 @@ class PlotHelper:
             # Get the key
             if not key:
                 key = f'bar_{idx}'
-            key += f' | n={arr.shape[0]}'
+            if add_cell_numbers and arr is not None:
+                key += f' | n={arr.shape[0]}'
 
             # err_estimator is used to calculate errorbars
             if err_estimator:
@@ -720,7 +751,7 @@ class PlotHelper:
                     error_x = None
                     error_y = self._default_error_bar_layout.copy()
                     error_y.update({'type': 'data'})
-                    if err_arr.ndim == 1:
+                    if err_arr.ndim in (0, 1):
                         # Assume symmetric
                         error_y.update({'array': err_arr, 'symmetric': True})
                     elif err_arr.ndim == 2:
@@ -737,7 +768,7 @@ class PlotHelper:
                     error_y = None
                     error_x = self._default_error_bar_layout.copy()
                     error_x.update({'type': 'data'})
-                    if err_arr.ndim == 1:
+                    if err_arr.ndim in (0, 1):
                         # Assume symmetric
                         error_x.update({'array': err_arr, 'symmetric': True})
                     elif err_arr.ndim == 2:
@@ -787,6 +818,7 @@ class PlotHelper:
                        alpha: float = 1.0,
                        orientation: str = 'v',
                        barmode: str = 'group',
+                       add_cell_numbers: bool = True,
                        legend: bool = True,
                        figure: Union[go.Figure, go.FigureWidget] = None,
                        figsize: Tuple[int] = (None, None),
@@ -842,11 +874,13 @@ class PlotHelper:
         :param orientation: Orientation of the bar plot.
         :param barmode: Keyword argument describing how to group the bars.
             Options are 'group', 'overlay', 'stack', and 'relative'.
+        :param add_cell_numbers: If True, adds the number of cells to each key
+            in keys.
         :param legend: If False, no legend is made on the plot.
         :param figure: If a go.Figure object is given, will be used to make
             the plot instead of a blank figure.
-        :param figsize: Height and width of the plot in pixels. Must be a tuple of
-            length two. To leave height or width unchanged, set as None.
+        :param figsize: Height and width of the plot in pixels. Must be a tuple
+            of length two. To leave height or width unchanged, set as None.
         :param title: Title to add to the plot
         :param x_label: Label of the x-axis
         :param y_label: Label of the y-axis
@@ -869,7 +903,7 @@ class PlotHelper:
         :raises AssertionError: If figsize is not a tuple of length two.
         """
         # Format data
-        assert all([isinstance(a, np.ndarray) for a in arrays])
+        arrays = self._format_arrays(arrays)
         assert orientation in ('v', 'h', 'horizontal', 'vertical')
         assert len(figsize) == 2
 
@@ -885,8 +919,9 @@ class PlotHelper:
         for idx, (arr, key) in enumerate(itertools.zip_longest(arrays, keys)):
             # Get the key
             if not key:
-                key = f'bar_{idx}'
-            key += f' | n={arr.shape[0]}'
+                key = f'dist_{idx}'
+            if add_cell_numbers and arr is not None:
+                key += f' | n={arr.shape[0]}'
 
             if orientation in ('v', 'vertical'):
                 y = None
@@ -948,6 +983,7 @@ class PlotHelper:
                     show_mean: bool = False,
                     spanmode: str = 'soft',
                     side: str = None,
+                    add_cell_numbers: bool = True,
                     legend: bool = True,
                     figure: Union[go.Figure, go.FigureWidget] = None,
                     figsize: Tuple[int] = (None, None),
@@ -996,11 +1032,13 @@ class PlotHelper:
         :param side: Side to plot the distribution. By default, the
             distribution is plotted on both sides, but can be 'positive'
             or 'negative' to plot on only one side.
+        :param add_cell_numbers: If True, adds the number of cells to each key
+            in keys.
         :param legend: If False, no legend is made on the plot.
         :param figure: If a go.Figure object is given, will be used to make
             the plot instead of a blank figure.
-        :param figsize: Height and width of the plot in pixels. Must be a tuple of
-            length two. To leave height or width unchanged, set as None.
+        :param figsize: Height and width of the plot in pixels. Must be a tuple
+            of length two. To leave height or width unchanged, set as None.
         :param title: Title to add to the plot
         :param x_label: Label of the x-axis
         :param y_label: Label of the y-axis
@@ -1030,7 +1068,8 @@ class PlotHelper:
         """
         # Format inputs
         violinmode = None
-        assert all([isinstance(a, np.ndarray) for a in arrays])
+        arrays = self._format_arrays(arrays)
+        neg_arrays = self._format_arrays(neg_arrays)
         arrays = [np.squeeze(a) for a in arrays]
         assert all([a.ndim in (1, 0) for a in arrays])
         if neg_arrays:
@@ -1059,7 +1098,8 @@ class PlotHelper:
             # Get the key
             if not key:
                 key = f'dist_{idx}'
-            key += f' | n={arr.shape[0]}'
+            if add_cell_numbers and arr is not None:
+                key += f' | n={arr.shape[0]}'
 
             # Set the data key based on orientation
             if orientation in ('v', 'vertical'):
@@ -1131,6 +1171,7 @@ class PlotHelper:
                        show_box: bool = False,
                        show_points: Union[str, bool] = False,
                        show_mean: bool = True,
+                       add_cell_numbers: bool = True,
                        legend: bool = True,
                        figure: Union[go.Figure, go.FigureWidget] = None,
                        figsize: Tuple[int] = (None, None),
@@ -1167,11 +1208,13 @@ class PlotHelper:
         :param side: Side to plot the distribution. By default, the
             distribution is plotted on both sides, but can be 'positive'
             or 'negative' to plot on only one side.
+        :param add_cell_numbers: If True, adds the number of cells to each key
+            in keys.
         :param legend: If False, no legend is made on the plot.
         :param figure: If a go.Figure object is given, will be used to make
             the plot instead of a blank figure.
-        :param figsize: Height and width of the plot in pixels. Must be a tuple of
-            length two. To leave height or width unchanged, set as None.
+        :param figsize: Height and width of the plot in pixels. Must be a tuple
+            of length two. To leave height or width unchanged, set as None.
         :param title: Title to add to the plot
         :param x_label: Label of the x-axis
         :param y_label: Label of the y-axis
@@ -1196,6 +1239,7 @@ class PlotHelper:
                                spanmode=spanmode, legend=legend,
                                show_box=show_box, show_points=show_points,
                                show_mean=show_mean, figure=figure, widget=widget,
+                               add_cell_numbers=add_cell_numbers,
                                side='positive', orientation='h', **kwargs)
 
         # Some settings for making a ridgeline out of the violin plot
@@ -1221,6 +1265,7 @@ class PlotHelper:
                      zmin: float = None,
                      zmid: float = None,
                      zmax: float = None,
+                     robust_z: bool = False,
                      reverse: bool = False,
                      figure: Union[go.Figure, go.FigureWidget] = None,
                      figsize: Tuple[int] = (None, None),
@@ -1248,11 +1293,13 @@ class PlotHelper:
             zmax to be equidistant from this point.
         :param zmax: Sets the upper bound of the color domain. If given, zmin
             must also be given.
+        :param robust_z: If True, uses percentiles to set zmin and zmax instead
+            of extremes of the dataset.
         :param reverse: If True, the color mapping is reversed.
         :param figure: If a go.Figure object is given, will be used to make
             the plot instead of a blank figure.
-        :param figsize: Height and width of the plot in pixels. Must be a tuple of
-            length two. To leave height or width unchanged, set as None.
+        :param figsize: Height and width of the plot in pixels. Must be a tuple
+            of length two. To leave height or width unchanged, set as None.
         :param title: Title to add to the plot
         :param x_label: Label of the x-axis
         :param y_label: Label of the y-axis
@@ -1268,9 +1315,11 @@ class PlotHelper:
 
         :return: Figure object.
 
+        :raises AssertionError: If array dtype is object.
         :raises AssertionError: If array is not two-dimensional.
         :raises AssertionError: If figsize is not a tuple of length two.
         """
+        assert array.dtype != 'object'
         assert array.ndim == 2
         assert len(figsize) == 2
 
@@ -1278,6 +1327,13 @@ class PlotHelper:
         if figure: fig = figure
         elif widget: fig = go.FigureWidget()
         else: fig = go.Figure()
+
+        # Similar to how seaborn determines robust quantiles
+        if robust_z:
+            zmin = np.nanpercentile(array, 2)
+            zmax = np.nanpercentile(array, 98)
+            zmid = None
+
         trace = go.Heatmap(z=array, zmin=zmin, zmax=zmax,
                            zmid=zmid, colorscale=colorscale,
                            reversescale=reverse, **kwargs)
@@ -1303,6 +1359,7 @@ class PlotHelper:
                        zmin: float = None,
                        zmid: float = None,
                        zmax: float = None,
+                       robust_z: bool = False,
                        xbinsize: float = None,
                        ybinsize: float = None,
                        histfunc: str = 'count',
@@ -1337,6 +1394,8 @@ class PlotHelper:
             zmax to be equidistant from this point.
         :param zmax: Sets the upper bound of the color domain. If given, zmin
             must also be given.
+        :param robust_z: If True, uses percentiles to set zmin and zmax instead
+            of extremes of the dataset.
         :param xbinsize: Size of the bins along the x-axis.
         :param ybinsize: Size of the bins along the y-axis.
         :param histfunc: Specifies the binning function used for
@@ -1358,8 +1417,8 @@ class PlotHelper:
             bin AREAS equals 1).
         :param figure: If a go.Figure object is given, will be used to make
             the plot instead of a blank figure.
-        :param figsize: Height and width of the plot in pixels. Must be a tuple of
-            length two. To leave height or width unchanged, set as None.
+        :param figsize: Height and width of the plot in pixels. Must be a tuple
+            of length two. To leave height or width unchanged, set as None.
         :param title: Title to add to the plot.
         :param x_label: Label of the x-axis
         :param y_label: Label of the y-axis
@@ -1382,6 +1441,13 @@ class PlotHelper:
         assert np.squeeze(x_array).ndim in (1, 0)
         assert np.squeeze(y_array).ndim in (1, 0)
         assert len(figsize) == 2
+
+        # Similar to how seaborn determines robust quantiles
+        if robust_z:
+            _arr = np.stack((x_array.ravel(), y_array.ravel()))
+            zmin = np.nanpercentile(_arr, 2)
+            zmax = np.nanpercentile(_arr, 98)
+            zmid = None
 
         # Build the figure and plot the density histogram
         if figure: fig = figure
@@ -1417,6 +1483,7 @@ class PlotHelper:
                        zmin: float = None,
                        zmid: float = None,
                        zmax: float = None,
+                       robust_z: bool = False,
                        xbinsize: float = None,
                        ybinsize: float = None,
                        histfunc: str = 'count',
@@ -1451,6 +1518,8 @@ class PlotHelper:
             zmax to be equidistant from this point.
         :param zmax: Sets the upper bound of the color domain. If given, zmin
             must also be given.
+        :param robust_z: If True, uses percentiles to set zmin and zmax instead
+            of extremes of the dataset.
         :param xbinsize: Size of the bins along the x-axis.
         :param ybinsize: Size of the bins along the y-axis.
         :param histfunc: Specifies the binning function used for
@@ -1472,8 +1541,8 @@ class PlotHelper:
             bin AREAS equals 1).
         :param figure: If a go.Figure object is given, will be used to make
             the plot instead of a blank figure.
-        :param figsize: Height and width of the plot in pixels. Must be a tuple of
-            length two. To leave height or width unchanged, set as None.
+        :param figsize: Height and width of the plot in pixels. Must be a tuple
+            of length two. To leave height or width unchanged, set as None.
         :param title: Title to add to the plot
         :param x_label: Label of the x-axis
         :param y_label: Label of the y-axis
@@ -1496,6 +1565,13 @@ class PlotHelper:
         assert np.squeeze(x_array).ndim in (1, 0)
         assert np.squeeze(y_array).ndim in (1, 0)
         assert len(figsize) == 2
+
+        # Similar to how seaborn determines robust quantiles
+        if robust_z:
+            _arr = np.stack((x_array.ravel(), y_array.ravel()))
+            zmin = np.nanpercentile(_arr, 2)
+            zmax = np.nanpercentile(_arr, 98)
+            zmid = None
 
         # Build the figure and plot the contours
         if figure: fig = figure
@@ -1588,6 +1664,8 @@ class PlotHelper:
             equal length of color_thres.
         """
         # Check inputs
+        color_arrays = self._format_arrays(color_arrays)
+        color_thres = self._format_arrays(color_thres)
         assert all([trace_array.shape == c.shape for c in color_arrays])
         assert len(color_arrays) == len(color_thres)
 

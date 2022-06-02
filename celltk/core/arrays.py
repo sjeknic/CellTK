@@ -1204,6 +1204,9 @@ class ExperimentArray():
                 else:
                     f[key].attrs[coord] = val.coords[coord]
 
+            f[key].attrs['time'] = val.time
+            f[key].attrs['pos_id'] = val.pos_id
+
         f.close()
 
     @classmethod
