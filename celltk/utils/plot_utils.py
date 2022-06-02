@@ -180,6 +180,32 @@ class PlotHelper:
                 except ValueError:
                     raise ValueError(f'Did not understand color {color}')
 
+    @staticmethod
+    def _format_arrays(arrays: Union[np.ndarray, Collection[np.ndarray]]
+                       ) -> Collection[np.ndarray]:
+        """"""
+        _t = (np.integer, np.float, np.ndarray, int, float)
+        if isinstance(arrays, np.ndarray):
+            # If the input is an array, put it in a list
+            # Cannot be object array, cannot pass array of arrays
+            assert arrays.dtype != 'object', 'Cannot use object arrays'
+            out = [arrays]
+        elif isinstance(arrays, _t):
+            out = [np.array(arrays)]
+        elif arrays is None or arrays == []:
+            # Empty input is just returned
+            return arrays
+        else:
+            # Basic check is that everything is an array or numeric type
+            if not all(isinstance(a, _t) for a in arrays):
+                raise TypeError('Received non-numeric type')
+
+            # Some plotly functions only take arrays, cast everything to array
+            out = [np.array(a) for a in arrays
+                   if not isinstance(a, np.ndarray)]
+
+        return out
+
     def _build_estimator_func(self,
                               func: Union[Callable, str, functools.partial],
                               *args, **kwargs
@@ -297,14 +323,13 @@ class PlotHelper:
 
         :return: Figure object
 
-        :raises AssertionError: If not all items in arrays are np.ndarray.
         :raises AssertionError: If any item in arrays is not two dimensional.
         :raises AssertionError: If figsize is not a tuple of length two.
         :raises TypeError: If time is not an np.ndarray or collection of
             np.ndarray.
         """
         # Format inputs
-        assert all([isinstance(a, np.ndarray) for a in arrays])
+        arrays = self._format_arrays(arrays)
         assert all([a.ndim == 2 for a in arrays])
         assert len(figsize) == 2
 
@@ -499,17 +524,9 @@ class PlotHelper:
         :raises AssertionError: If figsize is not a tuple of length two.
         """
         # Format inputs - cast to np.ndarray as needed
+        x_arrays = self._format_arrays(x_arrays)
+        y_arrays = self._format_arrays(y_arrays)
         if x_arrays and y_arrays: assert len(x_arrays) == len(y_arrays)
-        # Plotly will not accept int or float for go.Scatter
-        _t = (np.integer, np.float, int, float)
-        if any(isinstance(a, _t) for a in x_arrays):
-            x_arrays = [np.array(x) for x in x_arrays
-                        if not isinstance(x, np.ndarray)]
-        if any(isinstance(a, _t) for a in y_arrays):
-            y_arrays = [np.array(y) for y in y_arrays
-                        if not isinstance(y, np.ndarray)]
-        assert all(isinstance(a, np.ndarray) for a in x_arrays)
-        assert all(isinstance(a, np.ndarray) for a in y_arrays)
         assert len(figsize) == 2
 
         # Convert any inputs that need converting
@@ -558,7 +575,7 @@ class PlotHelper:
                     scale_only = err_arr.ndim == 1
                     err_arr = normalizer(
                         err_arr.reshape(-1, 1), scale_only=scale_only
-                ).reshape(err_arr.shape)
+                    ).reshape(err_arr.shape)
 
             # Assign to x and y:
             x = np.squeeze(xarr) if xarr is not None else None
@@ -690,7 +707,7 @@ class PlotHelper:
         :raises AssertionError: If figsize is not a tuple of length two.
         """
         # Format data
-        assert all([isinstance(a, np.ndarray) for a in arrays])
+        arrays = self._format_arrays(arrays)
         assert orientation in ('v', 'h', 'horizontal', 'vertical')
         assert len(figsize) == 2
 
@@ -886,7 +903,7 @@ class PlotHelper:
         :raises AssertionError: If figsize is not a tuple of length two.
         """
         # Format data
-        assert all([isinstance(a, np.ndarray) for a in arrays])
+        arrays = self._format_arrays(arrays)
         assert orientation in ('v', 'h', 'horizontal', 'vertical')
         assert len(figsize) == 2
 
@@ -1051,7 +1068,8 @@ class PlotHelper:
         """
         # Format inputs
         violinmode = None
-        assert all([isinstance(a, np.ndarray) for a in arrays])
+        arrays = self._format_arrays(arrays)
+        neg_arrays = self._format_arrays(neg_arrays)
         arrays = [np.squeeze(a) for a in arrays]
         assert all([a.ndim in (1, 0) for a in arrays])
         if neg_arrays:
@@ -1247,6 +1265,7 @@ class PlotHelper:
                      zmin: float = None,
                      zmid: float = None,
                      zmax: float = None,
+                     robust_z: bool = False,
                      reverse: bool = False,
                      figure: Union[go.Figure, go.FigureWidget] = None,
                      figsize: Tuple[int] = (None, None),
@@ -1274,6 +1293,8 @@ class PlotHelper:
             zmax to be equidistant from this point.
         :param zmax: Sets the upper bound of the color domain. If given, zmin
             must also be given.
+        :param robust_z: If True, uses percentiles to set zmin and zmax instead
+            of extremes of the dataset.
         :param reverse: If True, the color mapping is reversed.
         :param figure: If a go.Figure object is given, will be used to make
             the plot instead of a blank figure.
@@ -1294,9 +1315,11 @@ class PlotHelper:
 
         :return: Figure object.
 
+        :raises AssertionError: If array dtype is object.
         :raises AssertionError: If array is not two-dimensional.
         :raises AssertionError: If figsize is not a tuple of length two.
         """
+        assert array.dtype != 'object'
         assert array.ndim == 2
         assert len(figsize) == 2
 
@@ -1304,6 +1327,13 @@ class PlotHelper:
         if figure: fig = figure
         elif widget: fig = go.FigureWidget()
         else: fig = go.Figure()
+
+        # Similar to how seaborn determines robust quantiles
+        if robust_z:
+            zmin = np.nanpercentile(array, 2)
+            zmax = np.nanpercentile(array, 98)
+            zmid = None
+
         trace = go.Heatmap(z=array, zmin=zmin, zmax=zmax,
                            zmid=zmid, colorscale=colorscale,
                            reversescale=reverse, **kwargs)
@@ -1329,6 +1359,7 @@ class PlotHelper:
                        zmin: float = None,
                        zmid: float = None,
                        zmax: float = None,
+                       robust_z: bool = False,
                        xbinsize: float = None,
                        ybinsize: float = None,
                        histfunc: str = 'count',
@@ -1363,6 +1394,8 @@ class PlotHelper:
             zmax to be equidistant from this point.
         :param zmax: Sets the upper bound of the color domain. If given, zmin
             must also be given.
+        :param robust_z: If True, uses percentiles to set zmin and zmax instead
+            of extremes of the dataset.
         :param xbinsize: Size of the bins along the x-axis.
         :param ybinsize: Size of the bins along the y-axis.
         :param histfunc: Specifies the binning function used for
@@ -1409,6 +1442,13 @@ class PlotHelper:
         assert np.squeeze(y_array).ndim in (1, 0)
         assert len(figsize) == 2
 
+        # Similar to how seaborn determines robust quantiles
+        if robust_z:
+            _arr = np.stack((x_array.ravel(), y_array.ravel()))
+            zmin = np.nanpercentile(_arr, 2)
+            zmax = np.nanpercentile(_arr, 98)
+            zmid = None
+
         # Build the figure and plot the density histogram
         if figure: fig = figure
         elif widget: fig = go.FigureWidget()
@@ -1443,6 +1483,7 @@ class PlotHelper:
                        zmin: float = None,
                        zmid: float = None,
                        zmax: float = None,
+                       robust_z: bool = False,
                        xbinsize: float = None,
                        ybinsize: float = None,
                        histfunc: str = 'count',
@@ -1477,6 +1518,8 @@ class PlotHelper:
             zmax to be equidistant from this point.
         :param zmax: Sets the upper bound of the color domain. If given, zmin
             must also be given.
+        :param robust_z: If True, uses percentiles to set zmin and zmax instead
+            of extremes of the dataset.
         :param xbinsize: Size of the bins along the x-axis.
         :param ybinsize: Size of the bins along the y-axis.
         :param histfunc: Specifies the binning function used for
@@ -1522,6 +1565,13 @@ class PlotHelper:
         assert np.squeeze(x_array).ndim in (1, 0)
         assert np.squeeze(y_array).ndim in (1, 0)
         assert len(figsize) == 2
+
+        # Similar to how seaborn determines robust quantiles
+        if robust_z:
+            _arr = np.stack((x_array.ravel(), y_array.ravel()))
+            zmin = np.nanpercentile(_arr, 2)
+            zmax = np.nanpercentile(_arr, 98)
+            zmid = None
 
         # Build the figure and plot the contours
         if figure: fig = figure
@@ -1614,6 +1664,8 @@ class PlotHelper:
             equal length of color_thres.
         """
         # Check inputs
+        color_arrays = self._format_arrays(color_arrays)
+        color_thres = self._format_arrays(color_thres)
         assert all([trace_array.shape == c.shape for c in color_arrays])
         assert len(color_arrays) == len(color_thres)
 
