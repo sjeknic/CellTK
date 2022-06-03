@@ -13,7 +13,7 @@ import scipy.ndimage as ndi
 import SimpleITK as sitk
 
 from celltk.core.operation import BaseSegmenter
-from celltk.utils._types import Image, Mask
+from celltk.utils._types import Image, Mask, Stack
 from celltk.utils.utils import ImageHelper
 from celltk.utils.operation_utils import (dilate_sitk, voronoi_boundaries,
                                           skimage_level_set, gray_fill_holes,

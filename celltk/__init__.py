@@ -12,7 +12,7 @@ from .extract import Extractor
 from .evaluate import Evaluator
 
 # Import important types
-from .utils._types import Image, Mask, Track, Arr, Same
+from .utils._types import Image, Mask, Track, Array, Stack
 from .utils.slurm_utils import SlurmController
 
 # Import helper classes

@@ -5,7 +5,7 @@ import numpy as np
 
 from celltk.core.operation import BaseExtractor
 from celltk.utils.utils import ImageHelper
-from celltk.utils._types import Image, Mask, Track, Arr, RandomNameProperty
+from celltk.utils._types import Image, Mask, Track, Array, RandomNameProperty
 from celltk.core.arrays import ConditionArray
 from celltk.utils.operation_utils import lineage_to_track, parents_from_track
 import celltk.utils.metric_utils as metric_utils
@@ -34,7 +34,7 @@ class Extractor(BaseExtractor):
                                 skip_frames: Tuple[int] = tuple([]),
                                 remove_parent: bool = True,
                                 parent_track: int = 0
-                                ) -> Arr:
+                                ) -> Array:
         """Extracts data from stacks of images and constructs a ConditionArray.
 
         :param images: Images to extract data from.

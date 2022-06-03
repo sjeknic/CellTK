@@ -11,7 +11,7 @@ from glob import glob
 from celltk.core.operation import Operation
 from celltk.core.pipeline import Pipeline
 from celltk.core.arrays import ExperimentArray
-from celltk.utils._types import Arr
+from celltk.utils._types import Array
 from celltk.utils.process_utils import condense_operations, extract_operations
 from celltk.utils.log_utils import get_logger, get_console_logger
 from celltk.utils.file_utils import (save_operation_yaml, save_pipeline_yaml,
@@ -419,7 +419,7 @@ class Orchestrator():
     def _run_multiple_pipelines(self,
                                 pipeline_dict: Dict,
                                 n_cores: int = 1
-                                ) -> Collection[Arr]:
+                                ) -> Collection[Array]:
         """
         pipeline_dict holds path information for building ALL of the pipelines
             - key is subfolder, val is to be passed to Pipeline.__init__

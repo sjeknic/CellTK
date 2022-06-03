@@ -15,7 +15,7 @@ import skimage.util as util
 import SimpleITK as sitk
 
 from celltk.core.arrays import ConditionArray
-from celltk.utils._types import (Image, Mask, Track, Arr, Same,
+from celltk.utils._types import (Image, Mask, Track, Array, Stack,
                                  ImageContainer, INPT_NAMES,
                                  RandomNameProperty)
 from celltk.utils.operation_utils import (track_to_mask, parents_from_track,
@@ -26,7 +26,7 @@ import celltk.utils.metric_utils as metric_utils
 import celltk.utils.filter_utils as filter_utils
 
 
-class Operation():
+class Operation:
     """
     Base class for all other Operations.
 
@@ -134,9 +134,9 @@ class Operation():
                  images: Collection[Image] = [],
                  masks: Collection[Mask] = [],
                  tracks: Collection[Track] = [],
-                 arrays: Collection[Arr] = [],
+                 arrays: Collection[Array] = [],
                  _return_keys: bool = False
-                 ) -> Union[Image, Mask, Track, Arr]:
+                 ) -> Union[Image, Mask, Track, Array]:
         """
         __call__ runs operation independently of Pipeline class
 
@@ -153,7 +153,7 @@ class Operation():
 
         # Generate keys based on enumeration
         container = ImageContainer()
-        inputs = [Image, Mask, Track, Arr]
+        inputs = [Image, Mask, Track, Array]
         for nm, stack in zip(inputs, [images, masks, tracks, arrays]):
             if stack:
                 nm = nm.__name__
@@ -405,8 +405,8 @@ class Operation():
         # Get all the inputs that were passed to __init__
         inputs = []
         for i in INPT_NAMES:
-            # Messy fix, but not folder for Same/Stack input
-            if i != Same.__name__:
+            # Messy fix, but not folder for Stack/Stack input
+            if i != Stack.__name__:
                 inputs.extend([(g, i) for g in getattr(self, f'{i}s')])
 
         # Check if save_as was set for last function
@@ -614,7 +614,7 @@ class Operation():
                    mask: Mask = None,
                    mask_name: str = None,
                    *args, **kwargs
-                   ) -> Same:
+                   ) -> Stack:
         """ Applies a boolean mask to an image. User can supply
         a boolean mask or the name of a function from filter_utils.
 
@@ -822,7 +822,7 @@ class BaseExtractor(Operation):
     """
     __name__ = 'Extractor'
     _input_type = (Image, Mask, Track)
-    _output_type = Arr
+    _output_type = Array
     # This is directly from skimage.regionprops
     # Not included yet: convex_image, filled_image, image, inertia_tensor
     #                   inertia_tensor_eigvals, local_centroid, intensity_image
@@ -919,7 +919,7 @@ class BaseExtractor(Operation):
                  lineages: Collection[np.ndarray] = [],
                  condition: str = None,
                  **kwargs,
-                 ) -> Arr:
+                 ) -> Array:
         """
         This directly calls extract_data_from_image
         instead of using run_operation
@@ -1099,8 +1099,8 @@ class BaseExtractor(Operation):
 
                 # Each result is saved with the first key
                 save_key = [name] + [k for k in keys[0]
-                                     if not isinstance(k, slice) and
-                                     k not in self._metric_idx]
+                                     if not isinstance(k, slice)
+                                     and k not in self._metric_idx]
                 try:
                     array[tuple(save_key)] = result
                 except ValueError as e:
@@ -1197,8 +1197,8 @@ class BaseEvaluator(Operation):
     Extractor.
     """
     __name__ = 'Evaluator'
-    _input_type = (Arr,)
-    _output_type = Arr
+    _input_type = (Array,)
+    _output_type = Array
 
     def __init__(self,
                  output: str = 'evaluate',

@@ -1,6 +1,6 @@
 import warnings
 from itertools import groupby
-from typing import Union, Collection, Tuple
+from typing import Union, Collection, Tuple, Optional
 
 import numpy as np
 import SimpleITK as sitk
@@ -13,7 +13,7 @@ import scipy.ndimage as ndi
 import sklearn.preprocessing as preproc
 
 from celltk.core.operation import BaseProcessor
-from celltk.utils._types import Image, Mask, Track, Same
+from celltk.utils._types import Image, Mask, Track, Stack
 from celltk.utils.utils import ImageHelper
 from celltk.utils.operation_utils import (sliding_window_generator,
                                           shift_array, crop_array, PadHelper,
@@ -37,7 +37,7 @@ class Processor(BaseProcessor):
                                    track: Track = tuple([]),
                                    align_with: str = 'image',
                                    crop: bool = True
-                                   ) -> Same:
+                                   ) -> Stack:
         """Uses phase cross-correlation to shift the images to align them.
         Optionally can crop the images to align. Align with can be used
         to specify which of the inputs to use. Uses the first stack in the

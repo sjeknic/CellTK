@@ -4,7 +4,7 @@ from typing import Tuple
 import numpy as np
 import skimage.segmentation as segm
 
-from celltk.utils._types import Track, Mask, Image, Arr
+from celltk.utils._types import Track, Mask, Image, Array
 from celltk.core.operation import BaseEvaluator
 from celltk.utils.utils import ImageHelper
 from celltk.utils.operation_utils import track_to_mask, get_cell_index
@@ -15,7 +15,7 @@ class Evaluator(BaseEvaluator):
     @ImageHelper(by_frame=False)
     def save_kept_cells(self,
                         track: Track,
-                        array: Arr
+                        array: Array
                         ) -> Track:
         """Creates a track from the input track
         that only includes the cells that are present in array."""
@@ -39,7 +39,7 @@ class Evaluator(BaseEvaluator):
     @ImageHelper(by_frame=False, as_tuple=False)
     def make_single_cell_stack(self,
                                image: Image,
-                               array: Arr,
+                               array: Array,
                                cell_id: int,
                                position_id: int = None,
                                window_size: Tuple[int] = (40, 40),

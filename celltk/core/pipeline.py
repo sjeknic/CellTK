@@ -13,7 +13,7 @@ import imageio as iio
 from celltk.core.operation import Operation
 from celltk.core.arrays import ConditionArray, ExperimentArray
 from celltk.extract import Extractor
-from celltk.utils._types import Image, Mask, Track, Arr, ImageContainer, INPT_NAMES
+from celltk.utils._types import Image, Mask, Track, Array, ImageContainer, INPT_NAMES
 from celltk.utils.process_utils import condense_operations, extract_operations
 from celltk.utils.log_utils import get_logger, get_console_logger
 from celltk.utils.file_utils import (save_operation_yaml, save_pipeline_yaml,
@@ -212,7 +212,7 @@ class Pipeline():
         self.logger.info(f'Added {len(operation)} operations.'
                          f'\nCurrent operation list: {self.operations}.')
 
-    def run(self) -> (Image, Mask, Track, Arr):
+    def run(self) -> (Image, Mask, Track, Array):
         """
         Load images and run the operations
 
@@ -768,7 +768,7 @@ class Pipeline():
     @classmethod
     def _run_single_pipe(cls,
                          pipe_dict: Dict
-                         ) -> Arr:
+                         ) -> Array:
         """
         Creates a Pipeline object, adds operations, and runs.
 
