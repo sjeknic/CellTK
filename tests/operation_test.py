@@ -84,6 +84,75 @@ class UnitFunctions(Operation):
 
         return image
 
+    @ImageHelper(by_frame=True, as_tuple=True)
+    def _array_single_tuple_frame(self,
+                                  image: Image,
+                                  mask: Mask
+                                  ) -> Image:
+        """
+        Expects all images and all masks in tuple
+        """
+        assert isinstance(image, tuple) and isinstance(mask, tuple)
+        assert all(i.shape == (10, 10) for i in image)
+        assert all(m.shape == (10, 10) for m in mask)
+        assert (image[0] == 0.0).all()
+        assert (image[1] == 1.0).all()
+        assert (mask[0] == 0).all()
+        assert (mask[1] == 1).all()
+
+        return image[1]
+
+    @ImageHelper(by_frame=False, as_tuple=False)
+    def _array_multiple_stack(self,
+                              image: Image,
+                              image1: Image,
+                              mask: Mask
+                              ) -> Image:
+        """
+        Expects all images and the last mask
+        """
+        assert image.shape == (5, 10, 10)
+        assert image1.shape == (5, 10, 10)
+        assert mask.shape == (5, 10, 10)
+        assert (image == 1.0).all()
+        assert (image1 == 0.0).all()
+        assert (mask == 1).all()
+
+        return image
+
+    @ImageHelper(by_frame=True, as_tuple=False)
+    def _array_multiple_frames(self,
+                               image: Image,
+                               mask: Mask,
+                               mask1: Mask
+                               ) -> Image:
+        """
+        Expects frames from img1 and all masks
+        """
+        assert image.shape == (10, 10)
+        assert mask.shape == (10, 10)
+        assert mask1.shape == (10, 10)
+        assert (image == 1.0).all()
+        assert (mask == 1).all()
+        assert (mask1 == 0).all()
+
+        return image
+
+    @ImageHelper(by_frame=False, as_tuple=True)
+    def _array_specific_tuples(self,
+                               image: Image,
+                               mask: Mask
+                               ) -> Image:
+        """
+        Expects frames from img0 and msk0 in a tuple
+        """
+        assert isinstance(image, tuple) and isinstance(mask, tuple)
+        assert all(i.shape == (5, 10, 10) for i in image)
+        assert all(m.shape == (5, 10, 10) for m in mask)
+        assert (image[0] == 0.0).all()
+        assert (mask[0] == 0).all()
+
+        return image
 
 class TestOperation:
     """
@@ -94,13 +163,19 @@ class TestOperation:
         op = UnitFunctions()
         img, msk, trk = op._generate_default_arrays()
 
-        # Test passing single stacks around
+        # Test passing single stacks around without naming
         op.add_function_to_operation('_array_single_stack')
         op.add_function_to_operation('_array_single_frames')
         op.add_function_to_operation('_array_single_tuple')
-        op(img, msk, trk)
+        op.add_function_to_operation('_array_single_tuple_frame')
+        out = op(img, msk, trk)
 
         # Reset the instance for more testing
         op = UnitFunctions()
+        op.add_function_to_operation('_array_multiple_stack')
+        op.add_function_to_operation('_array_multiple_frames')
+        out = op(img, msk, trk)
 
-
+        op = UnitFunctions()
+        op.add_function_to_operation('_array_specific_tuples', image='image_0', mask='mask_0')
+        out = op(img, msk, trk)
