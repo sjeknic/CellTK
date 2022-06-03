@@ -35,21 +35,17 @@ class Mask(Stack, name='mask'):
     pass
 
 
-class Track(Stack, name='track'):
-    pass
-
-
 class Array(Stack, name='array'):
     pass
 
 
 # Save input names and types
-INPT_NAMES = [Image.__name__, Mask.__name__, Track.__name__,
+INPT_NAMES = [Image.__name__, Mask.__name__,
               Array.__name__, Stack.__name__]
 _INPT_NAMES_NO_STACK = [Image.__name__, Mask.__name__,
-                        Track.__name__, Array.__name__]
+                        Array.__name__]
 INPT_NAME_IDX = {n: i for i, n in enumerate(INPT_NAMES)}
-INPT = [Image, Mask, Track, Array]
+INPT = [Image, Mask, Array]
 INPT_IDX = {n: i for i, n in enumerate(INPT)}
 TYPE_LOOKUP = dict(zip(INPT_NAMES, INPT))
 
@@ -69,7 +65,7 @@ class ImageContainer(dict):
     """
     def __getitem__(self, key: Tuple[str]):
         # Check the expected type
-        if key[1] == 'same':
+        if key[1] == 'stack':
             out = []
             for t in _INPT_NAMES_NO_STACK:
                 # If the type is Stack, find all inputs with matching key

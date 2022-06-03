@@ -34,8 +34,6 @@ class Orchestrator():
         if different from parent_folder or output_folder
     :param mask_folder: Absolute path to folder with masks
         if different from parent_folder or output_folder
-    :param track_folder: Absolute path to folder with tracks
-        if different from parent_folder or output_folder
     :param array_folder: Absolute path to folder with arrays
         if different from parent_folder or output_folder
     :param condition_map: Dictionoary that maps folder names too
@@ -82,7 +80,6 @@ class Orchestrator():
                  match_str: str = None,
                  image_folder: str = None,
                  mask_folder: str = None,
-                 track_folder: str = None,
                  array_folder: str = None,
                  condition_map: dict = {},
                  position_map: Union[dict, Callable] = None,
@@ -134,7 +131,7 @@ class Orchestrator():
         # Build the Pipelines and input/output paths
         self.pipelines = {}
         self._build_pipelines(match_str, image_folder, mask_folder,
-                              track_folder, array_folder)
+                              array_folder)
 
         # Prepare for getting operations
         self.operations = []
@@ -483,7 +480,6 @@ class Orchestrator():
                          match_str: str,
                          image_folder: str,
                          mask_folder: str,
-                         track_folder: str,
                          array_folder: str
                          ) -> None:
         """
@@ -536,8 +532,6 @@ class Orchestrator():
                                                           image_folder),
                         mask_folder=self._set_rel_to_par(fol_path,
                                                          mask_folder),
-                        track_folder=self._set_rel_to_par(fol_path,
-                                                          track_folder),
                         array_folder=self._set_rel_to_par(fol_path,
                                                           array_folder),
                     ))
@@ -625,7 +619,6 @@ class Orchestrator():
             match_str=args.match_str,
             image_folder=args.image,
             mask_folder=args.mask,
-            track_folder=args.track,
             array_folder=args.array,
             file_extension=args.extension,
             name=args.name,

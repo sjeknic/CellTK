@@ -5,7 +5,7 @@ import numpy as np
 
 from celltk.core.operation import BaseExtractor
 from celltk.utils.utils import ImageHelper
-from celltk.utils._types import Image, Mask, Track, Array, RandomNameProperty
+from celltk.utils._types import Image, Mask, Array, RandomNameProperty
 from celltk.core.arrays import ConditionArray
 from celltk.utils.operation_utils import lineage_to_track, parents_from_track
 import celltk.utils.metric_utils as metric_utils
@@ -22,8 +22,7 @@ class Extractor(BaseExtractor):
     @ImageHelper(by_frame=False, as_tuple=True)
     def extract_data_from_image(self,
                                 images: Image,
-                                masks: Mask = [],
-                                tracks: Track = [],
+                                masks: Mask,
                                 channels: Collection[str] = [],
                                 regions: Collection[str] = [],
                                 lineages: Collection[np.ndarray] = [],
@@ -39,7 +38,6 @@ class Extractor(BaseExtractor):
 
         :param images: Images to extract data from.
         :param masks: Masks to segment images with.
-        :param tracks: Tracks to segment images with.
         :param channels: Names of channels corresponding to
         :param regions: Names of segmented regions corresponding,
             tracks and masks, in that order.
@@ -73,9 +71,15 @@ class Extractor(BaseExtractor):
             - Allow input of tracking file
             - Add option to change padding value
         """
-        # Check that all required inputs are there
-        if len(tracks) == 0 and len(masks) == 0:
-            raise ValueError('Missing masks and/or tracks.')
+        # Determine which masks contain tracking information:
+        tracks = []
+        _masks = []
+        for m in masks:
+            if (m < 0).any():
+                tracks.append(m)
+            else:
+                _masks.append(m)
+        masks = _masks
 
         # Collect the tracks to use
         tracks_to_use = []

@@ -854,7 +854,8 @@ class ConditionArray():
             keys in ConditionArray
         :param segment: If True, uses a watershed-based segmentation to label
             peaks based on the predictions.
-        :param kwargs: Passed to segmentation function
+        :param kwargs: Passed to segmentation function.
+            See utils.peak_utils.segment_peaks_agglomeration.
 
         :return: None
         """

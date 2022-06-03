@@ -11,8 +11,8 @@ from typing import Tuple, Generator, Dict, Optional
 
 import numpy as np
 
-from celltk.utils._types import (Image, Mask, Track,
-                                 ImageContainer, INPT, INPT_NAMES)
+from celltk.utils._types import (Image, Mask, ImageContainer,
+                                 INPT, INPT_NAMES)
 from celltk.core.arrays import ConditionArray, ExperimentArray
 from celltk.utils.operation_utils import sliding_window_generator
 from celltk.utils.log_utils import get_null_logger
@@ -308,7 +308,7 @@ class ImageHelper():
 
         # Adjust array dimensions if needed
         for n, (k, st) in enumerate(zip(keys, stack)):
-            while st.ndim < 3 and any([i in k for i in (Image, Mask, Track)]):
+            while st.ndim < 3 and any([i in k for i in (Image, Mask)]):
                 st = np.expand_dims(st, axis=-1)
             stack[n] = st
 

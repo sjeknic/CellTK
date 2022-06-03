@@ -4,7 +4,7 @@ from typing import Tuple
 import numpy as np
 import skimage.segmentation as segm
 
-from celltk.utils._types import Track, Mask, Image, Array
+from celltk.utils._types import Mask, Image, Array
 from celltk.core.operation import BaseEvaluator
 from celltk.utils.utils import ImageHelper
 from celltk.utils.operation_utils import track_to_mask, get_cell_index
@@ -14,9 +14,9 @@ from celltk.utils.info_utils import nan_helper_1d
 class Evaluator(BaseEvaluator):
     @ImageHelper(by_frame=False)
     def save_kept_cells(self,
-                        track: Track,
+                        track: Mask,
                         array: Array
-                        ) -> Track:
+                        ) -> Mask:
         """Creates a track from the input track
         that only includes the cells that are present in array."""
         # Figure out all the cells that were kept
@@ -90,7 +90,7 @@ class Evaluator(BaseEvaluator):
     @ImageHelper(by_frame=True)
     def overlay_tracks(self,
                        image: Image,
-                       track: Track,
+                       track: Mask,
                        boundaries: bool = False,
                        mode: str = 'inner'
                        ) -> Image:

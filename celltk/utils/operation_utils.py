@@ -13,7 +13,7 @@ import scipy.spatial.distance as distance
 import mahotas.segmentation as mahotas_seg
 import SimpleITK as sitk
 
-from celltk.utils._types import Mask, Track
+from celltk.utils._types import Mask
 
 # TODO: Add create lineage tree graph (maybe in plot_utils)
 
@@ -323,7 +323,7 @@ def mask_to_seeds(mask: np.ndarray,
     return out
 
 
-def track_to_mask(track: Track, idx: np.ndarray = None) -> Mask:
+def track_to_mask(track: Mask, idx: np.ndarray = None) -> Mask:
     """Gives Track with parent values filled in by closest neighbor.
 
     :param track:
@@ -337,7 +337,7 @@ def track_to_mask(track: Track, idx: np.ndarray = None) -> Mask:
     return track[tuple(ind)].astype(np.uint16)
 
 
-def parents_from_track(track: Track) -> Dict[int, int]:
+def parents_from_track(track: Mask) -> Dict[int, int]:
     """Returns dictionary of {daughter_id: parent_id} from the
     input Track.
     """
@@ -352,7 +352,7 @@ def parents_from_track(track: Track) -> Dict[int, int]:
     return dict(zip(mask[div_mask], track[div_mask] * -1))
 
 
-def track_to_lineage(track: Track) -> np.ndarray:
+def track_to_lineage(track: Mask) -> np.ndarray:
     """Given a set of track images, reconstruct all the
     cell lineages.
     """
@@ -381,9 +381,9 @@ def track_to_lineage(track: Track) -> np.ndarray:
 
 def lineage_to_track(mask: Mask,
                      lineage: np.ndarray
-                     ) -> Track:
+                     ) -> Mask:
     """Given a Mask and a cell lineage, marks pixels in the Mask
-    to create the representative Track.
+    to create the representative Mask.
 
     TODO:
         - This won't work if area(region) <= ~6, depending on shape

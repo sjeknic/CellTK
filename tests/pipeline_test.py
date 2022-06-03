@@ -41,7 +41,7 @@ class TestPipeline():
                                       weights=[1, 1, 1], mass_thres=0.2, displacement_thres=20)
         tra.add_function_to_operation('detect_cell_division')
 
-        ex = ctk.Extractor(images=['channel000', 'channel001'], tracks=['nuc'],
+        ex = ctk.Extractor(images=['channel000', 'channel001'], masks=['nuc'],
                             channels=['tritc', 'fitc'], regions=['nuc'], force_rerun=True,
                             time=10, remove_parent=True, min_trace_length=5)
         ex.add_derived_metric('median_ratio',

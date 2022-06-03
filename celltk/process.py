@@ -13,7 +13,7 @@ import scipy.ndimage as ndi
 import sklearn.preprocessing as preproc
 
 from celltk.core.operation import BaseProcessor
-from celltk.utils._types import Image, Mask, Track, Stack
+from celltk.utils._types import Image, Mask, Stack
 from celltk.utils.utils import ImageHelper
 from celltk.utils.operation_utils import (sliding_window_generator,
                                           shift_array, crop_array, PadHelper,
@@ -34,7 +34,6 @@ class Processor(BaseProcessor):
     def align_by_cross_correlation(self,
                                    image: Image = tuple([]),
                                    mask: Mask = tuple([]),
-                                   track: Track = tuple([]),
                                    align_with: str = 'image',
                                    crop: bool = True
                                    ) -> Stack:
@@ -45,7 +44,6 @@ class Processor(BaseProcessor):
 
         :param image: List of image stacks to be aligned.
         :param mask: List of mask stacks to be aligned.
-        :param track: List of track stacks to be aligned:
         :param align_with: Can be one of 'image', 'mask', or 'track'. Defines
             which of the input stacks should be used for alignment.
         :param crop: If True, the aligned stacks are cropped based on the largest
@@ -81,7 +79,7 @@ class Processor(BaseProcessor):
         cumulative = np.cumsum(shifts, axis=0)
 
         # Make arrays for each output
-        flat_inputs = image + mask + track
+        flat_inputs = image + mask
         flat_outputs = [np.empty_like(arr) for arr in flat_inputs]
 
         # Copy first frames and store the output
@@ -104,9 +102,8 @@ class Processor(BaseProcessor):
 
     @ImageHelper(by_frame=True, as_tuple=True)
     def tile_images(self,
-                    image: Image = tuple([]),
-                    mask: Mask = tuple([]),
-                    track: Track = tuple([]),
+                    image: Image[Optional] = tuple([]),
+                    mask: Mask[Optional] = tuple([]),
                     layout: Tuple[int] = None,
                     border_value: Union[int, float] = 0.,
                     ) -> Image:
@@ -116,7 +113,6 @@ class Processor(BaseProcessor):
 
         :param image: List of image stacks to be tiled.
         :param mask: List of mask stacks to be tiled.
-        :param track: List of track stacks to be tiled:
         :param layout:
         :param border_value: Value of the default pixels.
         """
@@ -127,7 +123,7 @@ class Processor(BaseProcessor):
         fil.SetDefaultPixelValue(border_value)
 
         # Combine the stacks
-        stacks = image + mask + track
+        stacks = image + mask
         images = [cast_sitk(sitk.GetImageFromArray(s), 'sitkUInt16', True)
                   for s in stacks]
 
