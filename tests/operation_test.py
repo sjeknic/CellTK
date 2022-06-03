@@ -41,7 +41,7 @@ class UnitFunctions(Operation):
     def _array_single_stack(self,
                             image: Image,
                             mask: Mask
-                            ) -> Image:
+                            ) -> Image[np.float64]:
         """
         Expects img1 and msk1
         """
@@ -200,3 +200,8 @@ class TestOperation:
         op.add_function_to_operation('_array_optional_stacks', mask='mask_0')
         op.add_function_to_operation('_array_optional_stacks')
         out = op(img, msk, trk)
+
+        op = UnitFunctions()
+        op.add_function_to_operation('_array_single_stack')
+        out = op(img, msk, trk)
+        assert out[0].dtype == np.float64

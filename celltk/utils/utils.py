@@ -61,13 +61,11 @@ class ImageHelper():
     def __init__(self, *,
                  by_frame: bool = False,
                  as_tuple: bool = False,
-                 dtype: type = None,
                  ) -> None:
         """
         """
         # Save inputs
         self.by_frame = by_frame
-        self.dtype = dtype
         self.as_tuple = as_tuple
 
     def __call__(self, func):
@@ -93,7 +91,7 @@ class ImageHelper():
             self.logger = self._get_calling_logger(calling_cls)
             self.logger.info(f'ImageHelper called for {self.func.__name__}')
             self.logger.info(f'by_frame: {self.by_frame}, '
-                             f'as_tuple: {self.as_tuple}, dtype: {self.dtype}')
+                             f'as_tuple: {self.as_tuple}')
 
             # Sort the inputs and keep only those that are relevant
             keys, pass_to_func, nkwargs = self._type_helper(img_container,
@@ -284,6 +282,10 @@ class ImageHelper():
                 keys = [keys[0]]
                 warnings.warn('Possible mismatch with keys for ',
                               f'for {self.func.__name__}.')
+
+        # If an output dtype was given, cast to that type
+        if self.output_dtype:
+            stack = [s.astype(self.output_dtype) for s in stack]
 
         # Check that length matches
         if len(stack) < len(keys):
