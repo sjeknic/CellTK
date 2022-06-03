@@ -1,5 +1,6 @@
 import os
 import sys
+from typing import Optional
 
 # Correct import paths
 cwd = os.path.dirname(os.path.realpath(__file__))
@@ -154,6 +155,24 @@ class UnitFunctions(Operation):
 
         return image
 
+    @ImageHelper(by_frame=False, as_tuple=False)
+    def _array_optional_stacks(self,
+                               image: Image,
+                               mask: Mask[Optional] = None,
+                               empty: float = np.nan
+                               ) -> Image:
+        assert image.shape == (5, 10, 10)
+        assert (image == 1.0).all()
+
+        if mask is not None:
+            assert mask.shape == (5, 10, 10)
+            assert (mask == 0).all()
+
+        assert np.isnan(empty)
+
+        return image
+
+
 class TestOperation:
     """
     - Test __call__ method
@@ -178,4 +197,6 @@ class TestOperation:
 
         op = UnitFunctions()
         op.add_function_to_operation('_array_specific_tuples', image='image_0', mask='mask_0')
+        op.add_function_to_operation('_array_optional_stacks', mask='mask_0')
+        op.add_function_to_operation('_array_optional_stacks')
         out = op(img, msk, trk)
