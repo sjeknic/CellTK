@@ -102,7 +102,7 @@ class TestPipeline():
         cond_arr = ctk.ConditionArray.load(os.path.join(self._output_path, 'data_frame.hdf5'))
 
         # Check that frame was skipped
-        test_arr = iio.imread(os.path.join(self._output_path, 'nuc', 'track2.tiff'))
+        test_arr = iio.imread(os.path.join(self._output_path, 'nuc', 'mask2.tiff'))
         assert (test_arr == 0).all()
 
     def test_orchestrator(self):
@@ -135,5 +135,5 @@ class TestPipeline():
                                                         'experiment.hdf5'))
 
         # Check that the frame was skipped
-        test_arr = iio.imread(os.path.join(self._output_path, 'live_cell_example', 'nuc', 'track2.tiff'))
+        test_arr = iio.imread(os.path.join(self._output_path, 'live_cell_example', 'nuc', 'mask2.tiff'))
         assert (test_arr == 0).all()
