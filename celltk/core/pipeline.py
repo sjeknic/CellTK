@@ -12,7 +12,7 @@ import imageio as iio
 
 from celltk.core.operation import Operation
 from celltk.core.arrays import ConditionArray, ExperimentArray
-from celltk.extract import Extractor
+from celltk.extract import Extract
 from celltk.utils._types import Image, Mask, Array, ImageContainer, INPT_NAMES
 from celltk.utils.process_utils import condense_operations, extract_operations
 from celltk.utils.log_utils import get_logger, get_console_logger
@@ -198,8 +198,8 @@ class Pipeline():
         # Ensure we are only adding Operations
         assert all([isinstance(o, Operation) for o in operation])
         for o in operation:
-            # Copy skip_frames to Extractor if needed
-            if isinstance(o, Extractor) and self.skip_frames:
+            # Copy skip_frames to Extract if needed
+            if isinstance(o, Extract) and self.skip_frames:
                 o._mark_skip_frames(self.skip_frames)
 
             self.operations.append(o)

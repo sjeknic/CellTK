@@ -97,7 +97,7 @@ class RandomNameProperty:
 
     NOTE:
         - This does not guarantee a unique name, so getting IndexError
-          in Extractor is still possible.
+          in Extract is still possible.
     """
     def __init__(self) -> None:
         # Use ranndom int as name of the property

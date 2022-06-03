@@ -5,13 +5,13 @@ import numpy as np
 import skimage.segmentation as segm
 
 from celltk.utils._types import Mask, Image, Array
-from celltk.core.operation import BaseEvaluator
+from celltk.core.operation import BaseEvaluate
 from celltk.utils.utils import ImageHelper
 from celltk.utils.operation_utils import track_to_mask, get_cell_index
 from celltk.utils.info_utils import nan_helper_1d
 
 
-class Evaluator(BaseEvaluator):
+class Evaluate(BaseEvaluate):
     @ImageHelper(by_frame=False)
     def save_kept_cells(self,
                         track: Mask,

@@ -11,7 +11,7 @@ import skimage.segmentation as segm
 import scipy.optimize as opti
 import scipy.spatial.distance as distance
 
-from celltk.core.operation import BaseTracker
+from celltk.core.operation import BaseTrack
 from celltk.utils._types import Image, Mask
 from celltk.utils.utils import ImageHelper, stdout_redirected
 from celltk.utils.operation_utils import (lineage_to_track,
@@ -34,7 +34,7 @@ from celltk.utils.bayes_utils import (bayes_extract_tracker_data,
                                       bayes_update_mask)
 
 
-class Tracker(BaseTracker):
+class Track(BaseTrack):
     @ImageHelper(by_frame=False)
     def simple_linear_tracker(self,
                               mask: Mask,

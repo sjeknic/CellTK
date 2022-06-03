@@ -12,7 +12,7 @@ import skimage.util as util
 import scipy.ndimage as ndi
 import sklearn.preprocessing as preproc
 
-from celltk.core.operation import BaseProcessor
+from celltk.core.operation import BaseProcess
 from celltk.utils._types import Image, Mask, Stack
 from celltk.utils.utils import ImageHelper
 from celltk.utils.operation_utils import (sliding_window_generator,
@@ -22,7 +22,7 @@ from celltk.utils.operation_utils import (sliding_window_generator,
                                           get_image_pixel_type)
 
 
-class Processor(BaseProcessor):
+class Process(BaseProcess):
     """
     TODO:
         - Add stand-alone crop function
@@ -225,7 +225,7 @@ class Processor(BaseProcessor):
         """
         Applies N4 bias field correction to the image. Can optionally return
         the calculated log bias field, which can be applied to the image with
-        ``Processor.apply_log_bias_field``.
+        ``Process.apply_log_bias_field``.
         """
         # Check the inputs
         if (image < 1).any():
@@ -376,7 +376,7 @@ class Processor(BaseProcessor):
                              image: Image,
                              ) -> Image:
         """
-        Similar to ``Processor.sobel_edge_detection``, but returns
+        Similar to ``Process.sobel_edge_detection``, but returns
         the magnitude of the gradient at each pixel, without regard
         for direction.
         """

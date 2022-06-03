@@ -3,7 +3,7 @@ from typing import Collection, Tuple, Union, Callable
 
 import numpy as np
 
-from celltk.core.operation import BaseExtractor
+from celltk.core.operation import BaseExtract
 from celltk.utils.utils import ImageHelper
 from celltk.utils._types import Image, Mask, Array, RandomNameProperty
 from celltk.core.arrays import ConditionArray
@@ -11,7 +11,7 @@ from celltk.utils.operation_utils import lineage_to_track, parents_from_track
 import celltk.utils.metric_utils as metric_utils
 
 
-class Extractor(BaseExtractor):
+class Extract(BaseExtract):
     _metrics = ['label', 'area', 'convex_area', 'filled_area', 'bbox',
                 'centroid', 'mean_intensity', 'max_intensity', 'min_intensity',
                 'minor_axis_length', 'major_axis_length',
@@ -308,7 +308,7 @@ class Extractor(BaseExtractor):
 
     def set_metric_list(self, metrics: Collection[str]) -> None:
         """Sets the list of metrics to get. For a possible list, see
-        skimage.regionprops or Extractor._possible_metrics.
+        skimage.regionprops or Extract._possible_metrics.
 
         :param metrics: List of metrics to measure from images
 

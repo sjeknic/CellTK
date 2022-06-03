@@ -676,12 +676,12 @@ class Operation:
         return sitk.GetArrayFromImage(fil.Execute(img))
 
 
-class BaseProcessor(Operation):
+class BaseProcess(Operation):
     """
-    Base class for Processor operations. Typically used to apply image filters
+    Base class for processing operations. Typically used to apply image filters
     such as blurring or edge detection.
     """
-    __name__ = 'Processor'
+    __name__ = 'Process'
     _input_type = (Image,)
     _output_type = Image
 
@@ -692,12 +692,12 @@ class BaseProcessor(Operation):
         super().__init__(output=output, **kwargs)
 
 
-class BaseSegmenter(Operation):
+class BaseSegment(Operation):
     """
-    Base class for Segmenter operations. Typically used to create masks
+    Base class for segmenting operations. Typically used to create masks
     from images or to adjust and label already existing masks.
     """
-    __name__ = 'Segmenter'
+    __name__ = 'Segment'
     _input_type = (Image,)
     _output_type = Mask
 
@@ -708,12 +708,12 @@ class BaseSegmenter(Operation):
         super().__init__(output=output, **kwargs)
 
 
-class BaseTracker(Operation):
+class BaseTrack(Operation):
     """
-    Base class for Tracker operations. Typically used to link objects
+    Base class for tracking operations. Typically used to link objects
     in a provided mask. Can also be used to detect dividing cells.
     """
-    __name__ = 'Tracker'
+    __name__ = 'Track'
     _input_type = (Image, Mask)
     _output_type = Mask
 
@@ -724,9 +724,9 @@ class BaseTracker(Operation):
         super().__init__(output=output, **kwargs)
 
 
-class BaseExtractor(Operation):
+class BaseExtract(Operation):
     """
-    Base class for Extractor operations. Typically used to extract data
+    Base class for extracting operations. Typically used to extract data
     from an intensity image using masks as a guide.
 
     :param images: Images to extract data from.
@@ -757,7 +757,7 @@ class BaseExtractor(Operation):
         the outputs will be saved as 'align&channel000' and
         'align&channel001' for _split_key = '&'
     """
-    __name__ = 'Extractor'
+    __name__ = 'Extract'
     _input_type = (Image, Mask)
     _output_type = Array
     # This is directly from skimage.regionprops
@@ -1095,10 +1095,10 @@ class BaseExtractor(Operation):
                      **kwargs
                      ) -> None:
         """
-        Extractor currently only supports one function due to how
+        Extract currently only supports one function due to how
         extract_data_from_images expects the inputs.
         """
-        raise NotImplementedError('Adding new functions to Extractor is '
+        raise NotImplementedError('Adding new functions to Extract is '
                                   'not currently supported. '
                                   'extract_data_from_image is included '
                                   'by default.')
@@ -1112,7 +1112,7 @@ class BaseExtractor(Operation):
         # Get inputs that were saved during __init__
         kwargs = self.functions[0][-1]
 
-        # Log inputs to Extractor
+        # Log inputs to Extract
         self.logger.info(f"Channels: {list(zip(kwargs['channels'], self.images))}")
         self.logger.info(f"Regions: {list(zip(kwargs['regions'], self.masks))}")
         self.logger.info(f"Metrics: {self._metrics}")
@@ -1123,13 +1123,13 @@ class BaseExtractor(Operation):
         return super().run_operation(inputs)
 
 
-class BaseEvaluator(Operation):
+class BaseEvaluate(Operation):
     """
-    Base class for Evaluator operations. Not currently implemented, but
+    Base class for evaluation operations. Not currently implemented, but
     will be used to generate plots and metrics regarding the data from
-    Extractor.
+    Extract.
     """
-    __name__ = 'Evaluator'
+    __name__ = 'Evaluate'
     _input_type = (Array,)
     _output_type = Array
 

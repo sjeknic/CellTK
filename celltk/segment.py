@@ -12,7 +12,7 @@ import skimage.feature as feat
 import scipy.ndimage as ndi
 import SimpleITK as sitk
 
-from celltk.core.operation import BaseSegmenter
+from celltk.core.operation import BaseSegment
 from celltk.utils._types import Image, Mask, Stack
 from celltk.utils.utils import ImageHelper
 from celltk.utils.operation_utils import (dilate_sitk, voronoi_boundaries,
@@ -23,7 +23,7 @@ from celltk.utils.operation_utils import (dilate_sitk, voronoi_boundaries,
                                           mask_to_seeds)
 
 
-class Segmenter(BaseSegmenter):
+class Segment(BaseSegment):
     """
     TODO:
         - Test Taka's CellTK functions (find_boundaries, cytoring)
@@ -591,7 +591,7 @@ class Segmenter(BaseSegmenter):
                                  epsilon: float = 1,
                                  ) -> Mask:
         """Calculates the Chan-Vese level set from initial seeds.
-        Similar to ``Segmenter.morphological_acwe``, but more
+        Similar to ``Segment.morphological_acwe``, but more
         customizable.
 
         :param image:
@@ -955,7 +955,7 @@ class Segmenter(BaseSegmenter):
                                   ) -> Mask:
         """Propagates an initial level set to edges found in an edge potential image.
         This function will likely not work well on an unmodified input image. Use the
-        edge detection functions in ``Processor`` to create an edge potential image.
+        edge detection functions in ``Process`` to create an edge potential image.
 
         :param edge_potential:
         :param initial_level_set:

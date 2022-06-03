@@ -19,7 +19,7 @@ from celltk.utils.metric_utils import active_cells, cumulative_active
 
 class ConditionArray():
     """
-    For now, this class is only built by Extractor. It's not meant to be
+    For now, this class is only built by Extract. It's not meant to be
     built by the user yet.
     Stores the results from a single condition in an experiment.
     """
@@ -614,7 +614,7 @@ class ConditionArray():
                        ) -> np.ndarray:
         """Returns 1D boolean mask to remove traces of cells that divided.
         Daughter cell traces are kept. Use with reshape_mask to remove
-        parent cells. Typically called by Extractor.
+        parent cells. Typically called by Extract.
 
         :param parent_daughter: Dictionary of parent_label : daughter_label
         :param cell_index: Dictionary of cell_label : cell_index_in_array
@@ -639,7 +639,7 @@ class ConditionArray():
     def remove_short_traces(self, min_trace_length: int) -> np.ndarray:
         """Removes cells with less than min_trace_length non-nan values.
         Uses label as the metric to determine non-nan values. Typically called
-        by Extractor
+        by Extract.
 
         :param min_trace_length: Shortest trace that should not be deleted
 

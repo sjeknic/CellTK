@@ -5,11 +5,11 @@ __all__ = ['core.orchestrator', 'core.pipeline', 'process', 'segment',
 from .core.orchestrator import Orchestrator
 from .core.pipeline import Pipeline
 from .core.arrays import ConditionArray, ExperimentArray
-from .process import Processor
-from .segment import Segmenter
-from .track import Tracker
-from .extract import Extractor
-from .evaluate import Evaluator
+from .process import Process
+from .segment import Segment
+from .track import Track
+from .extract import Extract
+from .evaluate import Evaluate
 
 # Import important types
 from .utils._types import Image, Mask, Array, Stack
