@@ -190,12 +190,12 @@ class Operation:
             # KeyboardInterrupt now won't cause additional exceptions
             pass
 
-    def add_function_to_operation(self,
-                                  func: str, *,
-                                  save_as: str = None,
-                                  output_type: str = None,
-                                  **kwargs
-                                  ) -> None:
+    def add_function(self,
+                     func: str, *,
+                     save_as: str = None,
+                     output_type: str = None,
+                     **kwargs
+                     ) -> None:
         """Adds a function to be run by the Operation
 
         :param func: Name of the function. Must exist in
@@ -1088,12 +1088,12 @@ class BaseExtractor(Operation):
             new_func[-1] = new_kwargs
             self.functions = [tuple(new_func)]
 
-    def add_function_to_operation(self,
-                                  func: str, *,
-                                  output_type: str = None,
-                                  name: str = None,
-                                  **kwargs
-                                  ) -> None:
+    def add_function(self,
+                     func: str, *,
+                     output_type: str = None,
+                     name: str = None,
+                     **kwargs
+                     ) -> None:
         """
         Extractor currently only supports one function due to how
         extract_data_from_images expects the inputs.

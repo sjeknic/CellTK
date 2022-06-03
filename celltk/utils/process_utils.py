@@ -62,8 +62,8 @@ def _dict_to_operation(oper_dict: Dict) -> Operation:
 
         try:
             # Add the functions to the operation
-            operation.add_function_to_operation(func, save_as=name,
-                                                output_type=exp_type, **kwargs)
+            operation.add_function(func, save_as=name,
+                                   output_type=exp_type, **kwargs)
         except NotImplementedError:  # Means operation is Extractor
             # TODO: These are all very messy and liable to break. Make neater.
             # Save other user defined parameters

@@ -26,13 +26,13 @@ Next, build a set of ``Operations`` that you would like to use on those images. 
 
     seg = celltk.Segmenter(images=['channel000'], output='seg', save=True, force_rerun=False)
 
-Next, we add the functions to the operation. For this example, we want to use UNet to find the nuclei followed by a simple constant threshold and cleaning to label the nuclei. Any kwargs those functions require can be passed to ``add_function_to_operation``. We will use the example weights for UNet, but if you have your own weights, you can pass them with the kwarg ``weight_path``. For any function, you can add the kwarg ``save_as`` to save those output files. It's best to add this to time consuming operations so that they do not need to be repeated.
+Next, we add the functions to the operation. For this example, we want to use UNet to find the nuclei followed by a simple constant threshold and cleaning to label the nuclei. Any kwargs those functions require can be passed to ``add_function``. We will use the example weights for UNet, but if you have your own weights, you can pass them with the kwarg ``weight_path``. For any function, you can add the kwarg ``save_as`` to save those output files. It's best to add this to time consuming operations so that they do not need to be repeated.
 
 ::
 
-    seg.add_function_to_operation('unet_predict', save_as='unet_nuc')
-    seg.add_function_to_operation('constant_thres', thres=0.8)
-    seg.add_function_to_operation('clean_labels', min_radius=3, relabel=True)
+    seg.add_function('unet_predict', save_as='unet_nuc')
+    seg.add_function('constant_thres', thres=0.8)
+    seg.add_function('clean_labels', min_radius=3, relabel=True)
 
 Next, we will add a tracking operation using the same format as above. This time we import the output from ``seg`` to be used by the ``Tracker``. We will use the ``kit_sch_ge_tracker`` function which runs a tracking algorithm from `Katharina Loeffler and colleagues`_.
 
@@ -40,7 +40,7 @@ Next, we will add a tracking operation using the same format as above. This time
 
     tra = celltk.Tracker(images=['channel000'], masks='seg', output='nuc',
                          save=True, force_rerun=False)
-    tra.add_function_to_operation('kit_sch_ge_tracker')
+    tra.add_function('kit_sch_ge_tracker')
 
 Finally, we need to add an operation to extract the data and save it in an easy to use file. For this, we use ``Extractor``. This is the operation to pass most of the experimental metadata to. No functions are added to this operation.
 

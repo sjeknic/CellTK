@@ -183,25 +183,29 @@ class TestOperation:
         img, msk, trk = op._generate_default_arrays()
 
         # Test passing single stacks around without naming
-        op.add_function_to_operation('_array_single_stack')
-        op.add_function_to_operation('_array_single_frames')
-        op.add_function_to_operation('_array_single_tuple')
-        op.add_function_to_operation('_array_single_tuple_frame')
+        op.add_function('_array_single_stack')
+        op.add_function('_array_single_frames')
+        op.add_function('_array_single_tuple')
+        op.add_function('_array_single_tuple_frame')
         out = op(img, msk, trk)
 
         # Reset the instance for more testing
         op = UnitFunctions()
-        op.add_function_to_operation('_array_multiple_stack')
-        op.add_function_to_operation('_array_multiple_frames')
+        op.add_function('_array_multiple_stack')
+        op.add_function('_array_multiple_frames')
         out = op(img, msk, trk)
 
         op = UnitFunctions()
-        op.add_function_to_operation('_array_specific_tuples', image='image_0', mask='mask_0')
-        op.add_function_to_operation('_array_optional_stacks', mask='mask_0')
-        op.add_function_to_operation('_array_optional_stacks')
+        op.add_function('_array_specific_tuples', image='image_0', mask='mask_0')
+        op.add_function('_array_optional_stacks', mask='mask_0')
+        op.add_function('_array_optional_stacks')
         out = op(img, msk, trk)
 
         op = UnitFunctions()
-        op.add_function_to_operation('_array_single_stack')
+        op.add_function('_array_single_stack')
         out = op(img, msk, trk)
         assert out[0].dtype == np.float64
+
+
+if __name__ == '__main__':
+    TestOperation().test_passing_args()
