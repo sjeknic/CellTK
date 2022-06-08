@@ -374,14 +374,14 @@ class Orchestrator():
         self.logger.info(f'Adding Operations {operations} '
                          f'to {len(self)} Pipelines.')
         for pipe, kwargs in self.pipelines.items():
-            # If Extrac is in operations, update the condition
+            # If Extract is in operations, update the condition
             # NOTE: This dictionary must preserve order
-            op = {k if 'extractor' not in k else 'extractor':
-                  v if 'extractor' not in k else {}
+            op = {k if 'extract' not in k else 'extract':
+                  v if 'extract' not in k else {}
                   for k, v in op_dict.items()}
             # TODO: This could be done outside of the outer loop
             for opname in op_dict:
-                if 'extractor' in opname:
+                if 'extract' in opname:
                     # Check if the name is the default and update
                     if op_dict[opname]['condition'] == 'condition':
                         condition = kwargs['name']
