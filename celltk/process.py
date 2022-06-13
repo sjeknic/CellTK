@@ -35,7 +35,8 @@ class Process(BaseProcess):
                                    image: Image = tuple([]),
                                    mask: Mask = tuple([]),
                                    align_with: str = 'image',
-                                   crop: bool = True
+                                   crop: bool = True,
+                                   normalization: str = 'phase'
                                    ) -> Stack:
         """Uses phase cross-correlation to shift the images to align them.
         Optionally can crop the images to align. Align with can be used
@@ -48,6 +49,7 @@ class Process(BaseProcess):
             which of the input stacks should be used for alignment.
         :param crop: If True, the aligned stacks are cropped based on the largest
             frame to frame shifts.
+        :param normalization:
 
         :return: Aligned input stack.
 
@@ -58,7 +60,7 @@ class Process(BaseProcess):
               otherwise, on reruns image might be cropped multiple times
             - Make all inputs optional
         """
-        sizes = [s.shape for s in image + mask + track]
+        sizes = [s.shape for s in image + mask]
         assert len(tuple(groupby(sizes))) == 1, 'Stacks must be same shape'
 
         # Image that aligning will be based on - first img in align_with
@@ -71,8 +73,10 @@ class Process(BaseProcess):
         shifts = []
         for idx, frames in enumerate(frame_generator):
             # frame_generator yields array of shape (overlap, y, x)
-            shifts.append(regi.phase_cross_correlation(frames[0, ...],
-                                                       frames[1, ...])[0])
+            shifts.append(
+                regi.phase_cross_correlation(frames[0, ...], frames[1, ...],
+                                             normalization=normalization)[0]
+            )
 
         # Get all shifts relative to the first image (cumulative)
         shifts = np.vstack(shifts)
