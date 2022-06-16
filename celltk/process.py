@@ -205,7 +205,8 @@ class Process(BaseProcess):
                                          image: Image,
                                          radius: float = 100,
                                          kernel: np.ndarray = None,
-                                         nansafe: bool = False
+                                         nansafe: bool = False,
+                                         return_bg: bool = False,
                                          ) -> Image:
         """
         Estimate background intensity by rolling/translating a kernel, and
@@ -213,7 +214,10 @@ class Process(BaseProcess):
         """
         bg = rest.rolling_ball(image, radius=radius,
                                kernel=kernel, nansafe=nansafe)
-        return image - bg
+        if return_bg:
+            return bg
+        else:
+            return image - bg
 
     @ImageHelper(by_frame=False)
     def n4_illumination_bias_correction(self,
@@ -561,6 +565,7 @@ class Process(BaseProcess):
                                     mode: str = 'symmetric',
                                     level: int = None,
                                     blur: bool = False,
+                                    return_bg: bool = False
                                     ) -> Image:
         """
         Uses discrete wavelet transformation to estimate and remove
@@ -571,18 +576,22 @@ class Process(BaseProcess):
         image_pad = padder.pad(image)
 
         # Pass frames of the padded image
-        out = np.zeros(image_pad.shape, dtype=image.dtype)
+        # Use higher precision then downsamble later
+        out = np.zeros(image_pad.shape, dtype=np.int32)
         for fr, im in enumerate(image_pad):
             bg = wavelet_background_estimate(im, wavelet, mode,
                                              level, blur)
-            bg = np.asarray(bg, dtype=out.dtype)
+            bg = np.asarray(bg, dtype=np.int32)
 
             # Remove background and ensure non-negative
-            out[fr, ...] = im - bg
+            if return_bg:
+                out[fr, ...] = bg
+            else:
+                out[fr, ...] = im - bg
             out[fr, ...][out[fr, ...] < 0] = 0
 
         # Undo padding and reset dtype before return
-        return padder.undo_pad(out.astype(image.dtype))
+        return padder.undo_pad(out.astype(np.int16))
 
     @ImageHelper(by_frame=False)
     def wavelet_noise_subtract(self,
