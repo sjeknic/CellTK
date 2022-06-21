@@ -206,6 +206,31 @@ class PlotHelper:
 
         return out
 
+    @staticmethod
+    def _format_keys(keys: Collection[str],
+                     default: str = 'trace',
+                     add_cell_numbers: bool = True,
+                     arrays: Collection[np.ndarray] = []
+                     ) -> Collection[str]:
+        if not isinstance(keys, (list, tuple, np.ndarray)):
+            keys = [keys]
+
+        # Make sure everything is a string
+        keys = [str(k) for k in keys]
+        # Extend the list if not enough keys
+        if len(keys) < len(arrays):
+            needed = len(arrays) - len(keys)
+            for n in range(needed):
+                keys.append(f'{default}_{n + len(keys)}')
+
+        # Add number of cells
+        if add_cell_numbers:
+            num_cells = [a.shape[0] if len(a.shape) >= 1 else 1
+                         for a in arrays]
+            keys = [f'{k} | n={n}' for k, n in zip(keys, num_cells)]
+
+        return keys
+
     def _build_estimator_func(self,
                               func: Union[Callable, str, functools.partial],
                               *args, **kwargs
@@ -331,6 +356,8 @@ class PlotHelper:
         # Format inputs
         arrays = self._format_arrays(arrays)
         assert all([a.ndim == 2 for a in arrays])
+        keys = self._format_keys(keys, default='line', arrays=arrays,
+                                 add_cell_numbers=add_cell_numbers)
         assert len(figsize) == 2
 
         # Convert any inputs that need converting
@@ -348,13 +375,7 @@ class PlotHelper:
         elif widget: fig = go.FigureWidget()
         else: fig = go.Figure()
 
-        for idx, (arr, key) in enumerate(itertools.zip_longest(arrays, keys)):
-            # Get the key
-            if not key:
-                key = f'line_{idx}'
-            if add_cell_numbers and arr is not None:
-                key += f' | n={arr.shape[0]}'
-
+        for idx, (arr, key) in enumerate(zip(arrays, keys)):
             # err_estimator is used to set the bounds for the shaded region
             if err_estimator:
                 err_arr = err_estimator(arr)
@@ -530,6 +551,12 @@ class PlotHelper:
         x_arrays = self._format_arrays(x_arrays)
         y_arrays = self._format_arrays(y_arrays)
         if x_arrays and y_arrays: assert len(x_arrays) == len(y_arrays)
+        if y_arrays:
+            keys = self._format_keys(keys, default='trace', arrays=y_arrays,
+                                     add_cell_numbers=add_cell_numbers)
+        elif x_arrays:
+            keys = self._format_keys(keys, default='trace', arrays=x_arrays,
+                                     add_cell_numbers=add_cell_numbers)
         assert len(figsize) == 2
 
         # Convert any inputs that need converting
@@ -553,13 +580,6 @@ class PlotHelper:
         zipped = itertools.zip_longest(x_arrays, y_arrays, keys,
                                        fillvalue=None)
         for idx, (xarr, yarr, key) in enumerate(zipped):
-            # Get the key
-            if not key:
-                key = f'group_{idx}'
-            if add_cell_numbers and (yarr is not None or xarr is not None):
-                n = yarr.shape[0] if yarr is not None else xarr.shape[0]
-                key += f' | n={n}'
-
             # err_estimator is used to set error bars
             if err_estimator:
                 err_arr = err_estimator(yarr)
@@ -711,6 +731,8 @@ class PlotHelper:
         """
         # Format data
         arrays = self._format_arrays(arrays)
+        keys = self._format_keys(keys, default='bar', arrays=arrays,
+                                 add_cell_numbers=add_cell_numbers)
         assert orientation in ('v', 'h', 'horizontal', 'vertical')
         assert len(figsize) == 2
 
@@ -727,13 +749,7 @@ class PlotHelper:
         if figure: fig = figure
         elif widget: fig = go.FigureWidget()
         else: fig = go.Figure()
-        for idx, (arr, key) in enumerate(itertools.zip_longest(arrays, keys)):
-            # Get the key
-            if not key:
-                key = f'bar_{idx}'
-            if add_cell_numbers and arr is not None:
-                key += f' | n={arr.shape[0]}'
-
+        for idx, (arr, key) in enumerate(zip(arrays, keys)):
             # err_estimator is used to calculate errorbars
             if err_estimator:
                 err_arr = err_estimator(arr)
@@ -934,6 +950,8 @@ class PlotHelper:
         """
         # Format data
         arrays = self._format_arrays(arrays)
+        keys = self._format_keys(keys, default='dist', arrays=arrays,
+                                 add_cell_numbers=add_cell_numbers)
         assert orientation in ('v', 'h', 'horizontal', 'vertical')
         assert len(figsize) == 2
 
@@ -950,13 +968,7 @@ class PlotHelper:
         elif widget: fig = go.FigureWidget()
         else: fig = go.Figure()
 
-        for idx, (arr, key) in enumerate(itertools.zip_longest(arrays, keys)):
-            # Get the key
-            if not key:
-                key = f'dist_{idx}'
-            if add_cell_numbers and arr is not None:
-                key += f' | n={arr.shape[0]}'
-
+        for idx, (arr, key) in enumerate(zip(arrays, keys)):
             if orientation in ('v', 'vertical'):
                 y = None
                 x = arr
@@ -1152,6 +1164,8 @@ class PlotHelper:
         arrays = self._format_arrays(arrays)
         neg_arrays = self._format_arrays(neg_arrays)
         arrays = [np.squeeze(a) for a in arrays]
+        keys = self._format_keys(keys, default='dist', arrays=arrays,
+                                 add_cell_numbers=add_cell_numbers)
         assert all([a.ndim in (1, 0) for a in arrays])
         if neg_arrays:
             assert len(arrays) == len(neg_arrays)
@@ -1175,13 +1189,7 @@ class PlotHelper:
         if figure: fig = figure
         elif widget: fig = go.FigureWidget()
         else: fig = go.Figure()
-        for idx, (arr, key) in enumerate(itertools.zip_longest(arrays, keys)):
-            # Get the key
-            if not key:
-                key = f'dist_{idx}'
-            if add_cell_numbers and arr is not None:
-                key += f' | n={arr.shape[0]}'
-
+        for idx, (arr, key) in enumerate(zip(arrays, keys)):
             # Set the data key based on orientation
             if orientation in ('v', 'vertical'):
                 y = arr
