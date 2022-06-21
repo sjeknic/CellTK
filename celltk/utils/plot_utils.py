@@ -5,6 +5,7 @@ from typing import Collection, Union, Callable, Generator, Tuple
 import numpy as np
 import sklearn.base as base
 import sklearn.preprocessing as preproc
+import scipy.stats as stats
 import matplotlib.colors as mcolors
 import seaborn as sns
 import plotly.graph_objects as go
@@ -201,8 +202,7 @@ class PlotHelper:
                 raise TypeError('Received non-numeric type')
 
             # Some plotly functions only take arrays, cast everything to array
-            out = [np.array(a) for a in arrays
-                   if not isinstance(a, np.ndarray)]
+            out = [np.array(a) for a in arrays]
 
         return out
 
@@ -522,6 +522,9 @@ class PlotHelper:
             number of columns.
         :raises AssertionError: If any item in arrays has more than 3 columns.
         :raises AssertionError: If figsize is not a tuple of length two.
+
+        TODO:
+            - Allow normalization of both x and y arrays
         """
         # Format inputs - cast to np.ndarray as needed
         x_arrays = self._format_arrays(x_arrays)
@@ -814,6 +817,11 @@ class PlotHelper:
                        bargap: float = None,
                        bargroupgap: float = None,
                        cumulative: bool = False,
+                       include_histogram: bool = True,
+                       include_kde: bool = False,
+                       bandwidth: Union[str, float] = None,
+                       extend_kde: Union[float, bool] = 0,
+                       fill_kde: Union[bool, str] = False,
                        colors: Union[str, Collection[str]] = None,
                        alpha: float = 1.0,
                        orientation: str = 'v',
@@ -850,7 +858,7 @@ class PlotHelper:
             all bin HEIGHTS equals 100% / 1). If “density”, the
             span of each bar corresponds to the number of
             occurrences in a bin divided by the size of the bin
-            interval. If probability density, the area of each
+            interval. If "probability density", the area of each
             bar corresponds to the probability that an event will
             fall into the corresponding bin (here, the sum of all
             bin AREAS equals 1).
@@ -865,6 +873,23 @@ class PlotHelper:
         :param bargroupgap: Gap between bars in the same location.
         :param cumulative: If True, the histogram will plot cumulative
             occurances.
+        :param include_histogram: If True, plot the histogram as a series
+            of bars.
+        :param include_kde: If True, calculate and plot a Gaussian kernel
+            density estimate of the data. NOTE: Not currently normalized,
+            so only plots the probability density function.
+        :param bandwidth: Value of the bandwidth or name of method to
+            estimate a good value of the bandwidth. Method options are
+            'scott' and 'silverman'. If None, uses 'scott'.
+        :param extend_kde: Boolean or number of bandwidth lengths to extend
+            the plot of the kernel density estimate. False or value of 0 means
+            the kernel density estimate will only be plotted for the values of
+            the data provided. If True, the default value is 3.
+        :param fill_kde: If True, fills in the area of the kernel density
+            estimate. By default, fills to a value of 0 on the axis. Can
+            also be a string to specify a different fill method. These options
+            are from Plotly and include: 'tozerox', 'tozeroy', 'tonextx',
+            'tonexty', 'tonext', 'toself'.
         :param colors: Name of a color palette or map to use. Searches first
             in seaborn/matplotlib, then in Plotly to find the color map. If
             not provided, the color map will be glasbey. Can also be list
@@ -892,15 +917,20 @@ class PlotHelper:
             is vertical.
         :param widget: If True, returns a go.FigureWidget object instead of
             a go.Figure object.
-        :param kwargs: Depending on name, passed to go.Bar or to
-            go.Figure.update_traces(). The following kwargs are passed to
-            go.Bar: 'hoverinfo', 'marker', 'width'.
+        :param kwargs: Depending on name, kwargs are passed to either
+            go.Histogram or the line kwarg of go.Scatter if a kernel density
+            estimate is included. The following kwargs are passed to "line":
+            'color', 'dash', 'shape', 'simplify', 'smoothing', 'width',
+            'hoverinfo'.
 
         :return: Figure object
 
         :raises AssertionError: If not all items in arrays are np.ndarray.
         :raises AssertionError: If orientation is a disallowed value.
         :raises AssertionError: If figsize is not a tuple of length two.
+
+        TODO:
+            - Add NORMALIZATION of the KDEs
         """
         # Format data
         arrays = self._format_arrays(arrays)
@@ -910,6 +940,10 @@ class PlotHelper:
         # Convert any inputs that need converting
         colors = self._build_colormap(colors, len(arrays), alpha)
         if normalizer: normalizer = self._build_normalizer_func(normalizer)
+        line_kwargs = {k: v for k, v in kwargs.items()
+                       if k in self._line_kwargs}
+        kwargs = {k: v for k, v in kwargs.items()
+                  if k not in self._line_kwargs}
 
         # Build the figure and start plotting
         if figure: fig = figure
@@ -939,22 +973,69 @@ class PlotHelper:
             # Set up the colors
             _c = next(colors)
             marker_kwargs = {'color': _c, 'line': {'color': _c}}
+            line_kwargs.update({'color': _c})
             cum_kwargs = {'enabled': cumulative}
 
             # Make individual distributions on the plot
-            trace = go.Histogram(x=x, y=y, name=key, legendgroup=key,
-                                 histfunc=histfunc, histnorm=histnorm,
-                                 orientation=orientation,
-                                 cumulative=cum_kwargs,
-                                 nbinsx=nbins, nbinsy=nbins,
-                                 xbins=dict(size=binsize),
-                                 ybins=dict(size=binsize),
-                                 marker=marker_kwargs,
-                                 **kwargs)
-            fig.add_trace(trace)
+            if include_histogram:
+                trace = go.Histogram(x=x, y=y, name=key, legendgroup=key,
+                                     histfunc=histfunc, histnorm=histnorm,
+                                     orientation=orientation,
+                                     cumulative=cum_kwargs,
+                                     nbinsx=nbins, nbinsy=nbins,
+                                     xbins=dict(size=binsize),
+                                     ybins=dict(size=binsize),
+                                     marker=marker_kwargs,
+                                     **kwargs)
+                fig.add_trace(trace)
+
+            # Estimate and plot KDE
+            if include_kde:
+                data = arr[~np.isnan(arr)]
+
+                # Set up the KDE estimator
+                kde = stats.gaussian_kde(data, bw_method=bandwidth)
+
+                # Determine the support set to plot
+                if extend_kde is True:
+                    extend_kde = 3  # default value
+                elif extend_kde is False:
+                    extend_kde = 0
+                left = data.min() - kde.factor * extend_kde
+                right = data.max() + kde.factor * extend_kde
+                num = 100 if nbins is None else max(nbins, 100)
+                support = np.linspace(left, right, num)
+
+                # Calculate the estimated kernel density
+                if cumulative:
+                    kde_line = np.array([kde.integrate_box_1d(support[0], s)
+                                         for s in support])
+                else:
+                    kde_line = kde.evaluate(support)
+
+                if orientation in ('v', 'vertical'):
+                    x = support
+                    y = kde_line
+                elif orientation in ('h', 'horizontal'):
+                    x = kde_line
+                    y = support
+
+                if fill_kde is True:
+                    if orientation in ('v', 'vertical'):
+                        fill = 'tozeroy'
+                    elif orientation in ('h', 'horizontal'):
+                        fill = 'tozerox'
+                elif isinstance(fill_kde, str):
+                    fill = fill_kde
+                else:
+                    fill = None
+
+                line = go.Scatter(x=x, y=y,
+                                  legendgroup=key, name=key, fill=fill,
+                                  mode='lines', line=line_kwargs)
+                fig.add_trace(line)
 
         # Format plot on the way out
-        fig.update_traces(**kwargs)
         fig.update_layout(template=self._template, barmode=barmode,
                           title=title, bargap=bargap, bargroupgap=bargroupgap)
         fig.update_xaxes(**self._default_axis_layout)
