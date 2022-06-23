@@ -220,8 +220,9 @@ class PlotHelper:
         # Extend the list if not enough keys
         if len(keys) < len(arrays):
             needed = len(arrays) - len(keys)
+            old_len = len(keys)
             for n in range(needed):
-                keys.append(f'{default}_{n + len(keys)}')
+                keys.append(f'{default}_{n + old_len}')
 
         # Add number of cells
         if add_cell_numbers:
