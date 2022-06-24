@@ -396,7 +396,7 @@ class Operation:
                 inputs.extend([(g, i) for g in getattr(self, f'{i}s')])
 
         # Check if save_as was set for last function
-        if self.functions[-1][1]:
+        if self.functions and self.functions[-1][1]:
             # TODO: If save name was set, this is already in outputs
             last_name = (self.functions[-1][1],
                          self.output_id[1])

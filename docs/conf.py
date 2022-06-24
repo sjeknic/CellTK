@@ -22,7 +22,7 @@ copyright = '2022, Stevan Jeknic'
 author = 'Stevan Jeknic'
 
 # The full version, including alpha/beta/rc tags
-release = '0.2.0'
+release = '0.4.0'
 
 
 # -- General configuration ---------------------------------------------------
@@ -32,7 +32,7 @@ release = '0.2.0'
 # ones.
 extensions = [
     'sphinx.ext.autodoc', 'sphinx.ext.coverage', 'sphinx.ext.napoleon',
-    'sphinx.ext.todo', 'sphinx_autodoc_typehints', 'sphinx_rtd_theme'
+    'sphinx.ext.todo', 'sphinx_rtd_theme', 'sphinx_autodoc_typehints'
 ]
 
 # Add any paths that contain templates here, relative to this directory.
@@ -55,3 +55,7 @@ html_theme = 'sphinx_rtd_theme'
 # relative to this directory. They are copied after the builtin static files,
 # so a file named "default.css" will overwrite the builtin "default.css".
 html_static_path = ['_static']
+
+# -- Miscellaneous ----------------------------------------------------------
+typehints_defaults = 'comma'
+always_document_param_types = True
