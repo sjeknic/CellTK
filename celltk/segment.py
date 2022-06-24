@@ -12,8 +12,8 @@ import skimage.feature as feat
 import scipy.ndimage as ndi
 import SimpleITK as sitk
 
-from celltk.core.operation import BaseSegmenter
-from celltk.utils._types import Image, Mask
+from celltk.core.operation import BaseSegment
+from celltk.utils._types import Image, Mask, Stack, Optional
 from celltk.utils.utils import ImageHelper
 from celltk.utils.operation_utils import (dilate_sitk, voronoi_boundaries,
                                           skimage_level_set, gray_fill_holes,
@@ -23,7 +23,7 @@ from celltk.utils.operation_utils import (dilate_sitk, voronoi_boundaries,
                                           mask_to_seeds)
 
 
-class Segmenter(BaseSegmenter):
+class Segment(BaseSegment):
     """
     TODO:
         - Test Taka's CellTK functions (find_boundaries, cytoring)
@@ -195,7 +195,7 @@ class Segmenter(BaseSegmenter):
                        negative: bool = False,
                        connectivity: int = 2,
                        relative: bool = False
-                       ) -> Mask:
+                       ) -> Mask[np.uint8]:
         """Labels pixels above or below a threshold value.
 
         :param image:
@@ -215,7 +215,7 @@ class Segmenter(BaseSegmenter):
         else:
             test_arr = image >= thres
 
-        return test_arr.astype(np.uint8)
+        return test_arr
 
     @ImageHelper(by_frame=True)
     def adaptive_thres(self,
@@ -223,7 +223,7 @@ class Segmenter(BaseSegmenter):
                        relative_thres: float = 0.1,
                        sigma: float = 50,
                        connectivity: int = 2
-                       ) -> Mask:
+                       ) -> Mask[np.uint8]:
         """Applies Gaussian blur to the image and marks pixels that
         are brighter than the blurred image by a specified threshold.
 
@@ -236,7 +236,7 @@ class Segmenter(BaseSegmenter):
         """
         fil = ndi.gaussian_filter(image, sigma)
         fil = image > fil * (1 + relative_thres)
-        return fil.astype(np.uint8)
+        return fil
 
     @ImageHelper(by_frame=True)
     def otsu_thres(self,
@@ -245,7 +245,7 @@ class Segmenter(BaseSegmenter):
                    connectivity: int = 2,
                    buffer: float = 0.,
                    fill_holes: bool = False,
-                   ) -> Mask:
+                   ) -> Mask[np.uint8]:
         """Uses Otsu's method to determine the threshold and labels all pixels
         above the threshold.
 
@@ -265,7 +265,7 @@ class Segmenter(BaseSegmenter):
             labels = morph.binary_closing(labels)
             labels = sitk_binary_fill_holes(labels)
 
-        return labels.astype(np.uint8)
+        return labels
 
     @ImageHelper(by_frame=False)
     def multiotsu_thres(self,
@@ -275,7 +275,7 @@ class Segmenter(BaseSegmenter):
                         nbins: int = 256,
                         hist: np.ndarray = None,
                         binarize: bool = False,
-                        ) -> Mask:
+                        ) -> Mask[np.uint8]:
         """Applies Otsu's thresholding with multiple classes. By default,
         returns a mask with all classes included, but can be limited to
         only returning some of the classes.
@@ -312,7 +312,7 @@ class Segmenter(BaseSegmenter):
                  image: Image,
                  inside_val: int = 0,
                  outside_val: int = 1
-                 ) -> Mask:
+                 ) -> Mask[np.uint8]:
         """Applies Li's thresholding method.
 
         :param image:
@@ -591,7 +591,7 @@ class Segmenter(BaseSegmenter):
                                  epsilon: float = 1,
                                  ) -> Mask:
         """Calculates the Chan-Vese level set from initial seeds.
-        Similar to ``Segmenter.morphological_acwe``, but more
+        Similar to ``Segment.morphological_acwe``, but more
         customizable.
 
         :param image:
@@ -628,7 +628,7 @@ class Segmenter(BaseSegmenter):
     @ImageHelper(by_frame=True)
     def morphological_acwe(self,
                            image: Image,
-                           seeds: Mask = 'checkerboard',
+                           seeds: Mask[Optional] = 'checkerboard',
                            iterations: int = 10,
                            smoothing: int = 1,
                            lambda1: float = 1,
@@ -696,7 +696,7 @@ class Segmenter(BaseSegmenter):
     @ImageHelper(by_frame=True)
     def morphological_geodesic_active_contour(self,
                                               image: Image,
-                                              seeds: Mask = 'checkerboard',
+                                              seeds: Mask[Optional] = 'checkerboard',
                                               iterations: int = 10,
                                               smoothing: int = 1,
                                               threshold: float = 'auto',
@@ -955,7 +955,7 @@ class Segmenter(BaseSegmenter):
                                   ) -> Mask:
         """Propagates an initial level set to edges found in an edge potential image.
         This function will likely not work well on an unmodified input image. Use the
-        edge detection functions in ``Processor`` to create an edge potential image.
+        edge detection functions in ``Process`` to create an edge potential image.
 
         :param edge_potential:
         :param initial_level_set:

@@ -21,27 +21,27 @@ class TestPipeline():
 
     def _make_operations(self):
 
-        pro = ctk.Processor(images=['channel000'], force_rerun=True)
-        pro.add_function_to_operation('unet_predict', weight_path=self._nuc_weight_path,
+        pro = ctk.Process(images=['channel000'], force_rerun=True)
+        pro.add_function('unet_predict', weight_path=self._nuc_weight_path,
                                       batch=2, save_as='unet')
 
-        seg = ctk.Segmenter(images=['unet'], output='seg', force_rerun=True)
-        seg.add_function_to_operation('constant_thres', thres=1.)
-        seg.add_function_to_operation('agglomeration_segmentation', agglom_min=0.67,
+        seg = ctk.Segment(images=['unet'], output='seg', force_rerun=True)
+        seg.add_function('constant_thres', thres=1.)
+        seg.add_function('agglomeration_segmentation', agglom_min=0.67,
                                        steps=40, connectivity=1)
-        seg.add_function_to_operation('mask_to_image')
-        seg.add_function_to_operation('sitk_label')
-        seg.add_function_to_operation('filter_objects_by_props',
+        seg.add_function('mask_to_image')
+        seg.add_function('sitk_label')
+        seg.add_function('filter_objects_by_props',
                                       properties=['area', 'solidity'],
                                       limits=[(25, 100), (0.85, 1.)])
 
-        tra = ctk.Tracker(images=['channel000'], masks=['seg'], output='nuc', force_rerun=True)
-        tra.add_function_to_operation('linear_tracker_w_properties',
+        tra = ctk.Track(images=['channel000'], masks=['seg'], output='nuc', force_rerun=True)
+        tra.add_function('linear_tracker_w_properties',
                                       properties=['centroid', 'total_intensity', 'area'],
                                       weights=[1, 1, 1], mass_thres=0.2, displacement_thres=20)
-        tra.add_function_to_operation('detect_cell_division')
+        tra.add_function('detect_cell_division')
 
-        ex = ctk.Extractor(images=['channel000', 'channel001'], tracks=['nuc'],
+        ex = ctk.Extract(images=['channel000', 'channel001'], masks=['nuc'],
                             channels=['tritc', 'fitc'], regions=['nuc'], force_rerun=True,
                             time=10, remove_parent=True, min_trace_length=5)
         ex.add_derived_metric('median_ratio',
@@ -102,7 +102,7 @@ class TestPipeline():
         cond_arr = ctk.ConditionArray.load(os.path.join(self._output_path, 'data_frame.hdf5'))
 
         # Check that frame was skipped
-        test_arr = iio.imread(os.path.join(self._output_path, 'nuc', 'track2.tiff'))
+        test_arr = iio.imread(os.path.join(self._output_path, 'nuc', 'mask2.tiff'))
         assert (test_arr == 0).all()
 
     def test_orchestrator(self):
@@ -135,5 +135,5 @@ class TestPipeline():
                                                         'experiment.hdf5'))
 
         # Check that the frame was skipped
-        test_arr = iio.imread(os.path.join(self._output_path, 'live_cell_example', 'nuc', 'track2.tiff'))
+        test_arr = iio.imread(os.path.join(self._output_path, 'live_cell_example', 'nuc', 'mask2.tiff'))
         assert (test_arr == 0).all()

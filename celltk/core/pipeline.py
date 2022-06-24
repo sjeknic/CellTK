@@ -12,8 +12,8 @@ import imageio as iio
 
 from celltk.core.operation import Operation
 from celltk.core.arrays import ConditionArray, ExperimentArray
-from celltk.extract import Extractor
-from celltk.utils._types import Image, Mask, Track, Arr, ImageContainer, INPT_NAMES
+from celltk.extract import Extract
+from celltk.utils._types import Image, Mask, Array, ImageContainer, INPT_NAMES
 from celltk.utils.process_utils import condense_operations, extract_operations
 from celltk.utils.log_utils import get_logger, get_console_logger
 from celltk.utils.file_utils import (save_operation_yaml, save_pipeline_yaml,
@@ -30,8 +30,6 @@ class Pipeline():
     :param image_folder: Location of images
         if different from parent_folder or output_folder
     :param mask_folder: Location of masks
-        if different from parent_folder or output_folder
-    :param track_folder: Location of tracks
         if different from parent_folder or output_folder
     :param array_folder: Location of arrays
         if different from parent_folder or output_folder
@@ -63,7 +61,7 @@ class Pipeline():
     __slots__ = ('_image_container', 'operations',
                  'parent_folder', 'output_folder',
                  'image_folder', 'mask_folder',
-                 'track_folder', 'array_folder',
+                 'array_folder',
                  'operation_index', 'file_extension',
                  'logger', 'timer', 'overwrite',
                  'name', 'log_file', '_split_key',
@@ -74,7 +72,6 @@ class Pipeline():
                  output_folder: str = None,
                  image_folder: str = None,
                  mask_folder: str = None,
-                 track_folder: str = None,
                  array_folder: str = None,
                  name: str = None,
                  frame_rng: Tuple[int] = None,
@@ -100,7 +97,7 @@ class Pipeline():
         # Define paths to find and save images
         self.file_extension = file_extension
         self._set_all_paths(parent_folder, output_folder, image_folder,
-                            mask_folder, track_folder, array_folder)
+                            mask_folder, array_folder)
         self._make_output_folder(overwrite)
         self.name = folder_name(self.parent_folder) if name is None else name
 
@@ -123,7 +120,6 @@ class Pipeline():
         self.logger.info(f'Output folder: {self.output_folder}')
         self.logger.info(f'Image folder: {self.image_folder}')
         self.logger.info(f'Mask folder: {self.mask_folder}')
-        self.logger.info(f'Track folder: {self.track_folder}')
         self.logger.info(f'Array folder: {self.array_folder}')
         other_keys = ['name', 'frame_rng', 'skip_frames', 'overwrite', 'log_file',
                       'file_extension']
@@ -170,7 +166,7 @@ class Pipeline():
         """
         # Inputs are printed first
         string = self.parent_folder
-        _fols = ['image', 'mask', 'track', 'array']
+        _fols = ['image', 'mask', 'array']
         for imtyp in _fols:
             string += (f'\n\t {imtyp}: ' +
                        folder_name(getattr(self, f'{imtyp}_folder')))
@@ -202,8 +198,8 @@ class Pipeline():
         # Ensure we are only adding Operations
         assert all([isinstance(o, Operation) for o in operation])
         for o in operation:
-            # Copy skip_frames to Extractor if needed
-            if isinstance(o, Extractor) and self.skip_frames:
+            # Copy skip_frames to Extract if needed
+            if isinstance(o, Extract) and self.skip_frames:
                 o._mark_skip_frames(self.skip_frames)
 
             self.operations.append(o)
@@ -212,7 +208,7 @@ class Pipeline():
         self.logger.info(f'Added {len(operation)} operations.'
                          f'\nCurrent operation list: {self.operations}.')
 
-    def run(self) -> (Image, Mask, Track, Arr):
+    def run(self) -> (Image, Mask, Array):
         """
         Load images and run the operations
 
@@ -666,14 +662,11 @@ class Pipeline():
                        output_folder: str,
                        image_folder: str,
                        mask_folder: str,
-                       track_folder: str,
                        array_folder: str
                        ) -> None:
         """
         TODO:
             - Should these use Path module?
-            - Should image, mask, track be set as relative folders?
-                - If so, based on outputs or on parent?
         """
         # Parent folder defaults to folder where Pipeline was called
         if parent_folder is None:
@@ -694,9 +687,8 @@ class Pipeline():
             self.image_folder = os.path.abspath(image_folder)
 
         # All others default to output folder
-        _fols = ['mask', 'track', 'array']
+        _fols = ['mask', 'array']
         self.mask_folder = mask_folder
-        self.track_folder = track_folder
         self.array_folder = array_folder
 
         for imtyp in _fols:
@@ -731,7 +723,7 @@ class Pipeline():
         """
         # Save basic parameters
         init_params = ('parent_folder', 'output_folder', 'image_folder',
-                       'mask_folder', 'track_folder', 'array_folder',
+                       'mask_folder', 'array_folder',
                        'overwrite', 'file_extension', 'log_file', 'name',
                        'frame_rng', 'skip_frames', '_split_key')
         pipe_dict = {att: getattr(self, att) for att in init_params}
@@ -768,7 +760,7 @@ class Pipeline():
     @classmethod
     def _run_single_pipe(cls,
                          pipe_dict: Dict
-                         ) -> Arr:
+                         ) -> Array:
         """
         Creates a Pipeline object, adds operations, and runs.
 

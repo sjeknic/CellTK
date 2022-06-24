@@ -5,6 +5,7 @@ from typing import Collection, Union, Callable, Generator, Tuple
 import numpy as np
 import sklearn.base as base
 import sklearn.preprocessing as preproc
+import scipy.stats as stats
 import matplotlib.colors as mcolors
 import seaborn as sns
 import plotly.graph_objects as go
@@ -125,6 +126,52 @@ class PlotHelper:
 
         return itertools.cycle(symbols)
 
+    def _apply_format_figure(self,
+                             figure: go.Figure,
+                             figsize: Tuple[int] = (None, None),
+                             title: str = None,
+                             x_label: str = None,
+                             y_label: str = None,
+                             x_limit: Tuple[float] = None,
+                             y_limit: Tuple[float] = None,
+                             axis_type: str = 'default',
+                             **kwargs
+                             ) -> go.Figure:
+        # Default layouts
+        if axis_type == 'default':
+            x_axis_layout = self._default_axis_layout.copy()
+            y_axis_layout = self._default_axis_layout.copy()
+        elif axis_type == 'noline':
+            x_axis_layout = self._no_line_axis.copy()
+            y_axis_layout = self._no_line_axis.copy()
+        else:
+            raise ValueError(f'Did not understand axis type {axis_type}.')
+
+        figure_layout = {'template': self._template}
+
+        # Updates only made if not None, preserves old values
+        if x_label is not None:
+            x_axis_layout['title'].update({'text': x_label})
+        if y_label is not None:
+            y_axis_layout['title'].update({'text': y_label})
+        if x_limit is not None:
+            x_axis_layout.update({'range': x_limit})
+        if y_limit is not None:
+            y_axis_layout.update({'range': y_limit})
+        if title is not None:
+            figure_layout.update({'title': title})
+        if figsize[0] is not None:
+            figure_layout.update({'height': figsize[0]})
+        if figsize[1] is not None:
+            figure_layout.update({'width': figsize[1]})
+
+        # Apply changes
+        figure.update_layout(**figure_layout, **kwargs)
+        figure.update_xaxes(**x_axis_layout)
+        figure.update_yaxes(**y_axis_layout)
+
+        return figure
+
     @staticmethod
     def _format_colors(color: str, alpha: float = None) -> str:
         """Converst hexcode colors to RGBA to allow transparency"""
@@ -201,10 +248,35 @@ class PlotHelper:
                 raise TypeError('Received non-numeric type')
 
             # Some plotly functions only take arrays, cast everything to array
-            out = [np.array(a) for a in arrays
-                   if not isinstance(a, np.ndarray)]
+            out = [np.array(a) for a in arrays]
 
         return out
+
+    @staticmethod
+    def _format_keys(keys: Collection[str],
+                     default: str = 'trace',
+                     add_cell_numbers: bool = True,
+                     arrays: Collection[np.ndarray] = []
+                     ) -> Collection[str]:
+        if not isinstance(keys, (list, tuple, np.ndarray)):
+            keys = [keys]
+
+        # Make sure everything is a string
+        keys = [str(k) for k in keys]
+        # Extend the list if not enough keys
+        if len(keys) < len(arrays):
+            needed = len(arrays) - len(keys)
+            old_len = len(keys)
+            for n in range(needed):
+                keys.append(f'{default}_{n + old_len}')
+
+        # Add number of cells
+        if add_cell_numbers:
+            num_cells = [a.shape[0] if len(a.shape) >= 1 else 1
+                         for a in arrays]
+            keys = [f'{k} | n={n}' for k, n in zip(keys, num_cells)]
+
+        return keys
 
     def _build_estimator_func(self,
                               func: Union[Callable, str, functools.partial],
@@ -327,10 +399,15 @@ class PlotHelper:
         :raises AssertionError: If figsize is not a tuple of length two.
         :raises TypeError: If time is not an np.ndarray or collection of
             np.ndarray.
+
+        TODO:
+            - Add more generalized line_plot, turn this to time_plot
         """
         # Format inputs
         arrays = self._format_arrays(arrays)
         assert all([a.ndim == 2 for a in arrays])
+        keys = self._format_keys(keys, default='line', arrays=arrays,
+                                 add_cell_numbers=add_cell_numbers)
         assert len(figsize) == 2
 
         # Convert any inputs that need converting
@@ -348,13 +425,7 @@ class PlotHelper:
         elif widget: fig = go.FigureWidget()
         else: fig = go.Figure()
 
-        for idx, (arr, key) in enumerate(itertools.zip_longest(arrays, keys)):
-            # Get the key
-            if not key:
-                key = f'line_{idx}'
-            if add_cell_numbers and arr is not None:
-                key += f' | n={arr.shape[0]}'
-
+        for idx, (arr, key) in enumerate(zip(arrays, keys)):
             # err_estimator is used to set the bounds for the shaded region
             if err_estimator:
                 err_arr = err_estimator(arr)
@@ -417,19 +488,9 @@ class PlotHelper:
             fig.add_traces(lines)
 
         # Upate the axes and figure layout
-        self._default_axis_layout['title'].update({'text': x_label})
-        fig.update_xaxes(**self._default_axis_layout)
-        self._default_axis_layout['title'].update({'text': y_label})
-        fig.update_yaxes(**self._default_axis_layout)
-        fig.update_layout(template=self._template,
-                          title=title,
-                          xaxis_range=x_limit,
-                          yaxis_range=y_limit)
-
-        # Set size only if not None, so as to not overwrite previous changes
-        h, w = figsize
-        if h: fig.update_layout(height=h)
-        if w: fig.update_layout(width=w)
+        fig = self._apply_format_figure(fig, figsize, title,
+                                        x_label, y_label, x_limit, y_limit,
+                                        axis_type='default')
 
         return fig
 
@@ -522,11 +583,20 @@ class PlotHelper:
             number of columns.
         :raises AssertionError: If any item in arrays has more than 3 columns.
         :raises AssertionError: If figsize is not a tuple of length two.
+
+        TODO:
+            - Allow normalization of both x and y arrays
         """
         # Format inputs - cast to np.ndarray as needed
         x_arrays = self._format_arrays(x_arrays)
         y_arrays = self._format_arrays(y_arrays)
         if x_arrays and y_arrays: assert len(x_arrays) == len(y_arrays)
+        if y_arrays:
+            keys = self._format_keys(keys, default='trace', arrays=y_arrays,
+                                     add_cell_numbers=add_cell_numbers)
+        elif x_arrays:
+            keys = self._format_keys(keys, default='trace', arrays=x_arrays,
+                                     add_cell_numbers=add_cell_numbers)
         assert len(figsize) == 2
 
         # Convert any inputs that need converting
@@ -550,13 +620,6 @@ class PlotHelper:
         zipped = itertools.zip_longest(x_arrays, y_arrays, keys,
                                        fillvalue=None)
         for idx, (xarr, yarr, key) in enumerate(zipped):
-            # Get the key
-            if not key:
-                key = f'group_{idx}'
-            if add_cell_numbers and (yarr is not None or xarr is not None):
-                n = yarr.shape[0] if yarr is not None else xarr.shape[0]
-                key += f' | n={n}'
-
             # err_estimator is used to set error bars
             if err_estimator:
                 err_arr = err_estimator(yarr)
@@ -608,18 +671,10 @@ class PlotHelper:
 
         fig.add_traces(traces)
 
-        self._default_axis_layout['title'].update({'text': x_label})
-        fig.update_xaxes(**self._default_axis_layout)
-        self._default_axis_layout['title'].update({'text': y_label})
-        fig.update_yaxes(**self._default_axis_layout)
-        fig.update_layout(template=self._template,
-                          xaxis_range=x_limit,
-                          yaxis_range=y_limit)
-
-        # Set size only if not None, so as to not overwrite previous changes
-        h, w = figsize
-        if h: fig.update_layout(height=h)
-        if w: fig.update_layout(width=w)
+        # Apply formatting and return
+        fig = self._apply_format_figure(fig, figsize, title,
+                                        x_label, y_label, x_limit, y_limit,
+                                        axis_type='default')
 
         return fig
 
@@ -708,6 +763,8 @@ class PlotHelper:
         """
         # Format data
         arrays = self._format_arrays(arrays)
+        keys = self._format_keys(keys, default='bar', arrays=arrays,
+                                 add_cell_numbers=add_cell_numbers)
         assert orientation in ('v', 'h', 'horizontal', 'vertical')
         assert len(figsize) == 2
 
@@ -724,13 +781,7 @@ class PlotHelper:
         if figure: fig = figure
         elif widget: fig = go.FigureWidget()
         else: fig = go.Figure()
-        for idx, (arr, key) in enumerate(itertools.zip_longest(arrays, keys)):
-            # Get the key
-            if not key:
-                key = f'bar_{idx}'
-            if add_cell_numbers and arr is not None:
-                key += f' | n={arr.shape[0]}'
-
+        for idx, (arr, key) in enumerate(zip(arrays, keys)):
             # err_estimator is used to calculate errorbars
             if err_estimator:
                 err_arr = err_estimator(arr)
@@ -788,18 +839,10 @@ class PlotHelper:
             fig.add_trace(trace)
 
         # Format plot on the way out
+        fig = self._apply_format_figure(fig, figsize, title,
+                                        x_label, y_label, x_limit, y_limit,
+                                        axis_type='default', barmode=barmode)
         fig.update_traces(**kwargs)
-        fig.update_layout(template=self._template, barmode=barmode,
-                          title=title)
-        fig.update_xaxes(**self._default_axis_layout)
-        fig.update_xaxes(title=x_label, range=x_limit)
-        fig.update_yaxes(**self._default_axis_layout)
-        fig.update_yaxes(title=y_label, range=y_limit)
-
-        # Set size only if not None, so as to not overwrite previous changes
-        h, w = figsize
-        if h: fig.update_layout(height=h)
-        if w: fig.update_layout(width=w)
 
         return fig
 
@@ -814,6 +857,11 @@ class PlotHelper:
                        bargap: float = None,
                        bargroupgap: float = None,
                        cumulative: bool = False,
+                       include_histogram: bool = True,
+                       include_kde: bool = False,
+                       bandwidth: Union[str, float] = None,
+                       extend_kde: Union[float, bool] = 0,
+                       fill_kde: Union[bool, str] = False,
                        colors: Union[str, Collection[str]] = None,
                        alpha: float = 1.0,
                        orientation: str = 'v',
@@ -850,7 +898,7 @@ class PlotHelper:
             all bin HEIGHTS equals 100% / 1). If “density”, the
             span of each bar corresponds to the number of
             occurrences in a bin divided by the size of the bin
-            interval. If probability density, the area of each
+            interval. If "probability density", the area of each
             bar corresponds to the probability that an event will
             fall into the corresponding bin (here, the sum of all
             bin AREAS equals 1).
@@ -865,6 +913,23 @@ class PlotHelper:
         :param bargroupgap: Gap between bars in the same location.
         :param cumulative: If True, the histogram will plot cumulative
             occurances.
+        :param include_histogram: If True, plot the histogram as a series
+            of bars.
+        :param include_kde: If True, calculate and plot a Gaussian kernel
+            density estimate of the data. NOTE: Not currently normalized,
+            so only plots the probability density function.
+        :param bandwidth: Value of the bandwidth or name of method to
+            estimate a good value of the bandwidth. Method options are
+            'scott' and 'silverman'. If None, uses 'scott'.
+        :param extend_kde: Boolean or number of bandwidth lengths to extend
+            the plot of the kernel density estimate. False or value of 0 means
+            the kernel density estimate will only be plotted for the values of
+            the data provided. If True, the default value is 3.
+        :param fill_kde: If True, fills in the area of the kernel density
+            estimate. By default, fills to a value of 0 on the axis. Can
+            also be a string to specify a different fill method. These options
+            are from Plotly and include: 'tozerox', 'tozeroy', 'tonextx',
+            'tonexty', 'tonext', 'toself'.
         :param colors: Name of a color palette or map to use. Searches first
             in seaborn/matplotlib, then in Plotly to find the color map. If
             not provided, the color map will be glasbey. Can also be list
@@ -892,37 +957,42 @@ class PlotHelper:
             is vertical.
         :param widget: If True, returns a go.FigureWidget object instead of
             a go.Figure object.
-        :param kwargs: Depending on name, passed to go.Bar or to
-            go.Figure.update_traces(). The following kwargs are passed to
-            go.Bar: 'hoverinfo', 'marker', 'width'.
+        :param kwargs: Depending on name, kwargs are passed to either
+            go.Histogram or the line kwarg of go.Scatter if a kernel density
+            estimate is included. The following kwargs are passed to "line":
+            'color', 'dash', 'shape', 'simplify', 'smoothing', 'width',
+            'hoverinfo'.
 
         :return: Figure object
 
         :raises AssertionError: If not all items in arrays are np.ndarray.
         :raises AssertionError: If orientation is a disallowed value.
         :raises AssertionError: If figsize is not a tuple of length two.
+
+        TODO:
+            - Add NORMALIZATION of the KDEs
         """
         # Format data
         arrays = self._format_arrays(arrays)
+        keys = self._format_keys(keys, default='dist', arrays=arrays,
+                                 add_cell_numbers=add_cell_numbers)
         assert orientation in ('v', 'h', 'horizontal', 'vertical')
         assert len(figsize) == 2
 
         # Convert any inputs that need converting
         colors = self._build_colormap(colors, len(arrays), alpha)
         if normalizer: normalizer = self._build_normalizer_func(normalizer)
+        line_kwargs = {k: v for k, v in kwargs.items()
+                       if k in self._line_kwargs}
+        kwargs = {k: v for k, v in kwargs.items()
+                  if k not in self._line_kwargs}
 
         # Build the figure and start plotting
         if figure: fig = figure
         elif widget: fig = go.FigureWidget()
         else: fig = go.Figure()
 
-        for idx, (arr, key) in enumerate(itertools.zip_longest(arrays, keys)):
-            # Get the key
-            if not key:
-                key = f'dist_{idx}'
-            if add_cell_numbers and arr is not None:
-                key += f' | n={arr.shape[0]}'
-
+        for idx, (arr, key) in enumerate(zip(arrays, keys)):
             if orientation in ('v', 'vertical'):
                 y = None
                 x = arr
@@ -939,33 +1009,73 @@ class PlotHelper:
             # Set up the colors
             _c = next(colors)
             marker_kwargs = {'color': _c, 'line': {'color': _c}}
+            line_kwargs.update({'color': _c})
             cum_kwargs = {'enabled': cumulative}
 
             # Make individual distributions on the plot
-            trace = go.Histogram(x=x, y=y, name=key, legendgroup=key,
-                                 histfunc=histfunc, histnorm=histnorm,
-                                 orientation=orientation,
-                                 cumulative=cum_kwargs,
-                                 nbinsx=nbins, nbinsy=nbins,
-                                 xbins=dict(size=binsize),
-                                 ybins=dict(size=binsize),
-                                 marker=marker_kwargs,
-                                 **kwargs)
-            fig.add_trace(trace)
+            if include_histogram:
+                trace = go.Histogram(x=x, y=y, name=key, legendgroup=key,
+                                     histfunc=histfunc, histnorm=histnorm,
+                                     orientation=orientation,
+                                     cumulative=cum_kwargs,
+                                     nbinsx=nbins, nbinsy=nbins,
+                                     xbins=dict(size=binsize),
+                                     ybins=dict(size=binsize),
+                                     marker=marker_kwargs,
+                                     **kwargs)
+                fig.add_trace(trace)
+
+            # Estimate and plot KDE
+            if include_kde:
+                data = arr[~np.isnan(arr)]
+
+                # Set up the KDE estimator
+                kde = stats.gaussian_kde(data, bw_method=bandwidth)
+
+                # Determine the support set to plot
+                if extend_kde is True:
+                    extend_kde = 3  # default value
+                elif extend_kde is False:
+                    extend_kde = 0
+                left = data.min() - kde.factor * extend_kde
+                right = data.max() + kde.factor * extend_kde
+                num = 100 if nbins is None else max(nbins, 100)
+                support = np.linspace(left, right, num)
+
+                # Calculate the estimated kernel density
+                if cumulative:
+                    kde_line = np.array([kde.integrate_box_1d(support[0], s)
+                                         for s in support])
+                else:
+                    kde_line = kde.evaluate(support)
+
+                if orientation in ('v', 'vertical'):
+                    x = support
+                    y = kde_line
+                elif orientation in ('h', 'horizontal'):
+                    x = kde_line
+                    y = support
+
+                if fill_kde is True:
+                    if orientation in ('v', 'vertical'):
+                        fill = 'tozeroy'
+                    elif orientation in ('h', 'horizontal'):
+                        fill = 'tozerox'
+                elif isinstance(fill_kde, str):
+                    fill = fill_kde
+                else:
+                    fill = None
+
+                line = go.Scatter(x=x, y=y,
+                                  legendgroup=key, name=key, fill=fill,
+                                  mode='lines', line=line_kwargs)
+                fig.add_trace(line)
 
         # Format plot on the way out
-        fig.update_traces(**kwargs)
-        fig.update_layout(template=self._template, barmode=barmode,
-                          title=title, bargap=bargap, bargroupgap=bargroupgap)
-        fig.update_xaxes(**self._default_axis_layout)
-        fig.update_xaxes(title=x_label, range=x_limit)
-        fig.update_yaxes(**self._default_axis_layout)
-        fig.update_yaxes(title=y_label, range=y_limit)
-
-        # Set size only if not None, so as to not overwrite previous changes
-        h, w = figsize
-        if h: fig.update_layout(height=h)
-        if w: fig.update_layout(width=w)
+        fig = self._apply_format_figure(fig, figsize, title,
+                                        x_label, y_label, x_limit, y_limit,
+                                        axis_type='default', barmode=barmode,
+                                        bargap=bargap, bargroupgap=bargroupgap)
 
         return fig
 
@@ -1071,6 +1181,8 @@ class PlotHelper:
         arrays = self._format_arrays(arrays)
         neg_arrays = self._format_arrays(neg_arrays)
         arrays = [np.squeeze(a) for a in arrays]
+        keys = self._format_keys(keys, default='dist', arrays=arrays,
+                                 add_cell_numbers=add_cell_numbers)
         assert all([a.ndim in (1, 0) for a in arrays])
         if neg_arrays:
             assert len(arrays) == len(neg_arrays)
@@ -1094,13 +1206,7 @@ class PlotHelper:
         if figure: fig = figure
         elif widget: fig = go.FigureWidget()
         else: fig = go.Figure()
-        for idx, (arr, key) in enumerate(itertools.zip_longest(arrays, keys)):
-            # Get the key
-            if not key:
-                key = f'dist_{idx}'
-            if add_cell_numbers and arr is not None:
-                key += f' | n={arr.shape[0]}'
-
+        for idx, (arr, key) in enumerate(zip(arrays, keys)):
             # Set the data key based on orientation
             if orientation in ('v', 'vertical'):
                 y = arr
@@ -1146,19 +1252,11 @@ class PlotHelper:
                 fig.add_trace(neg_trace)
 
         # Format plot on the way out
+        fig = self._apply_format_figure(fig, figsize, title,
+                                        x_label, y_label, x_limit, y_limit,
+                                        axis_type='default',
+                                        violinmode=violinmode)
         fig.update_traces(**kwargs)
-        fig.update_layout(template=self._template,
-                          violinmode=violinmode,
-                          title=title)
-        fig.update_xaxes(**self._default_axis_layout)
-        fig.update_xaxes(title=x_label, range=x_limit)
-        fig.update_yaxes(**self._default_axis_layout)
-        fig.update_yaxes(title=y_label, range=y_limit)
-
-        # Set size only if not None, so as to not overwrite previous changes
-        h, w = figsize
-        if h: fig.update_layout(height=h)
-        if w: fig.update_layout(width=w)
 
         return fig
 
@@ -1243,19 +1341,12 @@ class PlotHelper:
                                side='positive', orientation='h', **kwargs)
 
         # Some settings for making a ridgeline out of the violin plot
+        fig = self._apply_format_figure(fig, figsize, title,
+                                        x_label, y_label, x_limit, y_limit,
+                                        axis_type='default',
+                                        xaxis_showgrid=False,
+                                        xaxis_zeroline=False)
         fig.update_traces(width=overlap)
-        fig.update_layout(template=self._template,
-                          title=title, xaxis_showgrid=False,
-                          xaxis_zeroline=False)
-        fig.update_xaxes(**self._default_axis_layout)
-        fig.update_xaxes(title=x_label, range=x_limit)
-        fig.update_yaxes(**self._default_axis_layout)
-        fig.update_yaxes(title=y_label, range=y_limit)
-
-        # Set size only if not None, so as to not overwrite previous changes
-        h, w = figsize
-        if h: fig.update_layout(height=h)
-        if w: fig.update_layout(width=w)
 
         return fig
 
@@ -1339,16 +1430,9 @@ class PlotHelper:
                            reversescale=reverse, **kwargs)
         fig.add_trace(trace)
 
-        fig.update_layout(template=self._template, title=title)
-        fig.update_xaxes(**self._no_line_axis)
-        fig.update_xaxes(title=x_label, range=x_limit)
-        fig.update_yaxes(**self._no_line_axis)
-        fig.update_yaxes(title=y_label, range=y_limit)
-
-        # Set size only if not None, so as to not overwrite previous changes
-        h, w = figsize
-        if h: fig.update_layout(height=h)
-        if w: fig.update_layout(width=w)
+        fig = self._apply_format_figure(fig, figsize, title,
+                                        x_label, y_label, x_limit, y_limit,
+                                        axis_type='noline')
 
         return fig
 
@@ -1463,16 +1547,9 @@ class PlotHelper:
                                **kwargs)
         fig.add_trace(trace)
 
-        fig.update_layout(template=self._template, title=title)
-        fig.update_xaxes(**self._no_line_axis)
-        fig.update_xaxes(title=x_label, range=x_limit)
-        fig.update_yaxes(**self._no_line_axis)
-        fig.update_yaxes(title=y_label, range=y_limit)
-
-        # Set size only if not None, so as to not overwrite previous changes
-        h, w = figsize
-        if h: fig.update_layout(height=h)
-        if w: fig.update_layout(width=w)
+        fig = self._apply_format_figure(fig, figsize, title,
+                                        x_label, y_label, x_limit, y_limit,
+                                        axis_type='noline')
 
         return fig
 
@@ -1587,16 +1664,9 @@ class PlotHelper:
                                       **kwargs)
         fig.add_trace(trace)
 
-        fig.update_layout(template=self._template, title=title)
-        fig.update_xaxes(**self._no_line_axis)
-        fig.update_xaxes(title=x_label, range=x_limit)
-        fig.update_yaxes(**self._no_line_axis)
-        fig.update_yaxes(title=y_label, range=y_limit)
-
-        # Set size only if not None, so as to not overwrite previous changes
-        h, w = figsize
-        if h: fig.update_layout(height=h)
-        if w: fig.update_layout(width=w)
+        fig = self._apply_format_figure(fig, figsize, title,
+                                        x_label, y_label, x_limit, y_limit,
+                                        axis_type='noline')
 
         return fig
 
@@ -1609,6 +1679,7 @@ class PlotHelper:
                          cols: int = 4,
                          max_figures: int = None,
                          time: np.ndarray = None,
+                         figsize: Tuple[float] = (None, None),
                          title: str = None,
                          x_label: str = None,
                          y_label: str = None,
@@ -1715,5 +1786,9 @@ class PlotHelper:
                 except IndexError:
                     # Reached the end of the traces
                     break
+
+            fig = self._apply_format_figure(fig, figsize, title,
+                                            x_label, y_label, x_limit, y_limit,
+                                            axis_type='default')
 
             yield fig

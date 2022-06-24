@@ -11,8 +11,8 @@ import skimage.segmentation as segm
 import scipy.optimize as opti
 import scipy.spatial.distance as distance
 
-from celltk.core.operation import BaseTracker
-from celltk.utils._types import Image, Mask, Track
+from celltk.core.operation import BaseTrack
+from celltk.utils._types import Image, Mask, Optional
 from celltk.utils.utils import ImageHelper, stdout_redirected
 from celltk.utils.operation_utils import (lineage_to_track,
                                           match_labels_linear,
@@ -34,12 +34,12 @@ from celltk.utils.bayes_utils import (bayes_extract_tracker_data,
                                       bayes_update_mask)
 
 
-class Tracker(BaseTracker):
+class Track(BaseTrack):
     @ImageHelper(by_frame=False)
     def simple_linear_tracker(self,
                               mask: Mask,
                               voronoi_split: bool = True
-                              ) -> Track:
+                              ) -> Mask[np.int16]:
         """Tracks objects by optimizing the area overlap
         from frame to frame.
 
@@ -49,7 +49,7 @@ class Tracker(BaseTracker):
             to keep objects separated in each frame. Slows
             down computation.
 
-        :return: Track with objects linked
+        :return: Mask with objects linked
 
         TODO:
             - Multiple ways to improve this function
@@ -80,7 +80,7 @@ class Tracker(BaseTracker):
                                  connectivity: int = 2,
                                  watershed_line: bool = True,
                                  keep_seeds: bool = False,
-                                 ) -> Track:
+                                 ) -> Mask[np.int16]:
         """Uses watershed to track from objects in one frame to objects
         in the next. Useful for objects that grow in size, but don't move
         much, such as bacterial colonies.
@@ -96,7 +96,7 @@ class Tracker(BaseTracker):
             monotonically increasing in size. Not appropriate for images
             with drift or for moving objects.
 
-        :return: Track with objects linked
+        :return: Mask with objects linked
         """
         # Iterate over all frames
         for idx, fr in enumerate(mask):
@@ -132,7 +132,7 @@ class Tracker(BaseTracker):
                                     thresholds: Collection[float] = None,
                                     displacement_thres: float = 30,
                                     mass_thres: float = 0.15,
-                                    ) -> Track:
+                                    ) -> Mask[np.int16]:
         """Tracks objects from frame to frame by optimizing the cost
         defined by an arbitrary list of properties. By default, includes
         thresholds on the distance and difference in intensity for
@@ -270,26 +270,26 @@ class Tracker(BaseTracker):
     @ImageHelper(by_frame=False)
     def detect_cell_division(self,
                              image: Image,
-                             track: Track,
-                             mask: Mask = None,
+                             track: Mask,
+                             mask: Mask[Optional] = None,
                              displacement_thres: float = 15,
                              frame_thres: int = 3,
                              mass_thres: float = 0.25,
                              dist_thres: float = 0.35,
                              dot_thres: float = -0.7,
                              angle_weight: float = 0.5
-                             ) -> Track:
+                             ) -> Mask[np.int16]:
         """Detects cells that have divided based on location, size,
         and intensity information. Daughter cells are expected to
         be approximately half the total intensity of the mother cell,
         and to have the mother cell roughly in line and between them.
 
         NOTE:
-            - Any Track passed to this function will have all other
+            - Any Mask passed to this function will have all other
               division events removed.
 
         :param image: Image with intensity information.
-        :param track: Track of objects to detect division on.
+        :param track: Mask of objects to detect division on.
         :param mask: Mask of objects to detect division on. Note
             that the objects must already be linked from frame
             to frame for the algorithm to work.
@@ -314,7 +314,7 @@ class Tracker(BaseTracker):
             found, they are assigned based on intensity information
             and angle information.
 
-        :return: Track with objects linked and cell division marked
+        :return: Mask with objects linked and cell division marked
         """
         # First, convert track to mask if needed
         if track is not None:
@@ -456,7 +456,7 @@ class Tracker(BaseTracker):
                            cut_off_distance: Tuple = None,
                            allow_cell_division: bool = True,
                            postprocessing_key: str = None,
-                           ) -> Track:
+                           ) -> Mask[np.int16]:
         """Tree-based tracking algorithm. First creates small
         tracklets within delta_t frames, then finds a globally optimal
         solution for linking the tracklets to form full tracks. Has
@@ -539,7 +539,7 @@ class Tracker(BaseTracker):
                          mask: Mask,
                          config_path: str = 'celltk/config/bayes_config.json',
                          update_method: str = 'exact',
-                         ) -> Track:
+                         ) -> Mask[np.int16]:
         """Wrapper for btrack, a Bayesian-based tracking algorithm.
         Please see: https://github.com/quantumjot/BayesianTracker
 
@@ -584,8 +584,8 @@ class Tracker(BaseTracker):
 
     @ImageHelper(by_frame=False)
     def lineage_masks(self,
-                      track: Track,
-                      ) -> Mask:
+                      track: Mask,
+                      ) -> Mask[np.int16]:
         """Creates a mask where all daughter cells have
         the label of their parent cell.
 

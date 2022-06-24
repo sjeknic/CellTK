@@ -12,8 +12,8 @@ import skimage.util as util
 import scipy.ndimage as ndi
 import sklearn.preprocessing as preproc
 
-from celltk.core.operation import BaseProcessor
-from celltk.utils._types import Image, Mask, Track, Same
+from celltk.core.operation import BaseProcess
+from celltk.utils._types import Image, Mask, Stack, Optional
 from celltk.utils.utils import ImageHelper
 from celltk.utils.operation_utils import (sliding_window_generator,
                                           shift_array, crop_array, PadHelper,
@@ -22,7 +22,7 @@ from celltk.utils.operation_utils import (sliding_window_generator,
                                           get_image_pixel_type)
 
 
-class Processor(BaseProcessor):
+class Process(BaseProcess):
     """
     TODO:
         - Add stand-alone crop function
@@ -34,10 +34,10 @@ class Processor(BaseProcessor):
     def align_by_cross_correlation(self,
                                    image: Image = tuple([]),
                                    mask: Mask = tuple([]),
-                                   track: Track = tuple([]),
                                    align_with: str = 'image',
-                                   crop: bool = True
-                                   ) -> Same:
+                                   crop: bool = True,
+                                   normalization: str = 'phase'
+                                   ) -> Stack:
         """Uses phase cross-correlation to shift the images to align them.
         Optionally can crop the images to align. Align with can be used
         to specify which of the inputs to use. Uses the first stack in the
@@ -45,11 +45,11 @@ class Processor(BaseProcessor):
 
         :param image: List of image stacks to be aligned.
         :param mask: List of mask stacks to be aligned.
-        :param track: List of track stacks to be aligned:
         :param align_with: Can be one of 'image', 'mask', or 'track'. Defines
             which of the input stacks should be used for alignment.
-        :param crop: If True, the aligned stacks are cropped based on the largest
-            frame to frame shifts.
+        :param crop: If True, the aligned stacks are cropped based on the
+            largest frame to frame shifts.
+        :param normalization:
 
         :return: Aligned input stack.
 
@@ -60,7 +60,7 @@ class Processor(BaseProcessor):
               otherwise, on reruns image might be cropped multiple times
             - Make all inputs optional
         """
-        sizes = [s.shape for s in image + mask + track]
+        sizes = [s.shape for s in image + mask]
         assert len(tuple(groupby(sizes))) == 1, 'Stacks must be same shape'
 
         # Image that aligning will be based on - first img in align_with
@@ -73,15 +73,17 @@ class Processor(BaseProcessor):
         shifts = []
         for idx, frames in enumerate(frame_generator):
             # frame_generator yields array of shape (overlap, y, x)
-            shifts.append(regi.phase_cross_correlation(frames[0, ...],
-                                                       frames[1, ...])[0])
+            shifts.append(
+                regi.phase_cross_correlation(frames[0, ...], frames[1, ...],
+                                             normalization=normalization)[0]
+            )
 
         # Get all shifts relative to the first image (cumulative)
         shifts = np.vstack(shifts)
         cumulative = np.cumsum(shifts, axis=0)
 
         # Make arrays for each output
-        flat_inputs = image + mask + track
+        flat_inputs = image + mask
         flat_outputs = [np.empty_like(arr) for arr in flat_inputs]
 
         # Copy first frames and store the output
@@ -104,9 +106,8 @@ class Processor(BaseProcessor):
 
     @ImageHelper(by_frame=True, as_tuple=True)
     def tile_images(self,
-                    image: Image = tuple([]),
-                    mask: Mask = tuple([]),
-                    track: Track = tuple([]),
+                    image: Image[Optional] = tuple([]),
+                    mask: Mask[Optional] = tuple([]),
                     layout: Tuple[int] = None,
                     border_value: Union[int, float] = 0.,
                     ) -> Image:
@@ -116,7 +117,6 @@ class Processor(BaseProcessor):
 
         :param image: List of image stacks to be tiled.
         :param mask: List of mask stacks to be tiled.
-        :param track: List of track stacks to be tiled:
         :param layout:
         :param border_value: Value of the default pixels.
         """
@@ -127,7 +127,7 @@ class Processor(BaseProcessor):
         fil.SetDefaultPixelValue(border_value)
 
         # Combine the stacks
-        stacks = image + mask + track
+        stacks = image + mask
         images = [cast_sitk(sitk.GetImageFromArray(s), 'sitkUInt16', True)
                   for s in stacks]
 
@@ -205,7 +205,8 @@ class Processor(BaseProcessor):
                                          image: Image,
                                          radius: float = 100,
                                          kernel: np.ndarray = None,
-                                         nansafe: bool = False
+                                         nansafe: bool = False,
+                                         return_bg: bool = False,
                                          ) -> Image:
         """
         Estimate background intensity by rolling/translating a kernel, and
@@ -213,7 +214,10 @@ class Processor(BaseProcessor):
         """
         bg = rest.rolling_ball(image, radius=radius,
                                kernel=kernel, nansafe=nansafe)
-        return image - bg
+        if return_bg:
+            return bg
+        else:
+            return image - bg
 
     @ImageHelper(by_frame=False)
     def n4_illumination_bias_correction(self,
@@ -229,7 +233,7 @@ class Processor(BaseProcessor):
         """
         Applies N4 bias field correction to the image. Can optionally return
         the calculated log bias field, which can be applied to the image with
-        ``Processor.apply_log_bias_field``.
+        ``Process.apply_log_bias_field``.
         """
         # Check the inputs
         if (image < 1).any():
@@ -380,7 +384,7 @@ class Processor(BaseProcessor):
                              image: Image,
                              ) -> Image:
         """
-        Similar to ``Processor.sobel_edge_detection``, but returns
+        Similar to ``Process.sobel_edge_detection``, but returns
         the magnitude of the gradient at each pixel, without regard
         for direction.
         """
@@ -561,6 +565,7 @@ class Processor(BaseProcessor):
                                     mode: str = 'symmetric',
                                     level: int = None,
                                     blur: bool = False,
+                                    return_bg: bool = False
                                     ) -> Image:
         """
         Uses discrete wavelet transformation to estimate and remove
@@ -571,18 +576,22 @@ class Processor(BaseProcessor):
         image_pad = padder.pad(image)
 
         # Pass frames of the padded image
-        out = np.zeros(image_pad.shape, dtype=image.dtype)
+        # Use higher precision then downsamble later
+        out = np.zeros(image_pad.shape, dtype=np.int32)
         for fr, im in enumerate(image_pad):
             bg = wavelet_background_estimate(im, wavelet, mode,
                                              level, blur)
-            bg = np.asarray(bg, dtype=out.dtype)
+            bg = np.asarray(bg, dtype=np.int32)
 
             # Remove background and ensure non-negative
-            out[fr, ...] = im - bg
+            if return_bg:
+                out[fr, ...] = bg
+            else:
+                out[fr, ...] = im - bg
             out[fr, ...][out[fr, ...] < 0] = 0
 
         # Undo padding and reset dtype before return
-        return padder.undo_pad(out.astype(image.dtype))
+        return padder.undo_pad(out.astype(np.int16))
 
     @ImageHelper(by_frame=False)
     def wavelet_noise_subtract(self,

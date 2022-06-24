@@ -11,7 +11,7 @@ from glob import glob
 from celltk.core.operation import Operation
 from celltk.core.pipeline import Pipeline
 from celltk.core.arrays import ExperimentArray
-from celltk.utils._types import Arr
+from celltk.utils._types import Array
 from celltk.utils.process_utils import condense_operations, extract_operations
 from celltk.utils.log_utils import get_logger, get_console_logger
 from celltk.utils.file_utils import (save_operation_yaml, save_pipeline_yaml,
@@ -33,8 +33,6 @@ class Orchestrator():
     :param image_folder: Absolute path to folder with images
         if different from parent_folder or output_folder
     :param mask_folder: Absolute path to folder with masks
-        if different from parent_folder or output_folder
-    :param track_folder: Absolute path to folder with tracks
         if different from parent_folder or output_folder
     :param array_folder: Absolute path to folder with arrays
         if different from parent_folder or output_folder
@@ -82,7 +80,6 @@ class Orchestrator():
                  match_str: str = None,
                  image_folder: str = None,
                  mask_folder: str = None,
-                 track_folder: str = None,
                  array_folder: str = None,
                  condition_map: dict = {},
                  position_map: Union[dict, Callable] = None,
@@ -134,7 +131,7 @@ class Orchestrator():
         # Build the Pipelines and input/output paths
         self.pipelines = {}
         self._build_pipelines(match_str, image_folder, mask_folder,
-                              track_folder, array_folder)
+                              array_folder)
 
         # Prepare for getting operations
         self.operations = []
@@ -377,14 +374,14 @@ class Orchestrator():
         self.logger.info(f'Adding Operations {operations} '
                          f'to {len(self)} Pipelines.')
         for pipe, kwargs in self.pipelines.items():
-            # If Extractor is in operations, update the condition
+            # If Extract is in operations, update the condition
             # NOTE: This dictionary must preserve order
-            op = {k if 'extractor' not in k else 'extractor':
-                  v if 'extractor' not in k else {}
+            op = {k if 'extract' not in k else 'extract':
+                  v if 'extract' not in k else {}
                   for k, v in op_dict.items()}
             # TODO: This could be done outside of the outer loop
             for opname in op_dict:
-                if 'extractor' in opname:
+                if 'extract' in opname:
                     # Check if the name is the default and update
                     if op_dict[opname]['condition'] == 'condition':
                         condition = kwargs['name']
@@ -419,7 +416,7 @@ class Orchestrator():
     def _run_multiple_pipelines(self,
                                 pipeline_dict: Dict,
                                 n_cores: int = 1
-                                ) -> Collection[Arr]:
+                                ) -> Collection[Array]:
         """
         pipeline_dict holds path information for building ALL of the pipelines
             - key is subfolder, val is to be passed to Pipeline.__init__
@@ -483,7 +480,6 @@ class Orchestrator():
                          match_str: str,
                          image_folder: str,
                          mask_folder: str,
-                         track_folder: str,
                          array_folder: str
                          ) -> None:
         """
@@ -536,8 +532,6 @@ class Orchestrator():
                                                           image_folder),
                         mask_folder=self._set_rel_to_par(fol_path,
                                                          mask_folder),
-                        track_folder=self._set_rel_to_par(fol_path,
-                                                          track_folder),
                         array_folder=self._set_rel_to_par(fol_path,
                                                           array_folder),
                     ))
@@ -625,7 +619,6 @@ class Orchestrator():
             match_str=args.match_str,
             image_folder=args.image,
             mask_folder=args.mask,
-            track_folder=args.track,
             array_folder=args.array,
             file_extension=args.extension,
             name=args.name,

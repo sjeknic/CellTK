@@ -15,7 +15,7 @@ import skimage.util as util
 import SimpleITK as sitk
 
 from celltk.core.arrays import ConditionArray
-from celltk.utils._types import (Image, Mask, Track, Arr, Same,
+from celltk.utils._types import (Image, Mask, Array, Stack,
                                  ImageContainer, INPT_NAMES,
                                  RandomNameProperty)
 from celltk.utils.operation_utils import (track_to_mask, parents_from_track,
@@ -26,13 +26,12 @@ import celltk.utils.metric_utils as metric_utils
 import celltk.utils.filter_utils as filter_utils
 
 
-class Operation():
+class Operation:
     """
     Base class for all other Operations.
 
     :param images: Names of images to use in this operation
     :param masks: Names of masks to use in this operation
-    :param tracks: Names of tracks to use in this operation
     :param arrays: Names of arrays to use in this operation
     :param output: Name to save the output stack
     :param save: If False, the final result will not be saved
@@ -51,7 +50,6 @@ class Operation():
     def __init__(self,
                  images: Collection[str] = [],
                  masks: Collection[str] = [],
-                 tracks: Collection[str] = [],
                  arrays: Collection[str] = [],
                  output: str = 'out',
                  save: bool = True,
@@ -84,11 +82,6 @@ class Operation():
             self.masks = [masks]
         else:
             self.masks = masks
-
-        if isinstance(tracks, str):
-            self.tracks = [tracks]
-        else:
-            self.tracks = tracks
 
         if isinstance(arrays, str):
             self.arrays = [arrays]
@@ -133,28 +126,21 @@ class Operation():
     def __call__(self,
                  images: Collection[Image] = [],
                  masks: Collection[Mask] = [],
-                 tracks: Collection[Track] = [],
-                 arrays: Collection[Arr] = [],
+                 arrays: Collection[Array] = [],
                  _return_keys: bool = False
-                 ) -> Union[Image, Mask, Track, Arr]:
+                 ) -> Union[Image, Mask, Array]:
         """
         __call__ runs operation independently of Pipeline class
-
-        TODO:
-            - In order for __call__ to work with the new ImageContainer system
-              it will have to take the inputs and build the ImageContainer. Only
-              question will be the keys, they have to match the inputs.
         """
         # Cast all to lists if they are not
         if not isinstance(images, (tuple, list)): images = [images]
         if not isinstance(masks, (tuple, list)): masks = [masks]
-        if not isinstance(tracks, (tuple, list)): tracks = [tracks]
         if not isinstance(arrays, (tuple, list)): arrays = [arrays]
 
         # Generate keys based on enumeration
         container = ImageContainer()
-        inputs = [Image, Mask, Track, Arr]
-        for nm, stack in zip(inputs, [images, masks, tracks, arrays]):
+        inputs = [Image, Mask, Array]
+        for nm, stack in zip(inputs, [images, masks, arrays]):
             if stack:
                 nm = nm.__name__
                 for i, st in enumerate(stack):
@@ -204,12 +190,12 @@ class Operation():
             # KeyboardInterrupt now won't cause additional exceptions
             pass
 
-    def add_function_to_operation(self,
-                                  func: str, *,
-                                  save_as: str = None,
-                                  output_type: str = None,
-                                  **kwargs
-                                  ) -> None:
+    def add_function(self,
+                     func: str, *,
+                     save_as: str = None,
+                     output_type: str = None,
+                     **kwargs
+                     ) -> None:
         """Adds a function to be run by the Operation
 
         :param func: Name of the function. Must exist in
@@ -405,12 +391,12 @@ class Operation():
         # Get all the inputs that were passed to __init__
         inputs = []
         for i in INPT_NAMES:
-            # Messy fix, but not folder for Same/Stack input
-            if i != Same.__name__:
+            # Messy fix, but not folder for Stack/Stack input
+            if i != Stack.__name__:
                 inputs.extend([(g, i) for g in getattr(self, f'{i}s')])
 
         # Check if save_as was set for last function
-        if self.functions[-1][1]:
+        if self.functions and self.functions[-1][1]:
             # TODO: If save name was set, this is already in outputs
             last_name = (self.functions[-1][1],
                          self.output_id[1])
@@ -478,7 +464,7 @@ class Operation():
         """
         # Get attributes to lookup and save in dictionary
         base_slots = ('__name__', '__module__', 'images', 'masks',
-                      'tracks', 'arrays', 'save', 'output',
+                      'arrays', 'save', 'output',
                       'force_rerun', '_output_id', '_split_key')
         op_defs = {}
         for att in base_slots:
@@ -549,18 +535,6 @@ class Operation():
         return image
 
     @ImageHelper(by_frame=False, as_tuple=True)
-    def image_to_track(self,
-                       image: Image,
-                       ) -> Track:
-        """Convert an Image stack to a Track stack.
-
-        :param image: Image stack to be typed as a Track
-
-        :return: Input stack with Track designation.
-        """
-        return image
-
-    @ImageHelper(by_frame=False, as_tuple=True)
     def mask_to_image(self,
                       mask: Mask,
                       ) -> Image:
@@ -572,49 +546,13 @@ class Operation():
         """
         return mask
 
-    @ImageHelper(by_frame=False, as_tuple=True)
-    def mask_to_track(self,
-                      mask: Mask,
-                      ) -> Track:
-        """Convert an Mask stack to a Track stack.
-
-        :param mask: Mask stack to be typed as a Track
-
-        :return: Input stack with Track designation.
-        """
-        return mask
-
-    @ImageHelper(by_frame=False, as_tuple=True)
-    def track_to_mask(self,
-                      track: Track,
-                      ) -> Mask:
-        """Convert an Track stack to a Mask stack.
-
-        :param track: Track stack to be typed as a Mask
-
-        :return: Input stack with Mask designation.
-        """
-        return track
-
-    @ImageHelper(by_frame=False, as_tuple=True)
-    def track_to_image(self,
-                       track: Track,
-                       ) -> Image:
-        """Convert an Track stack to a Image stack.
-
-        :param track: Track stack to be typed as a Image
-
-        :return: Input stack with Image designation.
-        """
-        return track
-
     @ImageHelper(by_frame=True)
     def apply_mask(self,
                    image: Image,
                    mask: Mask = None,
                    mask_name: str = None,
                    *args, **kwargs
-                   ) -> Same:
+                   ) -> Stack:
         """ Applies a boolean mask to an image. User can supply
         a boolean mask or the name of a function from filter_utils.
 
@@ -623,8 +561,8 @@ class Operation():
         :param mask_name: Name of a function in filter_utils to
             use to create a boolean mask. If given, any input
             mask is ignored
-        :param *args: Passed to mask_name function
-        :param **kwargs: Passed to mask_name function.
+        :param args: Passed to mask_name function
+        :param kwargs: Passed to mask_name function.
 
         :return: Masked image
         """
@@ -649,8 +587,8 @@ class Operation():
 
         :param image: Image to use for generating mask
         :param mask_name: Name of the function in filter_utils
-        :param *args: Passed to mask_name function
-        :param **kwargs: Passed to mask_name function.
+        :param args: Passed to mask_name function
+        :param kwargs: Passed to mask_name function.
 
         :return: Boolean mask with same shape as input image
         """
@@ -738,12 +676,12 @@ class Operation():
         return sitk.GetArrayFromImage(fil.Execute(img))
 
 
-class BaseProcessor(Operation):
+class BaseProcess(Operation):
     """
-    Base class for Processor operations. Typically used to apply image filters
+    Base class for processing operations. Typically used to apply image filters
     such as blurring or edge detection.
     """
-    __name__ = 'Processor'
+    __name__ = 'Process'
     _input_type = (Image,)
     _output_type = Image
 
@@ -754,12 +692,12 @@ class BaseProcessor(Operation):
         super().__init__(output=output, **kwargs)
 
 
-class BaseSegmenter(Operation):
+class BaseSegment(Operation):
     """
-    Base class for Segmenter operations. Typically used to create masks
+    Base class for segmenting operations. Typically used to create masks
     from images or to adjust and label already existing masks.
     """
-    __name__ = 'Segmenter'
+    __name__ = 'Segment'
     _input_type = (Image,)
     _output_type = Mask
 
@@ -770,14 +708,14 @@ class BaseSegmenter(Operation):
         super().__init__(output=output, **kwargs)
 
 
-class BaseTracker(Operation):
+class BaseTrack(Operation):
     """
-    Base class for Tracker operations. Typically used to link objects
+    Base class for tracking operations. Typically used to link objects
     in a provided mask. Can also be used to detect dividing cells.
     """
-    __name__ = 'Tracker'
+    __name__ = 'Track'
     _input_type = (Image, Mask)
-    _output_type = Track
+    _output_type = Mask
 
     def __init__(self,
                  output: str = 'track',
@@ -786,14 +724,13 @@ class BaseTracker(Operation):
         super().__init__(output=output, **kwargs)
 
 
-class BaseExtractor(Operation):
+class BaseExtract(Operation):
     """
-    Base class for Extractor operations. Typically used to extract data
+    Base class for extracting operations. Typically used to extract data
     from an intensity image using masks as a guide.
 
     :param images: Images to extract data from.
     :param masks: Masks to segment images with.
-    :param tracks: Tracks to segment images with.
     :param channels: Names of channels corresponding to
     :param regions: Names of segmented regions corresponding,
         tracks and masks, in that order.
@@ -820,9 +757,9 @@ class BaseExtractor(Operation):
         the outputs will be saved as 'align&channel000' and
         'align&channel001' for _split_key = '&'
     """
-    __name__ = 'Extractor'
-    _input_type = (Image, Mask, Track)
-    _output_type = Arr
+    __name__ = 'Extract'
+    _input_type = (Image, Mask)
+    _output_type = Array
     # This is directly from skimage.regionprops
     # Not included yet: convex_image, filled_image, image, inertia_tensor
     #                   inertia_tensor_eigvals, local_centroid, intensity_image
@@ -851,7 +788,6 @@ class BaseExtractor(Operation):
     def __init__(self,
                  images: Collection[str] = [],
                  masks: Collection[str] = [],
-                 tracks: Collection[str] = [],
                  channels: Collection[str] = [],
                  regions: Collection[str] = [],
                  lineages: Collection[np.ndarray] = [],
@@ -869,7 +805,7 @@ class BaseExtractor(Operation):
                  ) -> None:
         """
         """
-        super().__init__(images, masks, tracks,
+        super().__init__(images, masks,
                          output=output, save=save,
                          force_rerun=force_rerun,
                          _output_id=_output_id, **kwargs)
@@ -884,20 +820,18 @@ class BaseExtractor(Operation):
 
         # Prefer tracks for naming
         if not regions:
-            if tracks:
-                regions = tracks
-            else:
-                regions = masks
+            regions = masks
 
         # These kwargs get passed to self.extract_data_from_image
-        kwargs = dict(images=images, masks=masks, tracks=tracks,
+        kwargs = dict(images=images, masks=masks,
                       channels=channels, regions=regions, lineages=lineages,
                       condition=condition, min_trace_length=min_trace_length,
                       remove_parent=remove_parent, position_id=position_id,
                       skip_frames=skip_frames, time=time)
         # Add extract_data_from_image
         # functions are expected to be (func, save_as, user_type, kwargs)
-        self.functions = [tuple(['extract_data_from_image', output, None, kwargs])]
+        self.functions = [tuple(['extract_data_from_image',
+                                 output, None, kwargs])]
 
         # These cannot be class attributes
         self._derived_metrics = {}
@@ -913,13 +847,12 @@ class BaseExtractor(Operation):
     def __call__(self,
                  images: Collection[Image],
                  masks: Collection[Mask] = [],
-                 tracks: Collection[Track] = [],
                  channels: Collection[str] = [],
                  regions: Collection[str] = [],
                  lineages: Collection[np.ndarray] = [],
                  condition: str = None,
                  **kwargs,
-                 ) -> Arr:
+                 ) -> Array:
         """
         This directly calls extract_data_from_image
         instead of using run_operation
@@ -927,7 +860,7 @@ class BaseExtractor(Operation):
         kwargs.update(dict(channels=channels, regions=regions,
                            condition=condition, lineages=lineages))
         return self.extract_data_from_image.__wrapped__(self, images, masks,
-                                                        tracks, **kwargs)
+                                                        **kwargs)
 
     @property
     def metrics(self) -> list:
@@ -958,7 +891,7 @@ class BaseExtractor(Operation):
 
     def _extract_data_with_track(self,
                                  image: Image,
-                                 track: Track,
+                                 track: Mask,
                                  metrics: Collection[str],
                                  extra_metrics: Collection[Callable],
                                  cell_index: dict = None
@@ -1099,8 +1032,8 @@ class BaseExtractor(Operation):
 
                 # Each result is saved with the first key
                 save_key = [name] + [k for k in keys[0]
-                                     if not isinstance(k, slice) and
-                                     k not in self._metric_idx]
+                                     if not isinstance(k, slice)
+                                     and k not in self._metric_idx]
                 try:
                     array[tuple(save_key)] = result
                 except ValueError as e:
@@ -1155,17 +1088,17 @@ class BaseExtractor(Operation):
             new_func[-1] = new_kwargs
             self.functions = [tuple(new_func)]
 
-    def add_function_to_operation(self,
-                                  func: str, *,
-                                  output_type: str = None,
-                                  name: str = None,
-                                  **kwargs
-                                  ) -> None:
+    def add_function(self,
+                     func: str, *,
+                     output_type: str = None,
+                     name: str = None,
+                     **kwargs
+                     ) -> None:
         """
-        Extractor currently only supports one function due to how
+        Extract currently only supports one function due to how
         extract_data_from_images expects the inputs.
         """
-        raise NotImplementedError('Adding new functions to Extractor is '
+        raise NotImplementedError('Adding new functions to Extract is '
                                   'not currently supported. '
                                   'extract_data_from_image is included '
                                   'by default.')
@@ -1179,9 +1112,9 @@ class BaseExtractor(Operation):
         # Get inputs that were saved during __init__
         kwargs = self.functions[0][-1]
 
-        # Log inputs to Extractor
+        # Log inputs to Extract
         self.logger.info(f"Channels: {list(zip(kwargs['channels'], self.images))}")
-        self.logger.info(f"Regions: {list(zip(kwargs['regions'], self.tracks + self.masks))}")
+        self.logger.info(f"Regions: {list(zip(kwargs['regions'], self.masks))}")
         self.logger.info(f"Metrics: {self._metrics}")
         self.logger.info(f"Added metrics: {list(self._props_to_add.keys())}")
         self.logger.info(f"Condition: {kwargs['condition']}")
@@ -1190,15 +1123,15 @@ class BaseExtractor(Operation):
         return super().run_operation(inputs)
 
 
-class BaseEvaluator(Operation):
+class BaseEvaluate(Operation):
     """
-    Base class for Evaluator operations. Not currently implemented, but
+    Base class for evaluation operations. Not currently implemented, but
     will be used to generate plots and metrics regarding the data from
-    Extractor.
+    Extract.
     """
-    __name__ = 'Evaluator'
-    _input_type = (Arr,)
-    _output_type = Arr
+    __name__ = 'Evaluate'
+    _input_type = (Array,)
+    _output_type = Array
 
     def __init__(self,
                  output: str = 'evaluate',

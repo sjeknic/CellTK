@@ -6,15 +6,13 @@ import contextlib
 import warnings
 import logging
 import inspect
-import typing
 from copy import deepcopy
 from typing import Tuple, Generator, Dict
-from collections import Counter
 
 import numpy as np
 
-from celltk.utils._types import (Image, Mask, Track,
-                                 ImageContainer, INPT, INPT_NAMES)
+from celltk.utils._types import (Image, Mask, ImageContainer, Optional,
+                                 INPT, INPT_NAMES)
 from celltk.core.arrays import ConditionArray, ExperimentArray
 from celltk.utils.operation_utils import sliding_window_generator
 from celltk.utils.log_utils import get_null_logger
@@ -57,30 +55,22 @@ def stdout_redirected(to=os.devnull, stdout=None):
 class ImageHelper():
     """
     Decorator to help with passing only the correct image stacks to functions
-
-    TODO:
-        - Pass default args if no user input. See:
-        https://stackoverflow.com/questions/12627118/get-a-function-arguments-default-value
-        - Remove self.expected_types, self.expected_names, self.expected_numbers
-     """
+    """
     __name__ = 'ImageHelper'
 
     def __init__(self, *,
                  by_frame: bool = False,
                  as_tuple: bool = False,
-                 dtype: type = None,
                  ) -> None:
         """
         """
         # Save inputs
         self.by_frame = by_frame
-        self.dtype = dtype
         self.as_tuple = as_tuple
 
     def __call__(self, func):
         # Save information about the function from the signature
         self.func = func
-
 
         try:
             self._parse_type_hints()
@@ -101,7 +91,7 @@ class ImageHelper():
             self.logger = self._get_calling_logger(calling_cls)
             self.logger.info(f'ImageHelper called for {self.func.__name__}')
             self.logger.info(f'by_frame: {self.by_frame}, '
-                             f'as_tuple: {self.as_tuple}, dtype: {self.dtype}')
+                             f'as_tuple: {self.as_tuple}')
 
             # Sort the inputs and keep only those that are relevant
             keys, pass_to_func, nkwargs = self._type_helper(img_container,
@@ -123,49 +113,45 @@ class ImageHelper():
 
     def _parse_type_hints(self):
         """
-        TODO:
-            - This whole type checker has turned a bit unweildly. I don't
-              like using both inspect and typing.get_type_hints. Seems a
-              little redundant. However, I'm doing it now to mark
-              whether a parameter is optional.
+        Parses the function signature to determine which keyword arguments
+        might potentially receive CellTK types
         """
-        # NOTE: self/cls is not included in these type hints
-        self.type_hints = typing.get_type_hints(self.func)
+        # Get signature
+        _sig = inspect.signature(self.func)
 
-        # Save as type object, not __name__
-        self.output_type = self.type_hints.pop('return')
+        # Parse the output type
+        self.output_type = _sig.return_annotation
+        _args = _sig.return_annotation.__args__
+        if isinstance(_args, tuple):
+            if len(_args) > 1:
+                warnings.warn("More than one output dtype set. Using first.")
+            self.output_dtype = _args[0]
+        else:
+            self.output_dtype = _args
 
-        # Expected names and types are for CellTK types only
-        self.expected_names = []
-        self.expected_types = []
-        # Go through type hints and see if CellTK type
-        for key, val in self.type_hints.items():
-            arg_types = typing.get_args(val)  # returns () if not Union
-            if not arg_types: arg_types = (val,)
+        # Parse the input types
+        self.expected_names = []  # keep track of ctk keyword names
+        self.expected_types = []  # keep track of ctk keyword types
+        self.expected_optional = []  # keep track of ctk optional designation
+        self.celltk_type = {}  # keep track of which keywords are ctk types
+        for key, val in _sig.parameters.items():
+            if key in ('self', 'cls'):
+                continue
 
-            for a in arg_types:
-                if a in INPT:
-                    self.expected_names.append(key)
-                    self.expected_types.append(a.__name__)
+            try:
+                assert val.annotation in INPT or val.annotation.__name__ in INPT_NAMES
+                self.expected_names.append(key)
+                self.expected_types.append(val.annotation.__name__)
+                self.celltk_type[key] = True
 
-                    # If it was a union type, then self.type_hints should
-                    # also get overwritten for _type_helper
-                    self.type_hints[key] = a
-
-                    # Skip all remaining in Union
-                    break
-
-        # Mark optional parameters. Don't get loaded unless user specifies
-        # to load something.
-        _signature = inspect.signature(self.func).parameters
-        self.expected_optional = [param.default is not param.empty
-                                  for param in _signature.values()
-                                  if param.name in self.expected_names]
-
-        # Update the number of each Stack type that is expected
-        self.expected_numbers = dict(Counter(self.expected_types))
-        self.expected_numbers.update({k: 0 for k in INPT_NAMES
-                                      if k not in self.expected_types})
+                # If Optional in __args__, only gets passed if
+                # user explicitly passes a name to that keyword arg
+                _args = val.annotation.__args__
+                if not isinstance(_args, tuple): _args = (_args,)
+                self.expected_optional.append(Optional in _args)
+            except (AssertionError, AttributeError):
+                # Not a CellTK type
+                self.celltk_type[key] = False
 
     def _type_helper(self, img_container, **kwargs):
         """
@@ -187,8 +173,8 @@ class ImageHelper():
         for kw, val in kwargs.items():
             # Check that this kw is for a Stack
             try:
-                assert self.type_hints[kw].__name__ in INPT_NAMES
-            except (AttributeError, AssertionError):
+                assert self.celltk_type[kw]
+            except AssertionError:
                 # Indicates not CellTK type
                 continue
             except KeyError as e:
@@ -279,7 +265,7 @@ class ImageHelper():
             keys = [keys]
 
         # If output_type is "same" out_type = in_type, else defined by function
-        if self.output_type.__name__ != 'same':
+        if self.output_type.__name__ != 'stack':
             keys = [(k[0], self.output_type.__name__) for k in keys]
 
         # Store stack as list if not already
@@ -297,6 +283,10 @@ class ImageHelper():
                 keys = [keys[0]]
                 warnings.warn('Possible mismatch with keys for ',
                               f'for {self.func.__name__}.')
+
+        # If an output dtype was given, cast to that type
+        if self.output_dtype:
+            stack = [s.astype(self.output_dtype) for s in stack]
 
         # Check that length matches
         if len(stack) < len(keys):
@@ -319,7 +309,7 @@ class ImageHelper():
 
         # Adjust array dimensions if needed
         for n, (k, st) in enumerate(zip(keys, stack)):
-            while st.ndim < 3 and any([i in k for i in (Image, Mask, Track)]):
+            while st.ndim < 3 and any([i in k for i in (Image, Mask)]):
                 st = np.expand_dims(st, axis=-1)
             stack[n] = st
 
