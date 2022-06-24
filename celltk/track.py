@@ -12,7 +12,7 @@ import scipy.optimize as opti
 import scipy.spatial.distance as distance
 
 from celltk.core.operation import BaseTrack
-from celltk.utils._types import Image, Mask
+from celltk.utils._types import Image, Mask, Optional
 from celltk.utils.utils import ImageHelper, stdout_redirected
 from celltk.utils.operation_utils import (lineage_to_track,
                                           match_labels_linear,
@@ -39,7 +39,7 @@ class Track(BaseTrack):
     def simple_linear_tracker(self,
                               mask: Mask,
                               voronoi_split: bool = True
-                              ) -> Mask:
+                              ) -> Mask[np.int16]:
         """Tracks objects by optimizing the area overlap
         from frame to frame.
 
@@ -80,7 +80,7 @@ class Track(BaseTrack):
                                  connectivity: int = 2,
                                  watershed_line: bool = True,
                                  keep_seeds: bool = False,
-                                 ) -> Mask:
+                                 ) -> Mask[np.int16]:
         """Uses watershed to track from objects in one frame to objects
         in the next. Useful for objects that grow in size, but don't move
         much, such as bacterial colonies.
@@ -132,7 +132,7 @@ class Track(BaseTrack):
                                     thresholds: Collection[float] = None,
                                     displacement_thres: float = 30,
                                     mass_thres: float = 0.15,
-                                    ) -> Mask:
+                                    ) -> Mask[np.int16]:
         """Tracks objects from frame to frame by optimizing the cost
         defined by an arbitrary list of properties. By default, includes
         thresholds on the distance and difference in intensity for
@@ -271,14 +271,14 @@ class Track(BaseTrack):
     def detect_cell_division(self,
                              image: Image,
                              track: Mask,
-                             mask: Mask = None,
+                             mask: Mask[Optional] = None,
                              displacement_thres: float = 15,
                              frame_thres: int = 3,
                              mass_thres: float = 0.25,
                              dist_thres: float = 0.35,
                              dot_thres: float = -0.7,
                              angle_weight: float = 0.5
-                             ) -> Mask:
+                             ) -> Mask[np.int16]:
         """Detects cells that have divided based on location, size,
         and intensity information. Daughter cells are expected to
         be approximately half the total intensity of the mother cell,
@@ -456,7 +456,7 @@ class Track(BaseTrack):
                            cut_off_distance: Tuple = None,
                            allow_cell_division: bool = True,
                            postprocessing_key: str = None,
-                           ) -> Mask:
+                           ) -> Mask[np.int16]:
         """Tree-based tracking algorithm. First creates small
         tracklets within delta_t frames, then finds a globally optimal
         solution for linking the tracklets to form full tracks. Has
@@ -539,7 +539,7 @@ class Track(BaseTrack):
                          mask: Mask,
                          config_path: str = 'celltk/config/bayes_config.json',
                          update_method: str = 'exact',
-                         ) -> Mask:
+                         ) -> Mask[np.int16]:
         """Wrapper for btrack, a Bayesian-based tracking algorithm.
         Please see: https://github.com/quantumjot/BayesianTracker
 
@@ -585,7 +585,7 @@ class Track(BaseTrack):
     @ImageHelper(by_frame=False)
     def lineage_masks(self,
                       track: Mask,
-                      ) -> Mask:
+                      ) -> Mask[np.int16]:
         """Creates a mask where all daughter cells have
         the label of their parent cell.
 

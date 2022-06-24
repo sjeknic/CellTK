@@ -13,7 +13,7 @@ import scipy.ndimage as ndi
 import SimpleITK as sitk
 
 from celltk.core.operation import BaseSegment
-from celltk.utils._types import Image, Mask, Stack
+from celltk.utils._types import Image, Mask, Stack, Optional
 from celltk.utils.utils import ImageHelper
 from celltk.utils.operation_utils import (dilate_sitk, voronoi_boundaries,
                                           skimage_level_set, gray_fill_holes,
@@ -195,7 +195,7 @@ class Segment(BaseSegment):
                        negative: bool = False,
                        connectivity: int = 2,
                        relative: bool = False
-                       ) -> Mask:
+                       ) -> Mask[np.uint8]:
         """Labels pixels above or below a threshold value.
 
         :param image:
@@ -215,7 +215,7 @@ class Segment(BaseSegment):
         else:
             test_arr = image >= thres
 
-        return test_arr.astype(np.uint8)
+        return test_arr
 
     @ImageHelper(by_frame=True)
     def adaptive_thres(self,
@@ -223,7 +223,7 @@ class Segment(BaseSegment):
                        relative_thres: float = 0.1,
                        sigma: float = 50,
                        connectivity: int = 2
-                       ) -> Mask:
+                       ) -> Mask[np.uint8]:
         """Applies Gaussian blur to the image and marks pixels that
         are brighter than the blurred image by a specified threshold.
 
@@ -236,7 +236,7 @@ class Segment(BaseSegment):
         """
         fil = ndi.gaussian_filter(image, sigma)
         fil = image > fil * (1 + relative_thres)
-        return fil.astype(np.uint8)
+        return fil
 
     @ImageHelper(by_frame=True)
     def otsu_thres(self,
@@ -245,7 +245,7 @@ class Segment(BaseSegment):
                    connectivity: int = 2,
                    buffer: float = 0.,
                    fill_holes: bool = False,
-                   ) -> Mask:
+                   ) -> Mask[np.uint8]:
         """Uses Otsu's method to determine the threshold and labels all pixels
         above the threshold.
 
@@ -265,7 +265,7 @@ class Segment(BaseSegment):
             labels = morph.binary_closing(labels)
             labels = sitk_binary_fill_holes(labels)
 
-        return labels.astype(np.uint8)
+        return labels
 
     @ImageHelper(by_frame=False)
     def multiotsu_thres(self,
@@ -275,7 +275,7 @@ class Segment(BaseSegment):
                         nbins: int = 256,
                         hist: np.ndarray = None,
                         binarize: bool = False,
-                        ) -> Mask:
+                        ) -> Mask[np.uint8]:
         """Applies Otsu's thresholding with multiple classes. By default,
         returns a mask with all classes included, but can be limited to
         only returning some of the classes.
@@ -312,7 +312,7 @@ class Segment(BaseSegment):
                  image: Image,
                  inside_val: int = 0,
                  outside_val: int = 1
-                 ) -> Mask:
+                 ) -> Mask[np.uint8]:
         """Applies Li's thresholding method.
 
         :param image:
@@ -628,7 +628,7 @@ class Segment(BaseSegment):
     @ImageHelper(by_frame=True)
     def morphological_acwe(self,
                            image: Image,
-                           seeds: Mask = 'checkerboard',
+                           seeds: Mask[Optional] = 'checkerboard',
                            iterations: int = 10,
                            smoothing: int = 1,
                            lambda1: float = 1,
@@ -696,7 +696,7 @@ class Segment(BaseSegment):
     @ImageHelper(by_frame=True)
     def morphological_geodesic_active_contour(self,
                                               image: Image,
-                                              seeds: Mask = 'checkerboard',
+                                              seeds: Mask[Optional] = 'checkerboard',
                                               iterations: int = 10,
                                               smoothing: int = 1,
                                               threshold: float = 'auto',
