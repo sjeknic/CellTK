@@ -126,6 +126,52 @@ class PlotHelper:
 
         return itertools.cycle(symbols)
 
+    def _apply_format_figure(self,
+                             figure: go.Figure,
+                             figsize: Tuple[int] = (None, None),
+                             title: str = None,
+                             x_label: str = None,
+                             y_label: str = None,
+                             x_limit: Tuple[float] = None,
+                             y_limit: Tuple[float] = None,
+                             axis_type: str = 'default',
+                             **kwargs
+                             ) -> go.Figure:
+        # Default layouts
+        if axis_type == 'default':
+            x_axis_layout = self._default_axis_layout.copy()
+            y_axis_layout = self._default_axis_layout.copy()
+        elif axis_type == 'noline':
+            x_axis_layout = self._no_line_axis.copy()
+            y_axis_layout = self._no_line_axis.copy()
+        else:
+            raise ValueError(f'Did not understand axis type {axis_type}.')
+
+        figure_layout = {'template': self._template}
+
+        # Updates only made if not None, preserves old values
+        if x_label is not None:
+            x_axis_layout['title'].update({'text': x_label})
+        if y_label is not None:
+            y_axis_layout['title'].update({'text': y_label})
+        if x_limit is not None:
+            x_axis_layout.update({'range': x_limit})
+        if y_limit is not None:
+            y_axis_layout.update({'range': y_limit})
+        if title is not None:
+            figure_layout.update({'title': title})
+        if figsize[0] is not None:
+            figure_layout.update({'height': figsize[0]})
+        if figsize[1] is not None:
+            figure_layout.update({'width': figsize[1]})
+
+        # Apply changes
+        figure.update_layout(**figure_layout, **kwargs)
+        figure.update_xaxes(**x_axis_layout)
+        figure.update_yaxes(**y_axis_layout)
+
+        return figure
+
     @staticmethod
     def _format_colors(color: str, alpha: float = None) -> str:
         """Converst hexcode colors to RGBA to allow transparency"""
@@ -353,6 +399,9 @@ class PlotHelper:
         :raises AssertionError: If figsize is not a tuple of length two.
         :raises TypeError: If time is not an np.ndarray or collection of
             np.ndarray.
+
+        TODO:
+            - Add more generalized line_plot, turn this to time_plot
         """
         # Format inputs
         arrays = self._format_arrays(arrays)
@@ -439,19 +488,9 @@ class PlotHelper:
             fig.add_traces(lines)
 
         # Upate the axes and figure layout
-        self._default_axis_layout['title'].update({'text': x_label})
-        fig.update_xaxes(**self._default_axis_layout)
-        self._default_axis_layout['title'].update({'text': y_label})
-        fig.update_yaxes(**self._default_axis_layout)
-        fig.update_layout(template=self._template,
-                          title=title,
-                          xaxis_range=x_limit,
-                          yaxis_range=y_limit)
-
-        # Set size only if not None, so as to not overwrite previous changes
-        h, w = figsize
-        if h: fig.update_layout(height=h)
-        if w: fig.update_layout(width=w)
+        fig = self._apply_format_figure(fig, figsize, title,
+                                        x_label, y_label, x_limit, y_limit,
+                                        axis_type='default')
 
         return fig
 
@@ -632,18 +671,10 @@ class PlotHelper:
 
         fig.add_traces(traces)
 
-        self._default_axis_layout['title'].update({'text': x_label})
-        fig.update_xaxes(**self._default_axis_layout)
-        self._default_axis_layout['title'].update({'text': y_label})
-        fig.update_yaxes(**self._default_axis_layout)
-        fig.update_layout(template=self._template,
-                          xaxis_range=x_limit,
-                          yaxis_range=y_limit)
-
-        # Set size only if not None, so as to not overwrite previous changes
-        h, w = figsize
-        if h: fig.update_layout(height=h)
-        if w: fig.update_layout(width=w)
+        # Apply formatting and return
+        fig = self._apply_format_figure(fig, figsize, title,
+                                        x_label, y_label, x_limit, y_limit,
+                                        axis_type='default')
 
         return fig
 
@@ -808,18 +839,10 @@ class PlotHelper:
             fig.add_trace(trace)
 
         # Format plot on the way out
+        fig = self._apply_format_figure(fig, figsize, title,
+                                        x_label, y_label, x_limit, y_limit,
+                                        axis_type='default', barmode=barmode)
         fig.update_traces(**kwargs)
-        fig.update_layout(template=self._template, barmode=barmode,
-                          title=title)
-        fig.update_xaxes(**self._default_axis_layout)
-        fig.update_xaxes(title=x_label, range=x_limit)
-        fig.update_yaxes(**self._default_axis_layout)
-        fig.update_yaxes(title=y_label, range=y_limit)
-
-        # Set size only if not None, so as to not overwrite previous changes
-        h, w = figsize
-        if h: fig.update_layout(height=h)
-        if w: fig.update_layout(width=w)
 
         return fig
 
@@ -1049,17 +1072,10 @@ class PlotHelper:
                 fig.add_trace(line)
 
         # Format plot on the way out
-        fig.update_layout(template=self._template, barmode=barmode,
-                          title=title, bargap=bargap, bargroupgap=bargroupgap)
-        fig.update_xaxes(**self._default_axis_layout)
-        fig.update_xaxes(title=x_label, range=x_limit)
-        fig.update_yaxes(**self._default_axis_layout)
-        fig.update_yaxes(title=y_label, range=y_limit)
-
-        # Set size only if not None, so as to not overwrite previous changes
-        h, w = figsize
-        if h: fig.update_layout(height=h)
-        if w: fig.update_layout(width=w)
+        fig = self._apply_format_figure(fig, figsize, title,
+                                        x_label, y_label, x_limit, y_limit,
+                                        axis_type='default', barmode=barmode,
+                                        bargap=bargap, bargroupgap=bargroupgap)
 
         return fig
 
@@ -1236,19 +1252,11 @@ class PlotHelper:
                 fig.add_trace(neg_trace)
 
         # Format plot on the way out
+        fig = self._apply_format_figure(fig, figsize, title,
+                                        x_label, y_label, x_limit, y_limit,
+                                        axis_type='default',
+                                        violinmode=violinmode)
         fig.update_traces(**kwargs)
-        fig.update_layout(template=self._template,
-                          violinmode=violinmode,
-                          title=title)
-        fig.update_xaxes(**self._default_axis_layout)
-        fig.update_xaxes(title=x_label, range=x_limit)
-        fig.update_yaxes(**self._default_axis_layout)
-        fig.update_yaxes(title=y_label, range=y_limit)
-
-        # Set size only if not None, so as to not overwrite previous changes
-        h, w = figsize
-        if h: fig.update_layout(height=h)
-        if w: fig.update_layout(width=w)
 
         return fig
 
@@ -1333,19 +1341,12 @@ class PlotHelper:
                                side='positive', orientation='h', **kwargs)
 
         # Some settings for making a ridgeline out of the violin plot
+        fig = self._apply_format_figure(fig, figsize, title,
+                                        x_label, y_label, x_limit, y_limit,
+                                        axis_type='default',
+                                        xaxis_showgrid=False,
+                                        xaxis_zeroline=False)
         fig.update_traces(width=overlap)
-        fig.update_layout(template=self._template,
-                          title=title, xaxis_showgrid=False,
-                          xaxis_zeroline=False)
-        fig.update_xaxes(**self._default_axis_layout)
-        fig.update_xaxes(title=x_label, range=x_limit)
-        fig.update_yaxes(**self._default_axis_layout)
-        fig.update_yaxes(title=y_label, range=y_limit)
-
-        # Set size only if not None, so as to not overwrite previous changes
-        h, w = figsize
-        if h: fig.update_layout(height=h)
-        if w: fig.update_layout(width=w)
 
         return fig
 
@@ -1429,16 +1430,9 @@ class PlotHelper:
                            reversescale=reverse, **kwargs)
         fig.add_trace(trace)
 
-        fig.update_layout(template=self._template, title=title)
-        fig.update_xaxes(**self._no_line_axis)
-        fig.update_xaxes(title=x_label, range=x_limit)
-        fig.update_yaxes(**self._no_line_axis)
-        fig.update_yaxes(title=y_label, range=y_limit)
-
-        # Set size only if not None, so as to not overwrite previous changes
-        h, w = figsize
-        if h: fig.update_layout(height=h)
-        if w: fig.update_layout(width=w)
+        fig = self._apply_format_figure(fig, figsize, title,
+                                        x_label, y_label, x_limit, y_limit,
+                                        axis_type='noline')
 
         return fig
 
@@ -1553,16 +1547,9 @@ class PlotHelper:
                                **kwargs)
         fig.add_trace(trace)
 
-        fig.update_layout(template=self._template, title=title)
-        fig.update_xaxes(**self._no_line_axis)
-        fig.update_xaxes(title=x_label, range=x_limit)
-        fig.update_yaxes(**self._no_line_axis)
-        fig.update_yaxes(title=y_label, range=y_limit)
-
-        # Set size only if not None, so as to not overwrite previous changes
-        h, w = figsize
-        if h: fig.update_layout(height=h)
-        if w: fig.update_layout(width=w)
+        fig = self._apply_format_figure(fig, figsize, title,
+                                        x_label, y_label, x_limit, y_limit,
+                                        axis_type='noline')
 
         return fig
 
@@ -1677,16 +1664,9 @@ class PlotHelper:
                                       **kwargs)
         fig.add_trace(trace)
 
-        fig.update_layout(template=self._template, title=title)
-        fig.update_xaxes(**self._no_line_axis)
-        fig.update_xaxes(title=x_label, range=x_limit)
-        fig.update_yaxes(**self._no_line_axis)
-        fig.update_yaxes(title=y_label, range=y_limit)
-
-        # Set size only if not None, so as to not overwrite previous changes
-        h, w = figsize
-        if h: fig.update_layout(height=h)
-        if w: fig.update_layout(width=w)
+        fig = self._apply_format_figure(fig, figsize, title,
+                                        x_label, y_label, x_limit, y_limit,
+                                        axis_type='noline')
 
         return fig
 
@@ -1699,6 +1679,7 @@ class PlotHelper:
                          cols: int = 4,
                          max_figures: int = None,
                          time: np.ndarray = None,
+                         figsize: Tuple[float] = (None, None),
                          title: str = None,
                          x_label: str = None,
                          y_label: str = None,
@@ -1805,5 +1786,9 @@ class PlotHelper:
                 except IndexError:
                     # Reached the end of the traces
                     break
+
+            fig = self._apply_format_figure(fig, figsize, title,
+                                            x_label, y_label, x_limit, y_limit,
+                                            axis_type='default')
 
             yield fig
