@@ -13,7 +13,7 @@ class Stack(Generic[stack]):
         # Needs to make an instance so __args__
         # isn't overwritten for all uses of cls
         instance = super().__new__(cls)
-        instance.__args__ = vars
+        instance.__args__ = tuple([vars])
         instance.__name__ = cls.__name__
         return instance
 
@@ -36,6 +36,9 @@ class Mask(Stack, name='mask'):
 
 
 class Array(Stack, name='array'):
+    pass
+
+class Optional(Stack, name='optional'):
     pass
 
 

@@ -1,6 +1,6 @@
 import warnings
 from itertools import groupby
-from typing import Union, Collection, Tuple, Optional
+from typing import Union, Collection, Tuple
 
 import numpy as np
 import SimpleITK as sitk
@@ -13,7 +13,7 @@ import scipy.ndimage as ndi
 import sklearn.preprocessing as preproc
 
 from celltk.core.operation import BaseProcess
-from celltk.utils._types import Image, Mask, Stack
+from celltk.utils._types import Image, Mask, Stack, Optional
 from celltk.utils.utils import ImageHelper
 from celltk.utils.operation_utils import (sliding_window_generator,
                                           shift_array, crop_array, PadHelper,
@@ -47,8 +47,8 @@ class Process(BaseProcess):
         :param mask: List of mask stacks to be aligned.
         :param align_with: Can be one of 'image', 'mask', or 'track'. Defines
             which of the input stacks should be used for alignment.
-        :param crop: If True, the aligned stacks are cropped based on the largest
-            frame to frame shifts.
+        :param crop: If True, the aligned stacks are cropped based on the
+            largest frame to frame shifts.
         :param normalization:
 
         :return: Aligned input stack.

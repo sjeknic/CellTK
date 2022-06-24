@@ -7,11 +7,11 @@ import warnings
 import logging
 import inspect
 from copy import deepcopy
-from typing import Tuple, Generator, Dict, Optional
+from typing import Tuple, Generator, Dict
 
 import numpy as np
 
-from celltk.utils._types import (Image, Mask, ImageContainer,
+from celltk.utils._types import (Image, Mask, ImageContainer, Optional,
                                  INPT, INPT_NAMES)
 from celltk.core.arrays import ConditionArray, ExperimentArray
 from celltk.utils.operation_utils import sliding_window_generator
@@ -122,8 +122,9 @@ class ImageHelper():
         # Parse the output type
         self.output_type = _sig.return_annotation
         _args = _sig.return_annotation.__args__
-        if isinstance(_args, tuple) and len(_args) > 1:
-            warnings.warn("More than one output dtype set. Using first.")
+        if isinstance(_args, tuple):
+            if len(_args) > 1:
+                warnings.warn("More than one output dtype set. Using first.")
             self.output_dtype = _args[0]
         else:
             self.output_dtype = _args

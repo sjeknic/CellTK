@@ -2,7 +2,7 @@
 [![pytest](https://github.com/sjeknic/CellTK/actions/workflows/main.yml/badge.svg)](https://github.com/sjeknic/CellTK/actions/workflows/main.yml)
 
 
-# CellTK
+# CellTK2
 Toolkit for analysis of live-cell microscopy data
 
 ## Installation

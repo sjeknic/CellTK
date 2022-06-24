@@ -1,6 +1,5 @@
 import os
 import sys
-from typing import Optional
 
 # Correct import paths
 cwd = os.path.dirname(os.path.realpath(__file__))
@@ -10,7 +9,7 @@ sys.path.insert(0, par)
 import numpy as np
 import pytest
 
-from celltk.utils._types import Image, Mask
+from celltk.utils._types import Image, Mask, Optional
 from celltk.utils.utils import ImageHelper
 from celltk.core.operation import Operation
 

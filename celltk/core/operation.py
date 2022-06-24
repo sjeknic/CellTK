@@ -561,8 +561,8 @@ class Operation:
         :param mask_name: Name of a function in filter_utils to
             use to create a boolean mask. If given, any input
             mask is ignored
-        :param *args: Passed to mask_name function
-        :param **kwargs: Passed to mask_name function.
+        :param args: Passed to mask_name function
+        :param kwargs: Passed to mask_name function.
 
         :return: Masked image
         """
@@ -587,8 +587,8 @@ class Operation:
 
         :param image: Image to use for generating mask
         :param mask_name: Name of the function in filter_utils
-        :param *args: Passed to mask_name function
-        :param **kwargs: Passed to mask_name function.
+        :param args: Passed to mask_name function
+        :param kwargs: Passed to mask_name function.
 
         :return: Boolean mask with same shape as input image
         """
