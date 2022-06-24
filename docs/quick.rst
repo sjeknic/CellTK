@@ -6,7 +6,7 @@ Important classes
 
 #. ``Pipeline`` - runs CellTK on a single folder of images.
 #. ``Orchestrator`` - runs CellTK on multiple folders of images.
-#. ``Operation`` - includes ``Segmenter``, ``Processor``, ``Tracker``, ``Extractor``, and ``Evaluator``. Each of these holds the functions for analyzing images and can be found in ``CellTK/celltk``.
+#. ``Operation`` - includes ``Segment``, ``Process``, ``Track``, ``Extract``, and ``Evaluate``. Each of these holds the functions for analyzing images and can be found in ``CellTK/celltk``.
 
 
 Setting up a Pipeline
@@ -42,11 +42,11 @@ Next, we will add a tracking operation using the same format as above. This time
                          save=True, force_rerun=False)
     tra.add_function('kit_sch_ge_tracker')
 
-Finally, we need to add an operation to extract the data and save it in an easy to use file. For this, we use ``Extractor``. This is the operation to pass most of the experimental metadata to. No functions are added to this operation.
+Finally, we need to add an operation to extract the data and save it in an easy to use file. For this, we use ``Extract``. This is the operation to pass most of the experimental metadata to. No functions are added to this operation.
 
 ::
 
-    ext = celltk.Extractor(images=['channel000', 'channel0001'], tracks=['nuc'],
+    ext = celltk.Extract(images=['channel000', 'channel0001'], tracks=['nuc'],
                            regions=['nuc'], channels=['tritc', 'fitc'],
                            time=10, min_trace_length=5, force_rerun=True)
 

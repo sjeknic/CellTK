@@ -1,6 +1,7 @@
 [![Documentation Status](https://readthedocs.org/projects/celltk/badge/?version=latest)](https://celltk.readthedocs.io/en/latest/?badge=latest)
 [![pytest](https://github.com/sjeknic/CellTK/actions/workflows/main.yml/badge.svg)](https://github.com/sjeknic/CellTK/actions/workflows/main.yml)
 
+![Logo](docs/logo/black-assetLarge.png)
 
 # CellTK2
 Toolkit for analysis of live-cell microscopy data
