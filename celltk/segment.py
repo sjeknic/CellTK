@@ -11,6 +11,7 @@ import skimage.util as util
 import skimage.feature as feat
 import scipy.ndimage as ndi
 import SimpleITK as sitk
+import pkg_resources as pkg
 
 from celltk.core.operation import BaseSegment
 from celltk.utils._types import Image, Mask, Stack, Optional
@@ -1228,7 +1229,7 @@ class Segment(BaseSegment):
     @ImageHelper(by_frame=False)
     def misic_predict(self,
                       image: Image,
-                      model_path: str = 'external/misic/MiSiCv2.h5',
+                      model_path: str = None,
                       weight_path: str = None,
                       batch: int = None,
                       ) -> Mask:
@@ -1249,6 +1250,10 @@ class Segment(BaseSegment):
         """
         # Only import tensorflow if needed
         from celltk.utils.unet_model import MisicModel
+        if model_path is None:
+            # Original MiSiC model should have been installed
+            model_path = pkg.resource_filename('celltk',
+                                               'external/misic/MiSiCv2.h5')
         self.model = MisicModel(model_path)
 
         # Use model for predictions
