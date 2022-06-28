@@ -1,6 +1,6 @@
 import warnings
 import functools
-from typing import Tuple, Union, Collection, Callable, List
+from typing import Tuple, Union, Collection, List
 
 import numpy as np
 import skimage.measure as meas
@@ -1172,7 +1172,7 @@ class Segment(BaseSegment):
     @ImageHelper(by_frame=False)
     def unet_predict(self,
                      image: Image,
-                     weight_path: str = 'celltk/config/unet_example_cell_weights.hdf5',
+                     weight_path: str,
                      roi: Union[int, str] = 2,
                      batch: int = None,
                      classes: int = 3,
