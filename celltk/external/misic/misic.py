@@ -6,8 +6,8 @@ from skimage.feature import shape_index
 # from misic.utils import *
 # from misic.extras import *
 #  Fixed update path (sjeknic 20220331)
-from external.misic.utils import *
-from external.misic.extras import *
+from celltk.external.misic.utils import *
+from celltk.external.misic.extras import *
 import tensorflow as tf
 
 

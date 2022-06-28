@@ -27,7 +27,7 @@ from celltk.utils.metric_utils import total_intensity
 import celltk.utils.metric_utils as metric_utils
 
 # Tracking algorithm specific imports
-from external.kit_sch_ge.tracker.extract_data import get_indices_pandas
+from celltk.external.kit_sch_ge.tracker.extract_data import get_indices_pandas
 from celltk.utils.kit_sch_ge_utils import (TrackingConfig, MultiCellTracker,
                                            ExportResults)
 from celltk.utils.bayes_utils import (bayes_extract_tracker_data,
