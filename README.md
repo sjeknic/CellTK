@@ -26,4 +26,4 @@ If you run into any problems, please open an issue.
 More details on getting started coming soon. In the meantime, please see the documentation below.
 
 ## Documentation
-https://celltk.readthedocs.io/en/latest/![]()
+![https://celltk.readthedocs.io/en/latest/](https://celltk.readthedocs.io/en/latest/)
