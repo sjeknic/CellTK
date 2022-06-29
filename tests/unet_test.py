@@ -16,6 +16,7 @@ import celltk.utils.unet_model
 
 class TestUNet():
     weight_path = os.path.join(par, 'config/unet_example_cell_weights.tf')
+    misic_path = os.path.join(par, 'celltk/external/misic/MiSiCv2.h5')
     # TODO: Add bacterial test images
     data_path = os.path.join(par, 'examples/live_cell_example')
 
@@ -41,7 +42,7 @@ class TestUNet():
                                  for a in arrs], axis=0)
 
     def test_misic_model(self):
-        self.model = celltk.utils.unet_model.MisicModel()
+        self.model = celltk.utils.unet_model.MisicModel(self.misic_path)
         arrs = []
         for im in glob(os.path.join(self.data_path, '*l000*tif')):
             arrs.append(iio.imread(os.path.join(self.data_path, im)))

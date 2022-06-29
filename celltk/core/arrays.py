@@ -829,7 +829,7 @@ class ConditionArray():
     def predict_peaks(self,
                       key: Tuple[int, str],
                       model: UPeakModel = None,
-                      weight_path: str = 'celltk/config/upeak_example_weights.tf',
+                      weight_path: str = None,
                       propagate: bool = True,
                       segment: bool = True,
                       **kwargs
@@ -854,7 +854,13 @@ class ConditionArray():
             See utils.peak_utils.segment_peaks_agglomeration.
 
         :return: None
+
+        :raises ValueError: If neither model or weights are provided.
         """
+        if model is None and weight_path is None:
+            raise ValueError('Either weights or complete model '
+                             'must be provided.')
+
         # Get the data that will be used for prediction
         assert isinstance(key, tuple)
         data = self[key]
@@ -1452,7 +1458,7 @@ class ExperimentArray():
 
     def predict_peaks(self,
                       key: Tuple[int, str],
-                      weight_path: str = 'celltk/config/upeak_example_weights.tf',
+                      weight_path: str,
                       propagate: bool = True,
                       segment: bool = True,
                       **kwargs
