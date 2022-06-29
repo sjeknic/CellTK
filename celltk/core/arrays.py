@@ -1,16 +1,12 @@
-import os
 import warnings
 import itertools
-import functools
 from typing import List, Tuple, Dict, Callable, Collection, Union
 
 import h5py
 import numpy as np
-import plotly.graph_objects as go
-import matplotlib.pyplot as plt
 
 import celltk.utils.filter_utils as filtu
-from celltk.utils.info_utils import nan_helper_2d, get_split_idxs, split_array
+from celltk.utils.operation_utils import nan_helper_2d, get_split_idxs, split_array
 from celltk.utils.unet_model import UPeakModel
 from celltk.utils.peak_utils import (segment_peaks_agglomeration,
                                      PeakHelper)

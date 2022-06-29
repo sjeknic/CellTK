@@ -21,7 +21,7 @@ import celltk.external.misic.extras as miext
 import celltk.external.misic.utils as miutil
 
 from celltk.utils._types import Image
-from celltk.utils.info_utils import nan_helper_2d, get_split_idxs
+from celltk.utils.operation_utils import nan_helper_2d, get_split_idxs
 
 
 # TODO: Write docstring explaining kwargs

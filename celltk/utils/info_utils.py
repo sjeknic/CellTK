@@ -16,6 +16,8 @@ import matplotlib.pyplot as plt
 import matplotlib
 
 from celltk.utils._fastkde import FastLaplacianKDE
+from celltk.utils.estimator_utils import get_bootstrap_population
+from celltk.utils.operation_utils import get_split_idxs, split_array
 
 
 SEED = 69420
@@ -292,25 +294,6 @@ def normalize_arrays(arrays: Collection[np.ndarray],
     return arrays
 
 
-def get_bootstrap_population(arr: np.ndarray,
-                             boot_reps: int = 1000
-                             ) -> np.ndarray:
-    """
-
-    Args:
-        arr: response of cells in one condition, cells x response/times
-        boot_reps: Number of bootstrap replicates
-
-    Return:
-        array boot_reps x response/times
-    """
-    boot_arrs = [_RNG.choice(arr, size=arr.shape[0], replace=True)
-                 for _ in range(boot_reps)]
-    arr = np.vstack([np.nanmean(b, 0) for b in boot_arrs])
-
-    return arr
-
-
 def subset_array(arr: np.ndarray,
                  subset: float = 0.6,
                  ) -> np.ndarray:
@@ -362,50 +345,6 @@ def randomize_array(arr: Union[Collection[np.ndarray], np.ndarray]
         rand_samples = split_array(rand_samples, _splits)
 
     return rand_samples
-
-
-def _nan_helper(y: np.ndarray) -> np.ndarray:
-    """Linear interpolation of nans in a 1D array."""
-    return np.isnan(y), lambda z: z.nonzero()[0]
-
-
-def nan_helper_2d(arr: np.ndarray) -> np.ndarray:
-    """Linear interpolation of nans along rows in 2D array.
-
-    TODO:
-        - Move to a more sensible util file
-    """
-    temp = np.zeros(arr.shape)
-    temp[:] = np.nan
-    for n, y in enumerate(arr.copy()):
-        nans, z = _nan_helper(y)
-        y[nans] = np.interp(z(nans), z(~nans), y[~nans])
-        temp[n, :] = y
-
-    return temp
-
-
-def nan_helper_1d(arr: np.ndarray) -> np.ndarray:
-    temp = arr.copy()
-    nans, z = _nan_helper(arr)
-    temp[nans] = np.interp(z(nans), z(~nans), arr[~nans])
-    return temp
-
-
-def get_split_idxs(arrays: Collection[np.ndarray], axis: int = 0) -> List[int]:
-    """
-    """
-    row_idxs = [s.shape[axis] for s in arrays]
-    split_idxs = [np.sum(row_idxs[:i + 1])
-                  for i in range(len(row_idxs))]
-    return split_idxs
-
-
-def split_array(array: np.ndarray, split_idxs: List[int], axis: int = 0) -> List[np.ndarray]:
-    """
-    """
-    return [n for n in np.split(array, split_idxs, axis=axis)
-            if n.shape[axis] > 0]
 
 
 ### Functions for more complicated calculations ###
