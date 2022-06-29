@@ -7,8 +7,7 @@ import skimage.segmentation as segm
 from celltk.utils._types import Mask, Image, Array
 from celltk.core.operation import BaseEvaluate
 from celltk.utils.utils import ImageHelper
-from celltk.utils.operation_utils import track_to_mask, get_cell_index
-from celltk.utils.info_utils import nan_helper_1d
+from celltk.utils.operation_utils import track_to_mask, get_cell_index, nan_helper_1d
 
 
 class Evaluate(BaseEvaluate):

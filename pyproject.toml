@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=42"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "celltk2"
+version = "0.4.1"
+authors = [{name="sjeknic", email="sjeknic@stanford.edu"}]
+description = "A toolkit for analysis of live-cell microscopy images"
+readme = "README.md"
+requires-python = ">=3.8"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent"
+]
+
+[project.urls]
+"Homepage" = "https://github.com/sjeknic/CellTK/"
+"Bug Tracker" = "https://github.com/sjeknic/CellTK/issues"
+"Documentation" = "https://celltk.readthedocs.io/en/latest/"

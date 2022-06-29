@@ -14,7 +14,7 @@ import celltk.utils.unet_model
 from celltk.utils.peak_utils import segment_peaks_agglomeration
 
 class TestUPeak():
-    weight_path = "celltk/config/upeak_example_weights.tf"
+    weight_path = "config/upeak_example_weights.tf"
     data_path = "examples/example_traces.npy"
 
     def _upeak_model_creation(self):

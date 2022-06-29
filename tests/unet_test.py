@@ -15,8 +15,8 @@ import celltk
 import celltk.utils.unet_model
 
 class TestUNet():
-    weight_path = os.path.join(par, 'celltk/config/unet_example_cell_weights.tf')
-    misic_path = os.path.join(par, 'external/misic/MiSiCv2.h5')
+    weight_path = os.path.join(par, 'config/unet_example_cell_weights.tf')
+    misic_path = os.path.join(par, 'celltk/external/misic/MiSiCv2.h5')
     # TODO: Add bacterial test images
     data_path = os.path.join(par, 'examples/live_cell_example')
 

@@ -1,5 +1,6 @@
 import itertools
 import functools
+from copy import deepcopy
 from typing import Collection, Union, Callable, Generator, Tuple
 
 import numpy as np
@@ -139,15 +140,15 @@ class PlotHelper:
                              ) -> go.Figure:
         # Default layouts
         if axis_type == 'default':
-            x_axis_layout = self._default_axis_layout.copy()
-            y_axis_layout = self._default_axis_layout.copy()
+            x_axis_layout = deepcopy(self._default_axis_layout)
+            y_axis_layout = deepcopy(self._default_axis_layout)
         elif axis_type == 'noline':
-            x_axis_layout = self._no_line_axis.copy()
-            y_axis_layout = self._no_line_axis.copy()
+            x_axis_layout = deepcopy(self._no_line_axis)
+            y_axis_layout = deepcopy(self._no_line_axis)
         else:
             raise ValueError(f'Did not understand axis type {axis_type}.')
 
-        figure_layout = {'template': self._template}
+        figure_layout = {'template': deepcopy(self._template)}
 
         # Updates only made if not None, preserves old values
         if x_label is not None:

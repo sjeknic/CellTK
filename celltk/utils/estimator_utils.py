@@ -3,7 +3,6 @@ from typing import Tuple
 import numpy as np
 import scipy.stats as stats
 
-from celltk.utils.info_utils import get_bootstrap_population
 
 """None of these estimators need to be wrapped in partial or anything"""
 def confidence_interval(arr: np.ndarray,
@@ -25,6 +24,27 @@ def confidence_interval(arr: np.ndarray,
                                      loc=np.nanmean(col),
                                      scale=stats.sem(col, nan_policy='omit'))
     return out
+
+
+def get_bootstrap_population(arr: np.ndarray,
+                             boot_reps: int = 1000,
+                             seed: int = 69420
+                             ) -> np.ndarray:
+    """
+
+    Args:
+        arr: response of cells in one condition, cells x response/times
+        boot_reps: Number of bootstrap replicates
+
+    Return:
+        array boot_reps x response/times
+    """
+    _rng = np.random.default_rng(seed)
+    boot_arrs = [_rng.choice(arr, size=arr.shape[0], replace=True)
+                 for _ in range(boot_reps)]
+    arr = np.vstack([np.nanmean(b, 0) for b in boot_arrs])
+
+    return arr
 
 
 def bootstrap_estimator(arr: np.ndarray,

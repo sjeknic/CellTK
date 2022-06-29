@@ -17,7 +17,8 @@ class TestPipeline():
     _orch_path = os.path.join(par, 'examples')
     _img_path = os.path.join(_orch_path, 'live_cell_example')
     _output_path = os.path.join(_img_path, '_output')
-    _nuc_weight_path = os.path.join(par, 'celltk/config/unet_example_cell_weights.tf')
+    _nuc_weight_path = os.path.join(par, 'config/unet_example_cell_weights.tf')
+    _peak_weight_path = os.path.join(par, 'config/upeak_example_weights.tf')
 
     def _make_operations(self):
 
@@ -70,7 +71,8 @@ class TestPipeline():
                               func='divide', inverse=False, propagate=True)
         ex.add_derived_metric('predict_peaks',
                                 keys=(('nuc', 'fitc', 'median_intensity'),),
-                                propagate='true', function='predict_peaks')
+                                propagate='true', function='predict_peaks',
+                                weight_path=self._peak_weight_path)
         ex.add_derived_metric('active',
                                 keys=(('nuc', 'fitc', 'peaks'),),
                                 propagate='true', function='peaks')
