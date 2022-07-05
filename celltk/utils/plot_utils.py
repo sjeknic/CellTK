@@ -37,7 +37,7 @@ class PlotHelper:
         'ticklen': 7,
         'ticks': 'outside',
         'tickwidth': 2,
-        'title': dict(font=dict(color='#242424', size=24)),
+        'title': dict(font=dict(color='#242424', size=24, family=_font_families)),
         'zeroline': False,
     }
     _no_line_axis = _default_axis_layout.copy()
