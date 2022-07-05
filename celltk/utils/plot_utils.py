@@ -5,6 +5,7 @@ from typing import Collection, Union, Callable, Generator, Tuple
 
 import numpy as np
 import sklearn.base as base
+import sklearn.metrics as metrics
 import sklearn.preprocessing as preproc
 import scipy.stats as stats
 import matplotlib.colors as mcolors
@@ -1359,6 +1360,7 @@ class PlotHelper:
                      zmax: float = None,
                      robust_z: bool = False,
                      reverse: bool = False,
+                     sort: str = None,
                      figure: Union[go.Figure, go.FigureWidget] = None,
                      figsize: Tuple[int] = (None, None),
                      title: str = None,
@@ -1388,6 +1390,13 @@ class PlotHelper:
         :param robust_z: If True, uses percentiles to set zmin and zmax instead
             of extremes of the dataset.
         :param reverse: If True, the color mapping is reversed.
+        :param sort: If the name of a distance metric, will sort the array
+            according to that metric before producing the heatmap. Valid values
+            are ‘cityblock’, ‘cosine’, ‘euclidean’, ‘l1’, ‘l2’, ‘manhattan’,
+            ‘braycurtis’, ‘canberra’, ‘chebyshev’, ‘correlation’, ‘dice’,
+            ‘hamming’, ‘jaccard’, ‘kulsinski’, ‘mahalanobis’, ‘minkowski’,
+            ‘rogerstanimoto’, ‘russellrao’, ‘seuclidean’, ‘sokalmichener’,
+            ‘sokalsneath’, ‘sqeuclidean’, and ‘yule’.
         :param figure: If a go.Figure object is given, will be used to make
             the plot instead of a blank figure.
         :param figsize: Height and width of the plot in pixels. Must be a tuple
@@ -1425,6 +1434,11 @@ class PlotHelper:
             zmin = np.nanpercentile(array, 2)
             zmax = np.nanpercentile(array, 98)
             zmid = None
+
+        if sort:
+            darr = metrics.pairwise_distances(array, metric=sort)
+            idx = darr[0, :].argsort()
+            array = array[idx]
 
         trace = go.Heatmap(z=array, zmin=zmin, zmax=zmax,
                            zmid=zmid, colorscale=colorscale,
