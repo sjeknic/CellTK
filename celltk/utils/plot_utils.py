@@ -136,6 +136,7 @@ class PlotHelper:
                              y_label: str = None,
                              x_limit: Tuple[float] = None,
                              y_limit: Tuple[float] = None,
+                             legend: bool = None,
                              axis_type: str = 'default',
                              **kwargs
                              ) -> go.Figure:
@@ -152,6 +153,8 @@ class PlotHelper:
         figure_layout = {'template': deepcopy(self._template)}
 
         # Updates only made if not None, preserves old values
+        if legend is not None:
+            figure_layout.update({'showlegend': legend})
         if x_label is not None:
             x_axis_layout['title'].update({'text': x_label})
         if y_label is not None:
@@ -492,7 +495,7 @@ class PlotHelper:
         # Upate the axes and figure layout
         fig = self._apply_format_figure(fig, figsize, title,
                                         x_label, y_label, x_limit, y_limit,
-                                        axis_type='default')
+                                        legend, axis_type='default')
 
         return fig
 
@@ -503,6 +506,7 @@ class PlotHelper:
                      estimator: Union[Callable, str, functools.partial] = None,
                      err_estimator: Union[Callable, str, functools.partial] = None,
                      normalizer: Union[Callable, str] = None,
+                     scatter_mode: str = 'markers',
                      colors: Union[str, Collection[str]] = None,
                      alpha: float = 1.0,
                      symbols: Union[str, Collection[str]] = None,
@@ -549,6 +553,8 @@ class PlotHelper:
             the estimators. Normalizes the error as well. Can be 'minmax' or
             'maxabs', or a callable that inputs an array and outputs an array
             of the same shape.
+        :param scatter_mode: Drawing mode for the traces. Can be 'markers',
+            'lines', or 'lines+markers'.
         :param colors: Name of a color palette or map to use. Searches first
             in seaborn/matplotlib, then in Plotly to find the color map. If
             not provided, the color map will be glasbey. Can also be list
@@ -666,7 +672,7 @@ class PlotHelper:
                                       symbol=next(symbols)))
             traces.append(
                 go.Scatter(x=x, y=y, legendgroup=key, name=key,
-                           showlegend=legend, mode='markers',
+                           showlegend=legend, mode=scatter_mode,
                            error_x=error_x, error_y=error_y,
                            marker=marker_kwargs, **kwargs)
             )
@@ -676,7 +682,7 @@ class PlotHelper:
         # Apply formatting and return
         fig = self._apply_format_figure(fig, figsize, title,
                                         x_label, y_label, x_limit, y_limit,
-                                        axis_type='default')
+                                        legend, axis_type='default')
 
         return fig
 
@@ -843,7 +849,8 @@ class PlotHelper:
         # Format plot on the way out
         fig = self._apply_format_figure(fig, figsize, title,
                                         x_label, y_label, x_limit, y_limit,
-                                        axis_type='default', barmode=barmode)
+                                        legend, axis_type='default',
+                                        barmode=barmode)
         fig.update_traces(**kwargs)
 
         return fig
@@ -1076,7 +1083,8 @@ class PlotHelper:
         # Format plot on the way out
         fig = self._apply_format_figure(fig, figsize, title,
                                         x_label, y_label, x_limit, y_limit,
-                                        axis_type='default', barmode=barmode,
+                                        legend, axis_type='default',
+                                        barmode=barmode,
                                         bargap=bargap, bargroupgap=bargroupgap)
 
         return fig
@@ -1256,7 +1264,7 @@ class PlotHelper:
         # Format plot on the way out
         fig = self._apply_format_figure(fig, figsize, title,
                                         x_label, y_label, x_limit, y_limit,
-                                        axis_type='default',
+                                        legend, axis_type='default',
                                         violinmode=violinmode)
         fig.update_traces(**kwargs)
 
@@ -1345,6 +1353,7 @@ class PlotHelper:
         # Some settings for making a ridgeline out of the violin plot
         fig = self._apply_format_figure(fig, figsize, title,
                                         x_label, y_label, x_limit, y_limit,
+                                        legend,
                                         axis_type='default',
                                         xaxis_showgrid=False,
                                         xaxis_zeroline=False)
