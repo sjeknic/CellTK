@@ -1,4 +1,4 @@
-from typing import Tuple
+from typing import Tuple, Callable
 
 import numpy as np
 import scipy.stats as stats
@@ -28,7 +28,8 @@ def confidence_interval(arr: np.ndarray,
 
 def get_bootstrap_population(arr: np.ndarray,
                              boot_reps: int = 1000,
-                             seed: int = 69420
+                             seed: int = 69420,
+                             function: Callable = np.nanmean
                              ) -> np.ndarray:
     """
 
@@ -42,7 +43,7 @@ def get_bootstrap_population(arr: np.ndarray,
     _rng = np.random.default_rng(seed)
     boot_arrs = [_rng.choice(arr, size=arr.shape[0], replace=True)
                  for _ in range(boot_reps)]
-    arr = np.vstack([np.nanmean(b, 0) for b in boot_arrs])
+    arr = np.vstack([function(b, 0) for b in boot_arrs])
 
     return arr
 
@@ -51,7 +52,8 @@ def bootstrap_estimator(arr: np.ndarray,
                         reps: int = 1000,
                         ci: float = 0.95,
                         ax: int = 0,
-                        ignore_nans: bool = True
+                        ignore_nans: bool = True,
+                        function: Callable = np.nanmean
                         ) -> Tuple[np.ndarray]:
     """Uses bootstrap resampling to estimate a confidence interval.
     """
@@ -59,7 +61,7 @@ def bootstrap_estimator(arr: np.ndarray,
     ci *= 100
 
     # Sample the boostrap population
-    boot = get_bootstrap_population(arr, reps)
+    boot = get_bootstrap_population(arr, reps, function=function)
 
     if ignore_nans:
         func = np.nanpercentile
