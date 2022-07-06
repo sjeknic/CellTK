@@ -180,17 +180,41 @@ class PlotHelper:
     @staticmethod
     def _format_colors(color: str, alpha: float = None) -> str:
         """Converst hexcode colors to RGBA to allow transparency"""
+        def _convert_to_255(values):
+            # Otherwise, it's fine for 0-255
+            if len(values) == 3:
+                alpha = None
+            elif len(values) == 4:
+                alpha = values[-1]
+
+            if any(r > 0 and r < 1 for r in values[:3]):
+                # This means at least one value is 0-1
+                values = [int(round(r * 255)) for r in values[:3]]
+
+                # For some odd reason, It seems som colors don't
+                # render properly with values exactly 1.
+                # Don't ask me why. I'm just making them 2 for now
+                values = [v if v != 1 else 2 for v in values]
+
+                if alpha is not None:
+                    values += [alpha]
+            return values
+
         if isinstance(color, (list, tuple)):
             if all([isinstance(f, (float, int)) for f in color]):
                 # Assume rgb
-                if alpha: color += (alpha, )
-                else: color += (1.,)
+                if alpha:
+                    color += (alpha, )
+                else:
+                    color += (1.,)
+                color = _convert_to_255(color)
                 color_str = str(tuple([c for c in color]))
             else:
                 # Assume first value is alpha
                 alpha = alpha if alpha else color[0]
                 if alpha < 0.125: alpha = 0.125
                 values = pcol.unlabel_rgb(color[1]) + (alpha,)
+                values = _convert_to_255(values)
                 color_str = str(tuple([c for c in values]))
 
             return f'rgba{color_str}'
@@ -208,27 +232,27 @@ class PlotHelper:
 
                 if alpha:
                     color += (alpha,)
+                color = _convert_to_255(color)
                 color_str = str(tuple([c for c in color]))
                 if len(color) == 4:
                     return f'rgba{color_str}'
                 else:
                     return f'rgb{color_str}'
             elif color[:3] in ('rgb'):
+                vals = pcol.unlabel_rgb(color)
+                vals = _convert_to_255(vals)
                 if alpha:
-                    # extract the rgb values
-                    vals = pcol.unlabel_rgb(color)
                     vals += (alpha, )
-                    color_str = str(tuple([v for v in vals]))
-                    color = f'rgba{color_str}'
-                    return color
+                color_str = str(tuple([v for v in vals]))
+                return f'rgba{color_str}'
             else:
                 try:
                     vals = mcolors.to_rgba(color)
+                    vals = _convert_to_255(vals)
                     if alpha:
                         vals = (*vals[:-1], alpha)
                     color_str = str(tuple([v for v in vals]))
-                    color = f'rgba{color_str}'
-                    return color
+                    return f'rgba{color_str}'
                 except ValueError:
                     raise ValueError(f'Did not understand color {color}')
 
