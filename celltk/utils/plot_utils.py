@@ -137,6 +137,8 @@ class PlotHelper:
                              x_limit: Tuple[float] = None,
                              y_limit: Tuple[float] = None,
                              legend: bool = None,
+                             tick_size: float = None,
+                             axis_label_size: float = None,
                              axis_type: str = 'default',
                              **kwargs
                              ) -> go.Figure:
@@ -169,6 +171,12 @@ class PlotHelper:
             figure_layout.update({'height': figsize[0]})
         if figsize[1] is not None:
             figure_layout.update({'width': figsize[1]})
+        if tick_size is not None:
+            x_axis_layout['tickfont'].update({'size': tick_size})
+            y_axis_layout['tickfont'].update({'size': tick_size})
+        if axis_label_size is not None:
+            x_axis_layout['title']['font'].update({'size': axis_label_size})
+            y_axis_layout['title']['font'].update({'size': axis_label_size})
 
         # Apply changes
         figure.update_layout(**figure_layout, **kwargs)
@@ -363,6 +371,8 @@ class PlotHelper:
                   y_label: str = None,
                   x_limit: Tuple[float] = None,
                   y_limit: Tuple[float] = None,
+                  tick_size: float = None,
+                  axis_label_size: float = None,
                   widget: bool = False,
                   **kwargs
                   ) -> Union[go.Figure, go.FigureWidget]:
@@ -415,6 +425,8 @@ class PlotHelper:
             the plot is saved as an HTML object.
         :param y_limit: Initial limits for the y-axis. Can be changed if
             the plot is saved as an HTML object.
+        :param tick_size: Size of the font of the axis tick labels.
+        :param axis_label_size: Size of the font of the axis label.
         :param widget: If True, returns a go.FigureWidget object instead of
             a go.Figure object.
         :param kwargs: Depending on name, passed to the "line" keyword
@@ -519,7 +531,8 @@ class PlotHelper:
         # Upate the axes and figure layout
         fig = self._apply_format_figure(fig, figsize, title,
                                         x_label, y_label, x_limit, y_limit,
-                                        legend, axis_type='default')
+                                        legend, tick_size, axis_label_size,
+                                        axis_type='default')
 
         return fig
 
@@ -543,6 +556,8 @@ class PlotHelper:
                      y_label: str = None,
                      x_limit: Tuple[float] = None,
                      y_limit: Tuple[float] = None,
+                     tick_size: float = None,
+                     axis_label_size: float = None,
                      widget: bool = False,
                      **kwargs
                      ) -> Union[go.Figure, go.FigureWidget]:
@@ -598,6 +613,8 @@ class PlotHelper:
             the plot is saved as an HTML object.
         :param y_limit: Initial limits for the y-axis. Can be changed if
             the plot is saved as an HTML object.
+        :param tick_size: Size of the font of the axis tick labels.
+        :param axis_label_size: Size of the font of the axis label.
         :param widget: If True, returns a go.FigureWidget object instead of
             a go.Figure object.
         :param kwargs: Depending on name, passed to the "marker" keyword
@@ -706,7 +723,8 @@ class PlotHelper:
         # Apply formatting and return
         fig = self._apply_format_figure(fig, figsize, title,
                                         x_label, y_label, x_limit, y_limit,
-                                        legend, axis_type='default')
+                                        legend, tick_size, axis_label_size,
+                                        axis_type='default')
 
         return fig
 
@@ -729,6 +747,8 @@ class PlotHelper:
                  y_label: str = None,
                  x_limit: Tuple[float] = None,
                  y_limit: Tuple[float] = None,
+                 tick_size: float = None,
+                 axis_label_size: float = None,
                  widget: bool = False,
                  **kwargs
                  ) -> Union[go.Figure, go.FigureWidget]:
@@ -781,6 +801,8 @@ class PlotHelper:
         :param y_limit: Initial limits for the y-axis. Can be changed if
             the plot is saved as an HTML object. Only applies if orientation
             is vertical.
+        :param tick_size: Size of the font of the axis tick labels.
+        :param axis_label_size: Size of the font of the axis label.
         :param widget: If True, returns a go.FigureWidget object instead of
             a go.Figure object.
         :param kwargs: Depending on name, passed to go.Bar or to
@@ -873,7 +895,8 @@ class PlotHelper:
         # Format plot on the way out
         fig = self._apply_format_figure(fig, figsize, title,
                                         x_label, y_label, x_limit, y_limit,
-                                        legend, axis_type='default',
+                                        legend, tick_size, axis_label_size,
+                                        axis_type='default',
                                         barmode=barmode)
         fig.update_traces(**kwargs)
 
@@ -908,6 +931,8 @@ class PlotHelper:
                        y_label: str = None,
                        x_limit: Tuple[float] = None,
                        y_limit: Tuple[float] = None,
+                       tick_size: float = None,
+                       axis_label_size: float = None,
                        widget: bool = False,
                        **kwargs
                        ) -> Union[go.Figure, go.FigureWidget]:
@@ -988,6 +1013,8 @@ class PlotHelper:
         :param y_limit: Initial limits for the y-axis. Can be changed if
             the plot is saved as an HTML object. Only applies if orientation
             is vertical.
+        :param tick_size: Size of the font of the axis tick labels.
+        :param axis_label_size: Size of the font of the axis label.
         :param widget: If True, returns a go.FigureWidget object instead of
             a go.Figure object.
         :param kwargs: Depending on name, kwargs are passed to either
@@ -1107,7 +1134,8 @@ class PlotHelper:
         # Format plot on the way out
         fig = self._apply_format_figure(fig, figsize, title,
                                         x_label, y_label, x_limit, y_limit,
-                                        legend, axis_type='default',
+                                        legend, tick_size, axis_label_size,
+                                        axis_type='default',
                                         barmode=barmode,
                                         bargap=bargap, bargroupgap=bargroupgap)
 
@@ -1136,6 +1164,8 @@ class PlotHelper:
                     y_label: str = None,
                     x_limit: Tuple[float] = None,
                     y_limit: Tuple[float] = None,
+                    tick_size: float = None,
+                    axis_label_size: float = None,
                     widget: bool = False,
                     **kwargs
                     ) -> Union[go.Figure, go.FigureWidget]:
@@ -1192,6 +1222,8 @@ class PlotHelper:
         :param y_limit: Initial limits for the y-axis. Can be changed if
             the plot is saved as an HTML object. Only applies if orientation
             is veritcal.
+        :param tick_size: Size of the font of the axis tick labels.
+        :param axis_label_size: Size of the font of the axis label.
         :param widget: If True, returns a go.FigureWidget object instead of
             a go.Figure object.
         :param kwargs: Depending on name, passed to go.Violin or to
@@ -1288,7 +1320,8 @@ class PlotHelper:
         # Format plot on the way out
         fig = self._apply_format_figure(fig, figsize, title,
                                         x_label, y_label, x_limit, y_limit,
-                                        legend, axis_type='default',
+                                        legend, tick_size, axis_label_size,
+                                        axis_type='default',
                                         violinmode=violinmode)
         fig.update_traces(**kwargs)
 
@@ -1312,6 +1345,8 @@ class PlotHelper:
                        y_label: str = None,
                        x_limit: Tuple[float] = None,
                        y_limit: Tuple[float] = None,
+                       tick_size: float = None,
+                       axis_label_size: float = None,
                        widget: bool = False,
                        **kwargs
                        ) -> Union[go.Figure, go.FigureWidget]:
@@ -1356,6 +1391,8 @@ class PlotHelper:
         :param y_limit: Initial limits for the y-axis. Can be changed if
             the plot is saved as an HTML object. Only applies if orientation
             is veritcal.
+        :param tick_size: Size of the font of the axis tick labels.
+        :param axis_label_size: Size of the font of the axis label.
         :param widget: If True, returns a go.FigureWidget object instead of
             a go.Figure object.
         :param kwargs: Depending on name, passed to go.Violin or to
@@ -1377,7 +1414,7 @@ class PlotHelper:
         # Some settings for making a ridgeline out of the violin plot
         fig = self._apply_format_figure(fig, figsize, title,
                                         x_label, y_label, x_limit, y_limit,
-                                        legend,
+                                        legend, tick_size, axis_label_size,
                                         axis_type='default',
                                         xaxis_showgrid=False,
                                         xaxis_zeroline=False)
@@ -1401,6 +1438,8 @@ class PlotHelper:
                      y_label: str = None,
                      x_limit: Tuple[float] = None,
                      y_limit: Tuple[float] = None,
+                     tick_size: float = None,
+                     axis_label_size: float = None,
                      widget: bool = False,
                      **kwargs
                      ) -> Union[go.Figure, go.FigureWidget]:
@@ -1443,6 +1482,8 @@ class PlotHelper:
         :param y_limit: Initial limits for the y-axis. Can be changed if
             the plot is saved as an HTML object. Only applies if orientation
             is veritcal.
+        :param tick_size: Size of the font of the axis tick labels.
+        :param axis_label_size: Size of the font of the axis label.
         :param widget: If True, returns a go.FigureWidget object instead of
             a go.Figure object.
         :param kwargs: Passed to go.Heatmap.
@@ -1480,6 +1521,7 @@ class PlotHelper:
 
         fig = self._apply_format_figure(fig, figsize, title,
                                         x_label, y_label, x_limit, y_limit,
+                                        tick_size, axis_label_size,
                                         axis_type='noline')
 
         return fig
@@ -1503,6 +1545,8 @@ class PlotHelper:
                        y_label: str = None,
                        x_limit: Tuple[float] = None,
                        y_limit: Tuple[float] = None,
+                       tick_size: float = None,
+                       axis_label_size: float = None,
                        widget: bool = False,
                        **kwargs
                        ) -> Union[go.Figure, go.FigureWidget]:
@@ -1560,6 +1604,8 @@ class PlotHelper:
         :param y_limit: Initial limits for the y-axis. Can be changed if
             the plot is saved as an HTML object. Only applies if orientation
             is veritcal.
+        :param tick_size: Size of the font of the axis tick labels.
+        :param axis_label_size: Size of the font of the axis label.
         :param widget: If True, returns a go.FigureWidget object instead of
             a go.Figure object.
         :param kwargs: Passed to go.Histogram2d.
@@ -1597,6 +1643,7 @@ class PlotHelper:
 
         fig = self._apply_format_figure(fig, figsize, title,
                                         x_label, y_label, x_limit, y_limit,
+                                        tick_size, axis_label_size,
                                         axis_type='noline')
 
         return fig
@@ -1620,6 +1667,8 @@ class PlotHelper:
                        y_label: str = None,
                        x_limit: Tuple[float] = None,
                        y_limit: Tuple[float] = None,
+                       tick_size: float = None,
+                       axis_label_size: float = None,
                        widget: bool = False,
                        **kwargs
                        ) -> Union[go.Figure, go.FigureWidget]:
@@ -1677,6 +1726,8 @@ class PlotHelper:
         :param y_limit: Initial limits for the y-axis. Can be changed if
             the plot is saved as an HTML object. Only applies if orientation
             is veritcal.
+        :param tick_size: Size of the font of the axis tick labels.
+        :param axis_label_size: Size of the font of the axis label.
         :param widget: If True, returns a go.FigureWidget object instead of
             a go.Figure object.
         :param kwargs: Passed to go.Heatmap2dContour
@@ -1714,6 +1765,7 @@ class PlotHelper:
 
         fig = self._apply_format_figure(fig, figsize, title,
                                         x_label, y_label, x_limit, y_limit,
+                                        tick_size, axis_label_size,
                                         axis_type='noline')
 
         return fig
