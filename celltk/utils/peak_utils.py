@@ -1,5 +1,5 @@
 from itertools import zip_longest
-from typing import List, Collection
+from typing import List, Collection, Tuple
 
 import numpy as np
 import skimage.segmentation as segm
@@ -238,14 +238,18 @@ class PeakHelper:
 
         :return:
         """
-        raise NotImplementedError
         idxs = _labels_to_idxs(labels)
+
+        if not tracts:
+            tracts = self.detect_peak_tracts(traces, labels)
         amps = self.amplitude(traces, labels)
+        proms = self.prominence(traces, labels, tracts)
 
         out = []
-        long_zip = zip_longest(traces, idxs, tracts, amps, fillvalue=[])
-        for trace, idx, tract, amp in long_zip:
-            out.append(self._width(trace, idx, tract, amp,
+        long_zip = zip_longest(traces, idxs, tracts, amps, proms,
+                               fillvalue=[])
+        for trace, idx, tract, amp, prom in long_zip:
+            out.append(self._width(trace, idx, tract, amp, prom,
                                    relative, absolute))
         return out
 
@@ -360,7 +364,12 @@ class PeakHelper:
                index: np.ndarray,
                time: str,
                ) -> List[float]:
-        """"""
+        """
+        TODO:
+            - This will not work for traces containing all
+              negative values.
+            - Add a min option
+        """
         if time == 'first':
             return [idx[0] for idx in index]
         elif time == 'last':
@@ -439,26 +448,58 @@ class PeakHelper:
 
     @staticmethod
     def _width(trace: np.ndarray,
-               label: np.ndarray,
+               indexes: np.ndarray,
                tract: List[List[int]],
                amplitudes: List[float],
+               prominences: List[float],
                relative: float,
                absolute: float = None
                ) -> List[float]:
         """"""
+        # Peaks are the flat tracts
+        peaks = [p for sl in tract for p in sl]
+
         # Get the target height
         if absolute:
-            target = [absolute] * len(peaks)
+            targets = [absolute] * len(peaks)
         else:
-            target = [a * relative for a in amplitudes]
+            targets = [a - (1 - relative) * p
+                       for a, p in zip(amplitudes, prominences)]
 
         out = []
-        for p, t, a in zip(peaks, targets, amplitudes):
+        for p, i, t, a in zip(peaks, indexes, targets, amplitudes):
             if t >= a:
                 out.append(np.nan)
             else:
                 # Calculate crossing points
-                pass
+                # crosses is pt before the crossing on both the way up
+                # and the way down
+                all_crosses = np.where(np.diff(np.sign(trace - t)))[0]
+                peak_crosses = np.array([a for a in all_crosses if a in i])
+
+                # Need to interpolate to find crosses between points
+                direction = np.array([np.sign(t - trace[c])
+                                      for c in peak_crosses])
+                true_crosses = [c + ((t - trace[c]) / (trace[c + 1] - trace[c]))
+                                for c in peak_crosses]
+                ups = np.where(direction >= 0)[0]
+                downs = np.where(direction < 0)[0]
+
+                if len(ups) and len(downs):
+                    # Found both
+                    # Return first up cross and last down cross
+                    out.append(true_crosses[downs[-1]] - true_crosses[ups[0]])
+                else:
+                    '''
+                    This is where I would copy over the implementation of linear
+                    estimation of crossing points that I already wrote. BUT, it
+                    relies on having the slopes defined, which isn't hard to do
+                    but I'm lazy and not doing it now. So for now, all that will
+                    come out is nan if part of the peak is missing
+                    '''
+                    out.append(np.nan)
+
+        return out
 
     @staticmethod
     def _area_under_curve(trace: np.ndarray,
