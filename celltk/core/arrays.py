@@ -973,30 +973,166 @@ class ConditionArray():
              for d in dest_keys]
 
 
-class ExperimentArray():
+class ExperimentArray:
     """Base class to create arrays that can store an almost arbitrary number
     of ConditionArrays. Typically made by Orchestrator.build_experiment_file()
     """
     __slots__ = ('name', 'attrs', 'sites', 'masks', '__dict__')
 
-    class _CondIndexer():
+    class _ArrayHolder:
         """Basically a wrapper for a list. Makes it easier to index
         the ConditionArrays that are returned by ExperimentArray.__getitem__"""
         def __init__(self, data):
-            self.data = data
+            self._data = data
+
+        def __str__(self):
+            return self._data.__str__()
+
+        def __repr__(self):
+            return self._data.__repr__()
+
+        def __iter__(self):
+            return self._data.__iter__()
+
+        def __len__(self):
+            return len(self._data)
 
         def __getitem__(self, key):
             # Return ConditionArray if int or slice
             if isinstance(key, int):
-                return self.data[key]
+                return self._data[key]
             elif isinstance(key, slice):
-                return self.data[key]
+                return self._data[key]
             elif not isinstance(key, tuple):
                 key = tuple([key])
 
             # Otherwise, return FROM each ConditionArray
-            indices = self.data[0]._convert_keys_to_index(key)
-            return [v._getitem_w_idx(indices) for v in self.data]
+            indices = self._data[0]._convert_keys_to_index(key)
+            return ExperimentArray._ArrayHolder([v._getitem_w_idx(indices)
+                                                 for v in self._data])
+
+        def __add__(self, other):
+            self._not_implemented_handler(other)
+            return ExperimentArray._ArrayHolder([s + o for s, o
+                                                 in zip(self._data, other)])
+
+        def __sub__(self, other):
+            self._not_implemented_handler(other)
+            return ExperimentArray._ArrayHolder([s - o for s, o
+                                                 in zip(self._data, other)])
+
+        def __mul__(self, other):
+            self._not_implemented_handler(other)
+            return ExperimentArray._ArrayHolder([s * o for s, o
+                                                 in zip(self._data, other)])
+
+        def __matmul__(self, other):
+            self._not_implemented_handler(other)
+            return ExperimentArray._ArrayHolder([s @ o for s, o
+                                                 in zip(self._data, other)])
+
+        def __truediv__(self, other):
+            self._not_implemented_handler(other)
+            return ExperimentArray._ArrayHolder([s / o for s, o
+                                                 in zip(self._data, other)])
+
+        def __floordiv__(self, other):
+            self._not_implemented_handler(other)
+            return ExperimentArray._ArrayHolder([s // o for s, o
+                                                 in zip(self._data, other)])
+
+        def __mod__(self, other):
+            self._not_implemented_handler(other)
+            return ExperimentArray._ArrayHolder([s % o for s, o
+                                                 in zip(self._data, other)])
+
+        def __pow__(self, other):
+            self._not_implemented_handler(other)
+            return ExperimentArray._ArrayHolder([s ** o for s, o
+                                                 in zip(self._data, other)])
+
+        def __and__(self, other):
+            self._not_implemented_handler(other)
+            return ExperimentArray._ArrayHolder([s & o for s, o
+                                                 in zip(self._data, other)])
+
+        def __xor__(self, other):
+            self._not_implemented_handler(other)
+            return ExperimentArray._ArrayHolder([s ^ o for s, o
+                                                 in zip(self._data, other)])
+
+        def __or__(self, other):
+            self._not_implemented_handler(other)
+            return ExperimentArray._ArrayHolder([s | o for s, o
+                                                 in zip(self._data, other)])
+
+        def __iadd__(self, other):
+            self._not_implemented_handler(other)
+            self._data = [s + o for s, o in zip(self._data, other)]
+            return self
+
+        def __isub__(self, other):
+            self._not_implemented_handler(other)
+            self._data = [s - o for s, o in zip(self._data, other)]
+            return self
+
+        def __imul__(self, other):
+            self._not_implemented_handler(other)
+            self._data = [s * o for s, o in zip(self._data, other)]
+            return self
+
+        def __imatmul__(self, other):
+            self._not_implemented_handler(other)
+            self._data = [s @ o for s, o in zip(self._data, other)]
+            return self
+
+        def __itruediv__(self, other):
+            self._not_implemented_handler(other)
+            self._data = [s / o for s, o in zip(self._data, other)]
+            return self
+
+        def __ifloordiv__(self, other):
+            self._not_implemented_handler(other)
+            self._data = [s // o for s, o in zip(self._data, other)]
+            return self
+
+        def __imod__(self, other):
+            self._not_implemented_handler(other)
+            self._data = [s % o for s, o in zip(self._data, other)]
+            return self
+
+        def __ipow__(self, other):
+            self._not_implemented_handler(other)
+            self._data = [s ** o for s, o in zip(self._data, other)]
+            return self
+
+        def __iand__(self, other):
+            self._not_implemented_handler(other)
+            self._data = [s & o for s, o in zip(self._data, other)]
+            return self
+
+        def __ixor__(self, other):
+            self._not_implemented_handler(other)
+            self._data = [s ^ o for s, o in zip(self._data, other)]
+            return self
+
+        def __ior__(self, other):
+            self._not_implemented_handler(other)
+            self._data = [s | o for s, o in zip(self._data, other)]
+            return self
+
+        def _not_implemented_handler(self, other):
+            if not self._check_type_match(self, other):
+                raise NotImplementedError('Operation not implemented for '
+                                          f'type {type(self)} and '
+                                          f'type {type(other)}.')
+
+        @staticmethod
+        def _check_type_match(*args) -> bool:
+            if all(type(args[0]) is type(a) for a in args):
+                return True
+            else:
+                return False
 
     def __init__(self,
                  arrays: List[ConditionArray] = None,
@@ -1030,7 +1166,7 @@ class ExperimentArray():
         try:
             # First try to return a site the user requested
             if isinstance(key, (tuple, list)):
-                return self._CondIndexer([self.sites[k] for k in key])
+                return self._ArrayHolder([self.sites[k] for k in key])
             else:
                 return self.sites[key]
         except KeyError:
@@ -1039,7 +1175,8 @@ class ExperimentArray():
                 key = tuple([key])
             indices = tuple(self.sites.values())[0]._convert_keys_to_index(key)
 
-            return [v._getitem_w_idx(indices) for v in self.sites.values()]
+            return self._ArrayHolder([v._getitem_w_idx(indices)
+                                      for v in self.sites.values()])
 
     def __len__(self):
         return len(self.sites)
@@ -1551,6 +1688,7 @@ class ExperimentArray():
         for key in f:
             # Attrs define the coords and axes
             _arr = ConditionArray(**f[key].attrs, name=key)
+
             # f[key] holds the actual array data
             _arr[:] = f[key]
             pos[key] = _arr
