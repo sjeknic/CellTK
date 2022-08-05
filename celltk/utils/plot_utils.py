@@ -142,6 +142,11 @@ class PlotHelper:
                              axis_type: str = 'default',
                              **kwargs
                              ) -> go.Figure:
+        """
+        TODO:
+            - Standardize keyword inputs and simplify. e.g. ?_label for x_label
+              and y_label. And input to each function as part of kwargs.
+        """
         # Default layouts
         if axis_type == 'default':
             x_axis_layout = deepcopy(self._default_axis_layout)
@@ -374,6 +379,7 @@ class PlotHelper:
                   tick_size: float = None,
                   axis_label_size: float = None,
                   widget: bool = False,
+                  gl: bool = False,
                   **kwargs
                   ) -> Union[go.Figure, go.FigureWidget]:
         """
@@ -429,6 +435,9 @@ class PlotHelper:
         :param axis_label_size: Size of the font of the axis label.
         :param widget: If True, returns a go.FigureWidget object instead of
             a go.Figure object.
+        :param gl: If True, switches to using a WebGL backend. Much faster for
+            large datasets, but some features may not be available. May not
+            work in all contexts.
         :param kwargs: Depending on name, passed to the "line" keyword
             argument of go.Scatter or as keyword arguments for go.Scatter.
             The following kwargs are passed to "line": 'color', 'dash',
@@ -462,9 +471,18 @@ class PlotHelper:
                   if k not in self._line_kwargs}
 
         # Build the figure and start plotting
-        if figure: fig = figure
-        elif widget: fig = go.FigureWidget()
-        else: fig = go.Figure()
+        if figure:
+            fig = figure
+        elif widget:
+            fig = go.FigureWidget()
+        else:
+            fig = go.Figure()
+
+        # Switch to using WebGL if requested
+        if gl:
+            scatter = go.Scattergl
+        else:
+            scatter = go.Scatter
 
         for idx, (arr, key) in enumerate(zip(arrays, keys)):
             # err_estimator is used to set the bounds for the shaded region
@@ -503,9 +521,9 @@ class PlotHelper:
                 line_kwargs.update({'color': next(colors)})
 
                 lines.append(
-                    go.Scatter(x=x, y=y, legendgroup=key, name=key,
-                               showlegend=_legend, mode='lines',
-                               line=line_kwargs, **kwargs)
+                    scatter(x=x, y=y, legendgroup=key, name=key,
+                            showlegend=_legend, mode='lines',
+                            line=line_kwargs, **kwargs)
                 )
 
                 if err_arr is not None:
@@ -518,12 +536,12 @@ class PlotHelper:
                         hi = err_arr[-1, :]
 
                     lines.append(
-                        go.Scatter(x=np.hstack([x, x[::-1]]),
-                                   y=np.hstack([hi, lo[::-1]]), fill='tozerox',
-                                   fillcolor=self._format_colors(line_kwargs['color'], 0.25),
-                                   showlegend=False, legendgroup=key,
-                                   name=key, line=dict(color='rgba(255,255,255,0)'),
-                                   hoverinfo='skip')
+                        scatter(x=np.hstack([x, x[::-1]]),
+                                y=np.hstack([hi, lo[::-1]]), fill='tozerox',
+                                fillcolor=self._format_colors(line_kwargs['color'], 0.25),
+                                showlegend=False, legendgroup=key,
+                                name=key, line=dict(color='rgba(255,255,255,0)'),
+                                hoverinfo='skip')
                     )
 
             fig.add_traces(lines)
@@ -559,6 +577,7 @@ class PlotHelper:
                      tick_size: float = None,
                      axis_label_size: float = None,
                      widget: bool = False,
+                     gl: bool = False,
                      **kwargs
                      ) -> Union[go.Figure, go.FigureWidget]:
         """
@@ -617,6 +636,9 @@ class PlotHelper:
         :param axis_label_size: Size of the font of the axis label.
         :param widget: If True, returns a go.FigureWidget object instead of
             a go.Figure object.
+        :param gl: If True, switches to using a WebGL backend. Much faster for
+            large datasets, but some features may not be available. May not
+            work in all contexts.
         :param kwargs: Depending on name, passed to the "marker" keyword
             argument of go.Scatter or as keyword arguments for go.Scatter.
             The following kwargs are passed to "marker": 'color', 'line',
@@ -662,9 +684,19 @@ class PlotHelper:
                   if k not in self._marker_kwargs}
 
         # Build the figure and start plotting
-        if figure: fig = figure
-        elif widget: fig = go.FigureWidget()
-        else: fig = go.Figure()
+        if figure:
+            fig = figure
+        elif widget:
+            fig = go.FigureWidget()
+        else:
+            fig = go.Figure()
+
+        # Switch to WebGL backend
+        if gl:
+            scatter = go.Scattergl
+        else:
+            scatter = go.Scatter
+
         traces = []
         zipped = itertools.zip_longest(x_arrays, y_arrays, keys,
                                        fillvalue=None)
@@ -712,10 +744,10 @@ class PlotHelper:
             marker_kwargs.update(dict(color=next(colors),
                                       symbol=next(symbols)))
             traces.append(
-                go.Scatter(x=x, y=y, legendgroup=key, name=key,
-                           showlegend=legend, mode=scatter_mode,
-                           error_x=error_x, error_y=error_y,
-                           marker=marker_kwargs, **kwargs)
+                scatter(x=x, y=y, legendgroup=key, name=key,
+                        showlegend=legend, mode=scatter_mode,
+                        error_x=error_x, error_y=error_y,
+                        marker=marker_kwargs, **kwargs)
             )
 
         fig.add_traces(traces)
@@ -832,9 +864,13 @@ class PlotHelper:
                   if k not in self._bar_kwargs}
 
         # Build the figure and start plotting
-        if figure: fig = figure
-        elif widget: fig = go.FigureWidget()
-        else: fig = go.Figure()
+        if figure:
+            fig = figure
+        elif widget:
+            fig = go.FigureWidget()
+        else:
+            fig = go.Figure()
+
         for idx, (arr, key) in enumerate(zip(arrays, keys)):
             # err_estimator is used to calculate errorbars
             if err_estimator:
@@ -1048,9 +1084,12 @@ class PlotHelper:
                   if k not in self._line_kwargs}
 
         # Build the figure and start plotting
-        if figure: fig = figure
-        elif widget: fig = go.FigureWidget()
-        else: fig = go.Figure()
+        if figure:
+            fig = figure
+        elif widget:
+            fig = go.FigureWidget()
+        else:
+            fig = go.Figure()
 
         for idx, (arr, key) in enumerate(zip(arrays, keys)):
             if orientation in ('v', 'vertical'):
@@ -1269,9 +1308,13 @@ class PlotHelper:
         meanline_kw = {'visible': show_mean, 'width': 3}
 
         # Build the figure and start plotting
-        if figure: fig = figure
-        elif widget: fig = go.FigureWidget()
-        else: fig = go.Figure()
+        if figure:
+            fig = figure
+        elif widget:
+            fig = go.FigureWidget()
+        else:
+            fig = go.Figure()
+
         for idx, (arr, key) in enumerate(zip(arrays, keys)):
             # Set the data key based on orientation
             if orientation in ('v', 'vertical'):
@@ -1499,9 +1542,12 @@ class PlotHelper:
         assert len(figsize) == 2
 
         # Build the figure and make the heatmap
-        if figure: fig = figure
-        elif widget: fig = go.FigureWidget()
-        else: fig = go.Figure()
+        if figure:
+            fig = figure
+        elif widget:
+            fig = go.FigureWidget()
+        else:
+            fig = go.Figure()
 
         # Similar to how seaborn determines robust quantiles
         if robust_z:
@@ -1628,9 +1674,13 @@ class PlotHelper:
             zmid = None
 
         # Build the figure and plot the density histogram
-        if figure: fig = figure
-        elif widget: fig = go.FigureWidget()
-        else: fig = go.Figure()
+        if figure:
+            fig = figure
+        elif widget:
+            fig = go.FigureWidget()
+        else:
+            fig = go.Figure()
+
         trace = go.Histogram2d(x=x_array, y=y_array,
                                colorscale=colorscale,
                                histfunc=histfunc,
@@ -1750,9 +1800,13 @@ class PlotHelper:
             zmid = None
 
         # Build the figure and plot the contours
-        if figure: fig = figure
-        elif widget: fig = go.FigureWidget()
-        else: fig = go.Figure()
+        if figure:
+            fig = figure
+        elif widget:
+            fig = go.FigureWidget()
+        else:
+            fig = go.Figure()
+
         trace = go.Histogram2dContour(x=x_array, y=y_array,
                                       colorscale=colorscale,
                                       histfunc=histfunc,
