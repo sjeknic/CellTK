@@ -140,6 +140,7 @@ class PlotHelper:
                              tick_size: float = None,
                              axis_label_size: float = None,
                              axis_type: str = 'default',
+                             margin: str = 'auto',
                              **kwargs
                              ) -> go.Figure:
         """
@@ -157,7 +158,14 @@ class PlotHelper:
         else:
             raise ValueError(f'Did not understand axis type {axis_type}.')
 
-        figure_layout = {'template': deepcopy(self._template)}
+        figure_layout = {'template': self._template}
+
+        # Apply changes to margins
+        if isinstance(margin, (float, int)):
+            m = int(margin)
+            figure_layout.update({'margin': dict(l=m, r=m, b=m, t=m)})
+        elif margin in (False, 'zero', 'tight'):
+            figure_layout.update({'margin': dict(l=0, r=0, t=0, b=0)})
 
         # Updates only made if not None, preserves old values
         if legend is not None:
@@ -371,6 +379,7 @@ class PlotHelper:
                   legend: bool = True,
                   figure: Union[go.Figure, go.FigureWidget] = None,
                   figsize: Tuple[int] = (None, None),
+                  margin: str = 'auto',
                   title: str = None,
                   x_label: str = None,
                   y_label: str = None,
@@ -424,6 +433,9 @@ class PlotHelper:
             the plot instead of a blank figure.
         :param figsize: Height and width of the plot in pixels. Must be a tuple
             of length two. To leave height or width unchanged, set as None.
+        :param margin: Set the size of the margins. If 'auto', all margins
+            are set to defualt values. If 'zero' or 'tight', margins are
+            removed. If a number is given, sets all margins to that number.
         :param title: Title to add to the plot
         :param x_label: Label of the x-axis
         :param y_label: Label of the y-axis
@@ -550,7 +562,7 @@ class PlotHelper:
         fig = self._apply_format_figure(fig, figsize, title,
                                         x_label, y_label, x_limit, y_limit,
                                         legend, tick_size, axis_label_size,
-                                        axis_type='default')
+                                        axis_type='default', margin=margin)
 
         return fig
 
@@ -569,6 +581,7 @@ class PlotHelper:
                      legend: bool = True,
                      figure: Union[go.Figure, go.FigureWidget] = None,
                      figsize: Tuple[int] = (None, None),
+                     margin: str = 'auto',
                      title: str = None,
                      x_label: str = None,
                      y_label: str = None,
@@ -625,6 +638,9 @@ class PlotHelper:
             the plot instead of a blank figure.
         :param figsize: Height and width of the plot in pixels. Must be a tuple
             of length two. To leave height or width unchanged, set as None.
+        :param margin: Set the size of the margins. If 'auto', all margins
+            are set to defualt values. If 'zero' or 'tight', margins are
+            removed. If a number is given, sets all margins to that number.
         :param title: Title to add to the plot
         :param x_label: Label of the x-axis
         :param y_label: Label of the y-axis
@@ -756,7 +772,7 @@ class PlotHelper:
         fig = self._apply_format_figure(fig, figsize, title,
                                         x_label, y_label, x_limit, y_limit,
                                         legend, tick_size, axis_label_size,
-                                        axis_type='default')
+                                        axis_type='default', margin=margin)
 
         return fig
 
@@ -774,6 +790,7 @@ class PlotHelper:
                  legend: bool = True,
                  figure: Union[go.Figure, go.FigureWidget] = None,
                  figsize: Tuple[int] = (None, None),
+                 margin: str = 'auto',
                  title: str = None,
                  x_label: str = None,
                  y_label: str = None,
@@ -824,6 +841,9 @@ class PlotHelper:
             the plot instead of a blank figure.
         :param figsize: Height and width of the plot in pixels. Must be a tuple
             of length two. To leave height or width unchanged, set as None.
+        :param margin: Set the size of the margins. If 'auto', all margins
+            are set to defualt values. If 'zero' or 'tight', margins are
+            removed. If a number is given, sets all margins to that number.
         :param title: Title to add to the plot
         :param x_label: Label of the x-axis
         :param y_label: Label of the y-axis
@@ -933,7 +953,7 @@ class PlotHelper:
                                         x_label, y_label, x_limit, y_limit,
                                         legend, tick_size, axis_label_size,
                                         axis_type='default',
-                                        barmode=barmode)
+                                        barmode=barmode, margin=margin)
         fig.update_traces(**kwargs)
 
         return fig
@@ -962,6 +982,7 @@ class PlotHelper:
                        legend: bool = True,
                        figure: Union[go.Figure, go.FigureWidget] = None,
                        figsize: Tuple[int] = (None, None),
+                       margin: str = 'auto',
                        title: str = None,
                        x_label: str = None,
                        y_label: str = None,
@@ -1040,6 +1061,9 @@ class PlotHelper:
             the plot instead of a blank figure.
         :param figsize: Height and width of the plot in pixels. Must be a tuple
             of length two. To leave height or width unchanged, set as None.
+        :param margin: Set the size of the margins. If 'auto', all margins
+            are set to defualt values. If 'zero' or 'tight', margins are
+            removed. If a number is given, sets all margins to that number.
         :param title: Title to add to the plot
         :param x_label: Label of the x-axis
         :param y_label: Label of the y-axis
@@ -1175,7 +1199,7 @@ class PlotHelper:
                                         x_label, y_label, x_limit, y_limit,
                                         legend, tick_size, axis_label_size,
                                         axis_type='default',
-                                        barmode=barmode,
+                                        barmode=barmode, margin=margin,
                                         bargap=bargap, bargroupgap=bargroupgap)
 
         return fig
@@ -1198,6 +1222,7 @@ class PlotHelper:
                     legend: bool = True,
                     figure: Union[go.Figure, go.FigureWidget] = None,
                     figsize: Tuple[int] = (None, None),
+                    margin: str = 'auto',
                     title: str = None,
                     x_label: str = None,
                     y_label: str = None,
@@ -1239,6 +1264,7 @@ class PlotHelper:
             violin plot.
         :param show_points: If True, individual data points are overlaid over
             the violin plot.
+        :param show_mean: If True, dashed line is plotted at the mean value.
         :param spanmode: Determines how far the tails of the violin plot are
             extended. If 'hard', the plot spans as far as the data. If 'soft',
             the tails are extended.
@@ -1252,6 +1278,9 @@ class PlotHelper:
             the plot instead of a blank figure.
         :param figsize: Height and width of the plot in pixels. Must be a tuple
             of length two. To leave height or width unchanged, set as None.
+        :param margin: Set the size of the margins. If 'auto', all margins
+            are set to defualt values. If 'zero' or 'tight', margins are
+            removed. If a number is given, sets all margins to that number.
         :param title: Title to add to the plot
         :param x_label: Label of the x-axis
         :param y_label: Label of the y-axis
@@ -1365,7 +1394,7 @@ class PlotHelper:
                                         x_label, y_label, x_limit, y_limit,
                                         legend, tick_size, axis_label_size,
                                         axis_type='default',
-                                        violinmode=violinmode)
+                                        violinmode=violinmode, margin=margin)
         fig.update_traces(**kwargs)
 
         return fig
@@ -1383,6 +1412,7 @@ class PlotHelper:
                        legend: bool = True,
                        figure: Union[go.Figure, go.FigureWidget] = None,
                        figsize: Tuple[int] = (None, None),
+                       margin: str = 'auto',
                        title: str = None,
                        x_label: str = None,
                        y_label: str = None,
@@ -1425,6 +1455,9 @@ class PlotHelper:
             the plot instead of a blank figure.
         :param figsize: Height and width of the plot in pixels. Must be a tuple
             of length two. To leave height or width unchanged, set as None.
+        :param margin: Set the size of the margins. If 'auto', all margins
+            are set to defualt values. If 'zero' or 'tight', margins are
+            removed. If a number is given, sets all margins to that number.
         :param title: Title to add to the plot
         :param x_label: Label of the x-axis
         :param y_label: Label of the y-axis
@@ -1460,7 +1493,7 @@ class PlotHelper:
                                         legend, tick_size, axis_label_size,
                                         axis_type='default',
                                         xaxis_showgrid=False,
-                                        xaxis_zeroline=False)
+                                        xaxis_zeroline=False, margin=margin)
         fig.update_traces(width=overlap)
 
         return fig
@@ -1476,6 +1509,7 @@ class PlotHelper:
                      sort: str = None,
                      figure: Union[go.Figure, go.FigureWidget] = None,
                      figsize: Tuple[int] = (None, None),
+                     margin: str = 'auto',
                      title: str = None,
                      x_label: str = None,
                      y_label: str = None,
@@ -1516,6 +1550,9 @@ class PlotHelper:
             the plot instead of a blank figure.
         :param figsize: Height and width of the plot in pixels. Must be a tuple
             of length two. To leave height or width unchanged, set as None.
+        :param margin: Set the size of the margins. If 'auto', all margins
+            are set to defualt values. If 'zero' or 'tight', margins are
+            removed. If a number is given, sets all margins to that number.
         :param title: Title to add to the plot
         :param x_label: Label of the x-axis
         :param y_label: Label of the y-axis
@@ -1568,7 +1605,7 @@ class PlotHelper:
         fig = self._apply_format_figure(fig, figsize, title,
                                         x_label, y_label, x_limit, y_limit,
                                         tick_size, axis_label_size,
-                                        axis_type='noline')
+                                        axis_type='noline', margin=margin)
 
         return fig
 
@@ -1586,6 +1623,7 @@ class PlotHelper:
                        histnorm: str = "",
                        figure: Union[go.Figure, go.FigureWidget] = None,
                        figsize: Tuple[int] = (None, None),
+                       margin: str = 'auto',
                        title: str = None,
                        x_label: str = None,
                        y_label: str = None,
@@ -1641,6 +1679,9 @@ class PlotHelper:
             the plot instead of a blank figure.
         :param figsize: Height and width of the plot in pixels. Must be a tuple
             of length two. To leave height or width unchanged, set as None.
+        :param margin: Set the size of the margins. If 'auto', all margins
+            are set to defualt values. If 'zero' or 'tight', margins are
+            removed. If a number is given, sets all margins to that number.
         :param title: Title to add to the plot.
         :param x_label: Label of the x-axis
         :param y_label: Label of the y-axis
@@ -1694,7 +1735,7 @@ class PlotHelper:
         fig = self._apply_format_figure(fig, figsize, title,
                                         x_label, y_label, x_limit, y_limit,
                                         tick_size, axis_label_size,
-                                        axis_type='noline')
+                                        axis_type='noline', margin=margin)
 
         return fig
 
@@ -1712,6 +1753,7 @@ class PlotHelper:
                        histnorm: str = "",
                        figure: Union[go.Figure, go.FigureWidget] = None,
                        figsize: Tuple[int] = (None, None),
+                       margin: str = 'auto',
                        title: str = None,
                        x_label: str = None,
                        y_label: str = None,
@@ -1767,6 +1809,9 @@ class PlotHelper:
             the plot instead of a blank figure.
         :param figsize: Height and width of the plot in pixels. Must be a tuple
             of length two. To leave height or width unchanged, set as None.
+        :param margin: Set the size of the margins. If 'auto', all margins
+            are set to defualt values. If 'zero' or 'tight', margins are
+            removed. If a number is given, sets all margins to that number.
         :param title: Title to add to the plot
         :param x_label: Label of the x-axis
         :param y_label: Label of the y-axis
@@ -1820,7 +1865,7 @@ class PlotHelper:
         fig = self._apply_format_figure(fig, figsize, title,
                                         x_label, y_label, x_limit, y_limit,
                                         tick_size, axis_label_size,
-                                        axis_type='noline')
+                                        axis_type='noline', margin=margin)
 
         return fig
 
