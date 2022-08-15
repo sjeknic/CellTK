@@ -524,7 +524,7 @@ class PlotHelper:
                 x = time
             else:
                 raise TypeError('Did not understand time of '
-                                f'type {type(time)}')
+                                f'type {type(time)}.')
 
             lines = []
             _legend = True
@@ -1743,10 +1743,12 @@ class PlotHelper:
                        x_array: np.ndarray,
                        y_array: np.ndarray,
                        colorscale: str = 'viridis',
+                       fill: bool = True,
                        zmin: float = None,
                        zmid: float = None,
                        zmax: float = None,
                        robust_z: bool = False,
+                       width: float = 0.5,
                        xbinsize: float = None,
                        ybinsize: float = None,
                        histfunc: str = 'count',
@@ -1778,6 +1780,8 @@ class PlotHelper:
             "Blackbody", "Bluered", "Blues", "Cividis", "Earth", "Electric",
             "Greens", "Greys", "Hot", "Jet", "Picnic", "Portland", "Rainbow",
             "RdBu", "Reds", "Viridis", "YlGnBu", and "YlOrRd".
+        :param fill: If True, space between contour lines is filled with color,
+            otherwise, only the lines are colored.
         :param zmin: Sets the lower bound of the color domain. If given, zmax
             must also be given.
         :param zmid: Sets the midpoint of the color domain by setting zmin and
@@ -1786,6 +1790,7 @@ class PlotHelper:
             must also be given.
         :param robust_z: If True, uses percentiles to set zmin and zmax instead
             of extremes of the dataset.
+        :param width: Width of the contour lines.
         :param xbinsize: Size of the bins along the x-axis.
         :param ybinsize: Size of the bins along the y-axis.
         :param histfunc: Specifies the binning function used for
@@ -1844,6 +1849,12 @@ class PlotHelper:
             zmax = np.nanpercentile(_arr, 98)
             zmid = None
 
+        if fill:
+            contours = {'coloring': 'fill'}
+        else:
+            contours = {'coloring': 'lines'}
+        line = {'width': width}
+
         # Build the figure and plot the contours
         if figure:
             fig = figure
@@ -1854,6 +1865,7 @@ class PlotHelper:
 
         trace = go.Histogram2dContour(x=x_array, y=y_array,
                                       colorscale=colorscale,
+                                      contours=contours, line=line,
                                       histfunc=histfunc,
                                       histnorm=histnorm,
                                       zmin=zmin, zmid=zmid, zmax=zmax,
