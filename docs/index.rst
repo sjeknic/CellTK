@@ -13,10 +13,9 @@ CellTK is collection of tools to simplify working with live-cell and fixed-cell 
 
 Installation
 ------------
-A package will be published soon. In the meantime, please use the following steps to install and run CellTK.
+The easiest way to install CellTK is to use pip.
 
-| ``git clone https://github.com/sjeknic/CellTK/``
-| ``pip install -r requirements.txt``
+| ``pip install celltk2``
 
 That's it! You should be good to go. If you run into any problems, please open an issue on github.
 
