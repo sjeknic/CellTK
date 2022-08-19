@@ -141,6 +141,8 @@ class PlotHelper:
                              axis_label_size: float = None,
                              axis_type: str = 'default',
                              margin: str = 'auto',
+                             row: int = None,
+                             col: int = None,
                              **kwargs
                              ) -> go.Figure:
         """
@@ -193,8 +195,8 @@ class PlotHelper:
 
         # Apply changes
         figure.update_layout(**figure_layout, **kwargs)
-        figure.update_xaxes(**x_axis_layout)
-        figure.update_yaxes(**y_axis_layout)
+        figure.update_xaxes(**x_axis_layout, row=row, col=col)
+        figure.update_yaxes(**y_axis_layout, row=row, col=col)
 
         return figure
 
@@ -389,6 +391,8 @@ class PlotHelper:
                   axis_label_size: float = None,
                   widget: bool = False,
                   gl: bool = False,
+                  row: int = None,
+                  col: int = None,
                   **kwargs
                   ) -> Union[go.Figure, go.FigureWidget]:
         """
@@ -450,6 +454,14 @@ class PlotHelper:
         :param gl: If True, switches to using a WebGL backend. Much faster for
             large datasets, but some features may not be available. May not
             work in all contexts.
+        :param row: If Figure has multiple subplots, specifies which row
+            to use for the plot. Indexing starts at 1. Note that some
+            formatting args (such as figsize) may still be applied to all
+            subplots. Both row and col must be provided together.
+        :param col: If Figure has multiple subplots, specifies which
+            col to use for the plot. Indexing starts at 1. Note that some
+            formatting args (such as figsize) may still be applied to all
+            subplots. Both row and col must be provided together.
         :param kwargs: Depending on name, passed to the "line" keyword
             argument of go.Scatter or as keyword arguments for go.Scatter.
             The following kwargs are passed to "line": 'color', 'dash',
@@ -556,13 +568,14 @@ class PlotHelper:
                                 hoverinfo='skip')
                     )
 
-            fig.add_traces(lines)
+            fig.add_traces(lines, rows=row, cols=col)
 
         # Upate the axes and figure layout
         fig = self._apply_format_figure(fig, figsize, title,
                                         x_label, y_label, x_limit, y_limit,
                                         legend, tick_size, axis_label_size,
-                                        axis_type='default', margin=margin)
+                                        axis_type='default', margin=margin,
+                                        row=row, col=col)
 
         return fig
 
@@ -591,6 +604,8 @@ class PlotHelper:
                      axis_label_size: float = None,
                      widget: bool = False,
                      gl: bool = False,
+                     row: int = None,
+                     col: int = None,
                      **kwargs
                      ) -> Union[go.Figure, go.FigureWidget]:
         """
@@ -655,6 +670,14 @@ class PlotHelper:
         :param gl: If True, switches to using a WebGL backend. Much faster for
             large datasets, but some features may not be available. May not
             work in all contexts.
+        :param row: If Figure has multiple subplots, specifies which row
+            to use for the plot. Indexing starts at 1. Note that some
+            formatting args (such as figsize) may still be applied to all
+            subplots. Both row and col must be provided together.
+        :param col: If Figure has multiple subplots, specifies which
+            col to use for the plot. Indexing starts at 1. Note that some
+            formatting args (such as figsize) may still be applied to all
+            subplots. Both row and col must be provided together.
         :param kwargs: Depending on name, passed to the "marker" keyword
             argument of go.Scatter or as keyword arguments for go.Scatter.
             The following kwargs are passed to "marker": 'color', 'line',
@@ -766,13 +789,14 @@ class PlotHelper:
                         marker=marker_kwargs, **kwargs)
             )
 
-        fig.add_traces(traces)
+        fig.add_traces(traces, rows=row, cols=col)
 
         # Apply formatting and return
         fig = self._apply_format_figure(fig, figsize, title,
                                         x_label, y_label, x_limit, y_limit,
                                         legend, tick_size, axis_label_size,
-                                        axis_type='default', margin=margin)
+                                        axis_type='default', margin=margin,
+                                        row=row, col=col)
 
         return fig
 
@@ -799,6 +823,8 @@ class PlotHelper:
                  tick_size: float = None,
                  axis_label_size: float = None,
                  widget: bool = False,
+                 row: int = None,
+                 col: int = None,
                  **kwargs
                  ) -> Union[go.Figure, go.FigureWidget]:
         """Builds a Plotly Figure object plotting bars from the given arrays. Each
@@ -857,6 +883,14 @@ class PlotHelper:
         :param axis_label_size: Size of the font of the axis label.
         :param widget: If True, returns a go.FigureWidget object instead of
             a go.Figure object.
+        :param row: If Figure has multiple subplots, specifies which row
+            to use for the plot. Indexing starts at 1. Note that some
+            formatting args (such as figsize) may still be applied to all
+            subplots. Both row and col must be provided together.
+        :param col: If Figure has multiple subplots, specifies which
+            col to use for the plot. Indexing starts at 1. Note that some
+            formatting args (such as figsize) may still be applied to all
+            subplots. Both row and col must be provided together.
         :param kwargs: Depending on name, passed to go.Bar or to
             go.Figure.update_traces(). The following kwargs are passed to
             go.Bar: 'hoverinfo', 'marker', 'width'.
@@ -946,15 +980,16 @@ class PlotHelper:
 
             trace = go.Bar(x=x, y=y, error_x=error_x, error_y=error_y,
                            name=key, **bar_kwargs)
-            fig.add_trace(trace)
+            fig.add_traces(trace, rows=row, cols=col)
 
         # Format plot on the way out
         fig = self._apply_format_figure(fig, figsize, title,
                                         x_label, y_label, x_limit, y_limit,
                                         legend, tick_size, axis_label_size,
                                         axis_type='default',
-                                        barmode=barmode, margin=margin)
-        fig.update_traces(**kwargs)
+                                        barmode=barmode, margin=margin,
+                                        row=row, col=col)
+        fig.update_traces(**kwargs, row=row, col=col)
 
         return fig
 
@@ -991,6 +1026,8 @@ class PlotHelper:
                        tick_size: float = None,
                        axis_label_size: float = None,
                        widget: bool = False,
+                       row: int = None,
+                       col: int = None,
                        **kwargs
                        ) -> Union[go.Figure, go.FigureWidget]:
         """Builds a Plotly Figure object plotting a histogram of each of the
@@ -1077,6 +1114,14 @@ class PlotHelper:
         :param axis_label_size: Size of the font of the axis label.
         :param widget: If True, returns a go.FigureWidget object instead of
             a go.Figure object.
+        :param row: If Figure has multiple subplots, specifies which row
+            to use for the plot. Indexing starts at 1. Note that some
+            formatting args (such as figsize) may still be applied to all
+            subplots. Both row and col must be provided together.
+        :param col: If Figure has multiple subplots, specifies which
+            col to use for the plot. Indexing starts at 1. Note that some
+            formatting args (such as figsize) may still be applied to all
+            subplots. Both row and col must be provided together.
         :param kwargs: Depending on name, kwargs are passed to either
             go.Histogram or the line kwarg of go.Scatter if a kernel density
             estimate is included. The following kwargs are passed to "line":
@@ -1146,7 +1191,7 @@ class PlotHelper:
                                      ybins=dict(size=binsize),
                                      marker=marker_kwargs,
                                      **kwargs)
-                fig.add_trace(trace)
+                fig.add_traces(trace, rows=row, cols=col)
 
             # Estimate and plot KDE
             if include_kde:
@@ -1192,7 +1237,7 @@ class PlotHelper:
                 line = go.Scatter(x=x, y=y,
                                   legendgroup=key, name=key, fill=fill,
                                   mode='lines', line=line_kwargs)
-                fig.add_trace(line)
+                fig.add_traces(line, rows=row, cols=col)
 
         # Format plot on the way out
         fig = self._apply_format_figure(fig, figsize, title,
@@ -1200,7 +1245,8 @@ class PlotHelper:
                                         legend, tick_size, axis_label_size,
                                         axis_type='default',
                                         barmode=barmode, margin=margin,
-                                        bargap=bargap, bargroupgap=bargroupgap)
+                                        bargap=bargap, bargroupgap=bargroupgap,
+                                        row=row, col=col)
 
         return fig
 
@@ -1231,6 +1277,8 @@ class PlotHelper:
                     tick_size: float = None,
                     axis_label_size: float = None,
                     widget: bool = False,
+                    row: int = None,
+                    col: int = None,
                     **kwargs
                     ) -> Union[go.Figure, go.FigureWidget]:
         """
@@ -1294,6 +1342,14 @@ class PlotHelper:
         :param axis_label_size: Size of the font of the axis label.
         :param widget: If True, returns a go.FigureWidget object instead of
             a go.Figure object.
+        :param row: If Figure has multiple subplots, specifies which row
+            to use for the plot. Indexing starts at 1. Note that some
+            formatting args (such as figsize) may still be applied to all
+            subplots. Both row and col must be provided together.
+        :param col: If Figure has multiple subplots, specifies which
+            col to use for the plot. Indexing starts at 1. Note that some
+            formatting args (such as figsize) may still be applied to all
+            subplots. Both row and col must be provided together.
         :param kwargs: Depending on name, passed to go.Violin or to
             go.Figure.update_traces(). The following kwargs are passed to
             go.Violin: 'bandwidth', 'fillcolor', 'hoverinfo', 'jitter', 'line',
@@ -1370,7 +1426,7 @@ class PlotHelper:
                               points=show_points, hoverinfo='skip',
                               line=line, meanline=meanline_kw,
                               **violin_kwargs)
-            fig.add_trace(trace)
+            fig.add_traces(trace, rows=row, cols=col)
 
             # Add the other half of the distributions if needed
             if neg_arrays:
@@ -1387,14 +1443,15 @@ class PlotHelper:
                                       points=show_points, hoverinfo='skip',
                                       line=line, meanline=meanline_kw,
                                       **violin_kwargs)
-                fig.add_trace(neg_trace)
+                fig.add_traces(neg_trace, rows=row, cols=col)
 
         # Format plot on the way out
         fig = self._apply_format_figure(fig, figsize, title,
                                         x_label, y_label, x_limit, y_limit,
                                         legend, tick_size, axis_label_size,
                                         axis_type='default',
-                                        violinmode=violinmode, margin=margin)
+                                        violinmode=violinmode, margin=margin,
+                                        row=row, col=col)
         fig.update_traces(**kwargs)
 
         return fig
@@ -1421,6 +1478,8 @@ class PlotHelper:
                        tick_size: float = None,
                        axis_label_size: float = None,
                        widget: bool = False,
+                       row: int = None,
+                       col: int = None,
                        **kwargs
                        ) -> Union[go.Figure, go.FigureWidget]:
         """
@@ -1471,6 +1530,14 @@ class PlotHelper:
         :param axis_label_size: Size of the font of the axis label.
         :param widget: If True, returns a go.FigureWidget object instead of
             a go.Figure object.
+        :param row: If Figure has multiple subplots, specifies which row
+            to use for the plot. Indexing starts at 1. Note that some
+            formatting args (such as figsize) may still be applied to all
+            subplots. Both row and col must be provided together.
+        :param col: If Figure has multiple subplots, specifies which
+            col to use for the plot. Indexing starts at 1. Note that some
+            formatting args (such as figsize) may still be applied to all
+            subplots. Both row and col must be provided together.
         :param kwargs: Depending on name, passed to go.Violin or to
             go.Figure.update_traces(). The following kwargs are passed to
             go.Violin: 'bandwidth', 'fillcolor', 'hoverinfo', 'jitter', 'line',
@@ -1485,7 +1552,8 @@ class PlotHelper:
                                show_box=show_box, show_points=show_points,
                                show_mean=show_mean, figure=figure, widget=widget,
                                add_cell_numbers=add_cell_numbers,
-                               side='positive', orientation='h', **kwargs)
+                               side='positive', orientation='h',
+                               row=row, col=col, **kwargs)
 
         # Some settings for making a ridgeline out of the violin plot
         fig = self._apply_format_figure(fig, figsize, title,
@@ -1493,7 +1561,8 @@ class PlotHelper:
                                         legend, tick_size, axis_label_size,
                                         axis_type='default',
                                         xaxis_showgrid=False,
-                                        xaxis_zeroline=False, margin=margin)
+                                        xaxis_zeroline=False, margin=margin,
+                                        row=row, col=col)
         fig.update_traces(width=overlap)
 
         return fig
@@ -1518,6 +1587,8 @@ class PlotHelper:
                      tick_size: float = None,
                      axis_label_size: float = None,
                      widget: bool = False,
+                     row: int = None,
+                     col: int = None,
                      **kwargs
                      ) -> Union[go.Figure, go.FigureWidget]:
         """
@@ -1566,6 +1637,14 @@ class PlotHelper:
         :param axis_label_size: Size of the font of the axis label.
         :param widget: If True, returns a go.FigureWidget object instead of
             a go.Figure object.
+        :param row: If Figure has multiple subplots, specifies which row
+            to use for the plot. Indexing starts at 1. Note that some
+            formatting args (such as figsize) may still be applied to all
+            subplots. Both row and col must be provided together.
+        :param col: If Figure has multiple subplots, specifies which
+            col to use for the plot. Indexing starts at 1. Note that some
+            formatting args (such as figsize) may still be applied to all
+            subplots. Both row and col must be provided together.
         :param kwargs: Passed to go.Heatmap.
 
         :return: Figure object.
@@ -1600,12 +1679,14 @@ class PlotHelper:
         trace = go.Heatmap(z=array, zmin=zmin, zmax=zmax,
                            zmid=zmid, colorscale=colorscale,
                            reversescale=reverse, **kwargs)
-        fig.add_trace(trace)
+        fig.add_traces(trace, rows=row, cols=col)
 
+        # None is for the legend kwarg
         fig = self._apply_format_figure(fig, figsize, title,
                                         x_label, y_label, x_limit, y_limit,
-                                        tick_size, axis_label_size,
-                                        axis_type='noline', margin=margin)
+                                        None, tick_size, axis_label_size,
+                                        axis_type='noline', margin=margin,
+                                        row=row, col=col)
 
         return fig
 
@@ -1632,6 +1713,8 @@ class PlotHelper:
                        tick_size: float = None,
                        axis_label_size: float = None,
                        widget: bool = False,
+                       row: int = None,
+                       col: int = None,
                        **kwargs
                        ) -> Union[go.Figure, go.FigureWidget]:
         """
@@ -1695,6 +1778,14 @@ class PlotHelper:
         :param axis_label_size: Size of the font of the axis label.
         :param widget: If True, returns a go.FigureWidget object instead of
             a go.Figure object.
+        :param row: If Figure has multiple subplots, specifies which row
+            to use for the plot. Indexing starts at 1. Note that some
+            formatting args (such as figsize) may still be applied to all
+            subplots. Both row and col must be provided together.
+        :param col: If Figure has multiple subplots, specifies which
+            col to use for the plot. Indexing starts at 1. Note that some
+            formatting args (such as figsize) may still be applied to all
+            subplots. Both row and col must be provided together.
         :param kwargs: Passed to go.Histogram2d.
 
         :return: Figure object
@@ -1730,12 +1821,13 @@ class PlotHelper:
                                xbins=dict(size=xbinsize),
                                ybins=dict(size=ybinsize),
                                **kwargs)
-        fig.add_trace(trace)
+        fig.add_traces(trace, rows=row, cols=col)
 
         fig = self._apply_format_figure(fig, figsize, title,
                                         x_label, y_label, x_limit, y_limit,
                                         tick_size, axis_label_size,
-                                        axis_type='noline', margin=margin)
+                                        axis_type='noline', margin=margin,
+                                        row=row, col=col)
 
         return fig
 
@@ -1764,6 +1856,8 @@ class PlotHelper:
                        tick_size: float = None,
                        axis_label_size: float = None,
                        widget: bool = False,
+                       row: int = None,
+                       col: int = None,
                        **kwargs
                        ) -> Union[go.Figure, go.FigureWidget]:
         """
@@ -1830,6 +1924,14 @@ class PlotHelper:
         :param axis_label_size: Size of the font of the axis label.
         :param widget: If True, returns a go.FigureWidget object instead of
             a go.Figure object.
+        :param row: If Figure has multiple subplots, specifies which row
+            to use for the plot. Indexing starts at 1. Note that some
+            formatting args (such as figsize) may still be applied to all
+            subplots. Both row and col must be provided together.
+        :param col: If Figure has multiple subplots, specifies which
+            col to use for the plot. Indexing starts at 1. Note that some
+            formatting args (such as figsize) may still be applied to all
+            subplots. Both row and col must be provided together.
         :param kwargs: Passed to go.Heatmap2dContour
 
         :return: Figure object
@@ -1872,12 +1974,13 @@ class PlotHelper:
                                       xbins=dict(size=xbinsize),
                                       ybins=dict(size=ybinsize),
                                       **kwargs)
-        fig.add_trace(trace)
+        fig.add_traces(trace, rows=row, cols=col)
 
         fig = self._apply_format_figure(fig, figsize, title,
                                         x_label, y_label, x_limit, y_limit,
                                         tick_size, axis_label_size,
-                                        axis_type='noline', margin=margin)
+                                        axis_type='noline', margin=margin,
+                                        row=row, col=col)
 
         return fig
 
@@ -1979,7 +2082,7 @@ class PlotHelper:
                     background = go.Scatter(x=time, y=trace, line=line_kwargs,
                                             showlegend=False, mode='lines',
                                             **kwargs)
-                    fig.add_trace(background, row=r, col=c)
+                    fig.add_traces(background, row=r, col=c)
 
                     # Plot regions of the traces that will be different colors
                     for carr, thres in zip(color_arrays, color_thres):
@@ -1991,7 +2094,7 @@ class PlotHelper:
                                             line=line_kwargs,
                                             showlegend=False, mode='lines',
                                             **kwargs)
-                        fig.add_trace(ctrace, row=r, col=c)
+                        fig.add_traces(ctrace, row=r, col=c)
 
                     trace_idx += 1
                 except IndexError:
