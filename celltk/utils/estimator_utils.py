@@ -43,7 +43,7 @@ def get_bootstrap_population(arr: np.ndarray,
     _rng = np.random.default_rng(seed)
     boot_arrs = [_rng.choice(arr, size=arr.shape[0], replace=True)
                  for _ in range(boot_reps)]
-    arr = np.vstack([function(b, 0) for b in boot_arrs])
+    arr = np.vstack([function(b, axis=0) for b in boot_arrs])
 
     return arr
 
@@ -51,7 +51,7 @@ def get_bootstrap_population(arr: np.ndarray,
 def bootstrap_estimator(arr: np.ndarray,
                         reps: int = 1000,
                         ci: float = 0.95,
-                        ax: int = 0,
+                        axis: int = 0,
                         ignore_nans: bool = True,
                         function: Callable = np.nanmean
                         ) -> Tuple[np.ndarray]:
@@ -69,28 +69,28 @@ def bootstrap_estimator(arr: np.ndarray,
         func = np.percentile
 
     # Calculate bounds
-    low_end = func(boot, 50. - ci / 2., axis=ax, keepdims=True)
-    hi_end = func(boot, 50. + ci / 2., axis=ax, keepdims=True)
+    low_end = func(boot, 50. - ci / 2., axis=axis, keepdims=True)
+    hi_end = func(boot, 50. + ci / 2., axis=axis, keepdims=True)
 
     return np.vstack((hi_end, low_end))
 
 
 def fraction_of_total(arr: np.ndarray,
                       ignore_nans: bool = True,
-                      ax: int = 0
+                      axis: int = 0
                       ) -> np.ndarray:
     """Returns the fraction of entries that have non-zero values.
     """
     if ignore_nans:
         return np.count_nonzero(arr[~np.isnan(arr)],
-                                axis=ax, keepdims=True) / arr.shape[ax]
+                                axis=axis, keepdims=True) / arr.shape[axis]
     else:
-        return np.count_nonzero(arr, axis=ax, keepdims=True) / arr.shape[ax]
+        return np.count_nonzero(arr, axis=axis, keepdims=True) / arr.shape[axis]
 
 
 def wilson_score(arr: np.ndarray,
                  ci: float = 0.95,
-                 ax: int = 0
+                 axis: int = 0
                  ) -> np.ndarray:
     """Calculates the Wilson score for a binomial distribution.
     """
@@ -98,10 +98,10 @@ def wilson_score(arr: np.ndarray,
     z = stats.norm.ppf(1 - (1 - ci) / 2)
 
     # Get proportion of population that is positive
-    prob = np.squeeze(fraction_of_total(arr, ax=ax))
+    prob = np.squeeze(fraction_of_total(arr, axis=axis))
 
     # Get cell counts for each column
-    n = (~np.isnan(arr)).sum(ax)
+    n = (~np.isnan(arr)).sum(axis)
 
     # Calculate the wilson score
     denom = 1 + z ** 2 / n
@@ -116,15 +116,15 @@ def wilson_score(arr: np.ndarray,
 
 def normal_approx(arr: np.ndarray,
                   ci: float = 0.95,
-                  ax: int = 0
+                  axis: int = 0
                   ) -> np.ndarray:
     """Calculates the normal error for a binomial distribution."""
     # Do two-tailed by default, so divide by 2
     z = stats.norm.ppf(1 - (1 - ci) / 2)
 
     # Get proportion of population that is positive
-    prob = np.squeeze(fraction_of_total(arr, ax=ax))
+    prob = np.squeeze(fraction_of_total(arr, axis=axis))
     # Get cell counts
-    n = (~np.isnan(arr)).sum(ax)
+    n = (~np.isnan(arr)).sum(axis)
 
     return z * np.sqrt((prob * (1 - prob)) / n)
