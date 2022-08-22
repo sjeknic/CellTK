@@ -5,6 +5,7 @@ from typing import Collection, Union, Callable, Generator, Tuple
 
 import numpy as np
 import sklearn.base as base
+import sklearn.metrics as metrics
 import sklearn.preprocessing as preproc
 import scipy.stats as stats
 import matplotlib.colors as mcolors
@@ -36,7 +37,7 @@ class PlotHelper:
         'ticklen': 7,
         'ticks': 'outside',
         'tickwidth': 2,
-        'title': dict(font=dict(color='#242424', size=24)),
+        'title': dict(font=dict(color='#242424', size=24, family=_font_families)),
         'zeroline': False,
     }
     _no_line_axis = _default_axis_layout.copy()
@@ -135,9 +136,20 @@ class PlotHelper:
                              y_label: str = None,
                              x_limit: Tuple[float] = None,
                              y_limit: Tuple[float] = None,
+                             legend: bool = None,
+                             tick_size: float = None,
+                             axis_label_size: float = None,
                              axis_type: str = 'default',
+                             margin: str = 'auto',
+                             row: int = None,
+                             col: int = None,
                              **kwargs
                              ) -> go.Figure:
+        """
+        TODO:
+            - Standardize keyword inputs and simplify. e.g. ?_label for x_label
+              and y_label. And input to each function as part of kwargs.
+        """
         # Default layouts
         if axis_type == 'default':
             x_axis_layout = deepcopy(self._default_axis_layout)
@@ -148,9 +160,18 @@ class PlotHelper:
         else:
             raise ValueError(f'Did not understand axis type {axis_type}.')
 
-        figure_layout = {'template': deepcopy(self._template)}
+        figure_layout = {'template': self._template}
+
+        # Apply changes to margins
+        if isinstance(margin, (float, int)):
+            m = int(margin)
+            figure_layout.update({'margin': dict(l=m, r=m, b=m, t=m)})
+        elif margin in (False, 'zero', 'tight'):
+            figure_layout.update({'margin': dict(l=0, r=0, t=0, b=0)})
 
         # Updates only made if not None, preserves old values
+        if legend is not None:
+            figure_layout.update({'showlegend': legend})
         if x_label is not None:
             x_axis_layout['title'].update({'text': x_label})
         if y_label is not None:
@@ -165,28 +186,58 @@ class PlotHelper:
             figure_layout.update({'height': figsize[0]})
         if figsize[1] is not None:
             figure_layout.update({'width': figsize[1]})
+        if tick_size is not None:
+            x_axis_layout['tickfont'].update({'size': tick_size})
+            y_axis_layout['tickfont'].update({'size': tick_size})
+        if axis_label_size is not None:
+            x_axis_layout['title']['font'].update({'size': axis_label_size})
+            y_axis_layout['title']['font'].update({'size': axis_label_size})
 
         # Apply changes
         figure.update_layout(**figure_layout, **kwargs)
-        figure.update_xaxes(**x_axis_layout)
-        figure.update_yaxes(**y_axis_layout)
+        figure.update_xaxes(**x_axis_layout, row=row, col=col)
+        figure.update_yaxes(**y_axis_layout, row=row, col=col)
 
         return figure
 
     @staticmethod
     def _format_colors(color: str, alpha: float = None) -> str:
         """Converst hexcode colors to RGBA to allow transparency"""
+        def _convert_to_255(values):
+            # Otherwise, it's fine for 0-255
+            if len(values) == 3:
+                alpha = None
+            elif len(values) == 4:
+                alpha = values[-1]
+
+            if any(r > 0 and r < 1 for r in values[:3]):
+                # This means at least one value is 0-1
+                values = [int(round(r * 255)) for r in values[:3]]
+
+                # For some odd reason, It seems som colors don't
+                # render properly with values exactly 1.
+                # Don't ask me why. I'm just making them 2 for now
+                values = [v if v != 1 else 2 for v in values]
+
+                if alpha is not None:
+                    values += [alpha]
+            return values
+
         if isinstance(color, (list, tuple)):
             if all([isinstance(f, (float, int)) for f in color]):
                 # Assume rgb
-                if alpha: color += (alpha, )
-                else: color += (1.,)
+                if alpha:
+                    color += (alpha, )
+                else:
+                    color += (1.,)
+                color = _convert_to_255(color)
                 color_str = str(tuple([c for c in color]))
             else:
                 # Assume first value is alpha
                 alpha = alpha if alpha else color[0]
                 if alpha < 0.125: alpha = 0.125
                 values = pcol.unlabel_rgb(color[1]) + (alpha,)
+                values = _convert_to_255(values)
                 color_str = str(tuple([c for c in values]))
 
             return f'rgba{color_str}'
@@ -204,27 +255,27 @@ class PlotHelper:
 
                 if alpha:
                     color += (alpha,)
+                color = _convert_to_255(color)
                 color_str = str(tuple([c for c in color]))
                 if len(color) == 4:
                     return f'rgba{color_str}'
                 else:
                     return f'rgb{color_str}'
             elif color[:3] in ('rgb'):
+                vals = pcol.unlabel_rgb(color)
+                vals = _convert_to_255(vals)
                 if alpha:
-                    # extract the rgb values
-                    vals = pcol.unlabel_rgb(color)
                     vals += (alpha, )
-                    color_str = str(tuple([v for v in vals]))
-                    color = f'rgba{color_str}'
-                    return color
+                color_str = str(tuple([v for v in vals]))
+                return f'rgba{color_str}'
             else:
                 try:
                     vals = mcolors.to_rgba(color)
+                    vals = _convert_to_255(vals)
                     if alpha:
                         vals = (*vals[:-1], alpha)
                     color_str = str(tuple([v for v in vals]))
-                    color = f'rgba{color_str}'
-                    return color
+                    return f'rgba{color_str}'
                 except ValueError:
                     raise ValueError(f'Did not understand color {color}')
 
@@ -330,12 +381,18 @@ class PlotHelper:
                   legend: bool = True,
                   figure: Union[go.Figure, go.FigureWidget] = None,
                   figsize: Tuple[int] = (None, None),
+                  margin: str = 'auto',
                   title: str = None,
                   x_label: str = None,
                   y_label: str = None,
                   x_limit: Tuple[float] = None,
                   y_limit: Tuple[float] = None,
+                  tick_size: float = None,
+                  axis_label_size: float = None,
                   widget: bool = False,
+                  gl: bool = False,
+                  row: int = None,
+                  col: int = None,
                   **kwargs
                   ) -> Union[go.Figure, go.FigureWidget]:
         """
@@ -380,6 +437,9 @@ class PlotHelper:
             the plot instead of a blank figure.
         :param figsize: Height and width of the plot in pixels. Must be a tuple
             of length two. To leave height or width unchanged, set as None.
+        :param margin: Set the size of the margins. If 'auto', all margins
+            are set to defualt values. If 'zero' or 'tight', margins are
+            removed. If a number is given, sets all margins to that number.
         :param title: Title to add to the plot
         :param x_label: Label of the x-axis
         :param y_label: Label of the y-axis
@@ -387,8 +447,21 @@ class PlotHelper:
             the plot is saved as an HTML object.
         :param y_limit: Initial limits for the y-axis. Can be changed if
             the plot is saved as an HTML object.
+        :param tick_size: Size of the font of the axis tick labels.
+        :param axis_label_size: Size of the font of the axis label.
         :param widget: If True, returns a go.FigureWidget object instead of
             a go.Figure object.
+        :param gl: If True, switches to using a WebGL backend. Much faster for
+            large datasets, but some features may not be available. May not
+            work in all contexts.
+        :param row: If Figure has multiple subplots, specifies which row
+            to use for the plot. Indexing starts at 1. Note that some
+            formatting args (such as figsize) may still be applied to all
+            subplots. Both row and col must be provided together.
+        :param col: If Figure has multiple subplots, specifies which
+            col to use for the plot. Indexing starts at 1. Note that some
+            formatting args (such as figsize) may still be applied to all
+            subplots. Both row and col must be provided together.
         :param kwargs: Depending on name, passed to the "line" keyword
             argument of go.Scatter or as keyword arguments for go.Scatter.
             The following kwargs are passed to "line": 'color', 'dash',
@@ -422,9 +495,18 @@ class PlotHelper:
                   if k not in self._line_kwargs}
 
         # Build the figure and start plotting
-        if figure: fig = figure
-        elif widget: fig = go.FigureWidget()
-        else: fig = go.Figure()
+        if figure:
+            fig = figure
+        elif widget:
+            fig = go.FigureWidget()
+        else:
+            fig = go.Figure()
+
+        # Switch to using WebGL if requested
+        if gl:
+            scatter = go.Scattergl
+        else:
+            scatter = go.Scatter
 
         for idx, (arr, key) in enumerate(zip(arrays, keys)):
             # err_estimator is used to set the bounds for the shaded region
@@ -454,7 +536,7 @@ class PlotHelper:
                 x = time
             else:
                 raise TypeError('Did not understand time of '
-                                f'type {type(time)}')
+                                f'type {type(time)}.')
 
             lines = []
             _legend = True
@@ -463,9 +545,9 @@ class PlotHelper:
                 line_kwargs.update({'color': next(colors)})
 
                 lines.append(
-                    go.Scatter(x=x, y=y, legendgroup=key, name=key,
-                               showlegend=_legend, mode='lines',
-                               line=line_kwargs, **kwargs)
+                    scatter(x=x, y=y, legendgroup=key, name=key,
+                            showlegend=_legend, mode='lines',
+                            line=line_kwargs, **kwargs)
                 )
 
                 if err_arr is not None:
@@ -478,20 +560,22 @@ class PlotHelper:
                         hi = err_arr[-1, :]
 
                     lines.append(
-                        go.Scatter(x=np.hstack([x, x[::-1]]),
-                                   y=np.hstack([hi, lo[::-1]]), fill='tozerox',
-                                   fillcolor=self._format_colors(line_kwargs['color'], 0.25),
-                                   showlegend=False, legendgroup=key,
-                                   name=key, line=dict(color='rgba(255,255,255,0)'),
-                                   hoverinfo='skip')
+                        scatter(x=np.hstack([x, x[::-1]]),
+                                y=np.hstack([hi, lo[::-1]]), fill='tozerox',
+                                fillcolor=self._format_colors(line_kwargs['color'], 0.25),
+                                showlegend=False, legendgroup=key,
+                                name=key, line=dict(color='rgba(255,255,255,0)'),
+                                hoverinfo='skip')
                     )
 
-            fig.add_traces(lines)
+            fig.add_traces(lines, rows=row, cols=col)
 
         # Upate the axes and figure layout
         fig = self._apply_format_figure(fig, figsize, title,
                                         x_label, y_label, x_limit, y_limit,
-                                        axis_type='default')
+                                        legend, tick_size, axis_label_size,
+                                        axis_type='default', margin=margin,
+                                        row=row, col=col)
 
         return fig
 
@@ -502,6 +586,7 @@ class PlotHelper:
                      estimator: Union[Callable, str, functools.partial] = None,
                      err_estimator: Union[Callable, str, functools.partial] = None,
                      normalizer: Union[Callable, str] = None,
+                     scatter_mode: str = 'markers',
                      colors: Union[str, Collection[str]] = None,
                      alpha: float = 1.0,
                      symbols: Union[str, Collection[str]] = None,
@@ -509,12 +594,18 @@ class PlotHelper:
                      legend: bool = True,
                      figure: Union[go.Figure, go.FigureWidget] = None,
                      figsize: Tuple[int] = (None, None),
+                     margin: str = 'auto',
                      title: str = None,
                      x_label: str = None,
                      y_label: str = None,
                      x_limit: Tuple[float] = None,
                      y_limit: Tuple[float] = None,
+                     tick_size: float = None,
+                     axis_label_size: float = None,
                      widget: bool = False,
+                     gl: bool = False,
+                     row: int = None,
+                     col: int = None,
                      **kwargs
                      ) -> Union[go.Figure, go.FigureWidget]:
         """
@@ -548,6 +639,8 @@ class PlotHelper:
             the estimators. Normalizes the error as well. Can be 'minmax' or
             'maxabs', or a callable that inputs an array and outputs an array
             of the same shape.
+        :param scatter_mode: Drawing mode for the traces. Can be 'markers',
+            'lines', or 'lines+markers'.
         :param colors: Name of a color palette or map to use. Searches first
             in seaborn/matplotlib, then in Plotly to find the color map. If
             not provided, the color map will be glasbey. Can also be list
@@ -560,6 +653,9 @@ class PlotHelper:
             the plot instead of a blank figure.
         :param figsize: Height and width of the plot in pixels. Must be a tuple
             of length two. To leave height or width unchanged, set as None.
+        :param margin: Set the size of the margins. If 'auto', all margins
+            are set to defualt values. If 'zero' or 'tight', margins are
+            removed. If a number is given, sets all margins to that number.
         :param title: Title to add to the plot
         :param x_label: Label of the x-axis
         :param y_label: Label of the y-axis
@@ -567,8 +663,21 @@ class PlotHelper:
             the plot is saved as an HTML object.
         :param y_limit: Initial limits for the y-axis. Can be changed if
             the plot is saved as an HTML object.
+        :param tick_size: Size of the font of the axis tick labels.
+        :param axis_label_size: Size of the font of the axis label.
         :param widget: If True, returns a go.FigureWidget object instead of
             a go.Figure object.
+        :param gl: If True, switches to using a WebGL backend. Much faster for
+            large datasets, but some features may not be available. May not
+            work in all contexts.
+        :param row: If Figure has multiple subplots, specifies which row
+            to use for the plot. Indexing starts at 1. Note that some
+            formatting args (such as figsize) may still be applied to all
+            subplots. Both row and col must be provided together.
+        :param col: If Figure has multiple subplots, specifies which
+            col to use for the plot. Indexing starts at 1. Note that some
+            formatting args (such as figsize) may still be applied to all
+            subplots. Both row and col must be provided together.
         :param kwargs: Depending on name, passed to the "marker" keyword
             argument of go.Scatter or as keyword arguments for go.Scatter.
             The following kwargs are passed to "marker": 'color', 'line',
@@ -614,9 +723,19 @@ class PlotHelper:
                   if k not in self._marker_kwargs}
 
         # Build the figure and start plotting
-        if figure: fig = figure
-        elif widget: fig = go.FigureWidget()
-        else: fig = go.Figure()
+        if figure:
+            fig = figure
+        elif widget:
+            fig = go.FigureWidget()
+        else:
+            fig = go.Figure()
+
+        # Switch to WebGL backend
+        if gl:
+            scatter = go.Scattergl
+        else:
+            scatter = go.Scatter
+
         traces = []
         zipped = itertools.zip_longest(x_arrays, y_arrays, keys,
                                        fillvalue=None)
@@ -664,18 +783,20 @@ class PlotHelper:
             marker_kwargs.update(dict(color=next(colors),
                                       symbol=next(symbols)))
             traces.append(
-                go.Scatter(x=x, y=y, legendgroup=key, name=key,
-                           showlegend=legend, mode='markers',
-                           error_x=error_x, error_y=error_y,
-                           marker=marker_kwargs, **kwargs)
+                scatter(x=x, y=y, legendgroup=key, name=key,
+                        showlegend=legend, mode=scatter_mode,
+                        error_x=error_x, error_y=error_y,
+                        marker=marker_kwargs, **kwargs)
             )
 
-        fig.add_traces(traces)
+        fig.add_traces(traces, rows=row, cols=col)
 
         # Apply formatting and return
         fig = self._apply_format_figure(fig, figsize, title,
                                         x_label, y_label, x_limit, y_limit,
-                                        axis_type='default')
+                                        legend, tick_size, axis_label_size,
+                                        axis_type='default', margin=margin,
+                                        row=row, col=col)
 
         return fig
 
@@ -693,12 +814,17 @@ class PlotHelper:
                  legend: bool = True,
                  figure: Union[go.Figure, go.FigureWidget] = None,
                  figsize: Tuple[int] = (None, None),
+                 margin: str = 'auto',
                  title: str = None,
                  x_label: str = None,
                  y_label: str = None,
                  x_limit: Tuple[float] = None,
                  y_limit: Tuple[float] = None,
+                 tick_size: float = None,
+                 axis_label_size: float = None,
                  widget: bool = False,
+                 row: int = None,
+                 col: int = None,
                  **kwargs
                  ) -> Union[go.Figure, go.FigureWidget]:
         """Builds a Plotly Figure object plotting bars from the given arrays. Each
@@ -741,6 +867,9 @@ class PlotHelper:
             the plot instead of a blank figure.
         :param figsize: Height and width of the plot in pixels. Must be a tuple
             of length two. To leave height or width unchanged, set as None.
+        :param margin: Set the size of the margins. If 'auto', all margins
+            are set to defualt values. If 'zero' or 'tight', margins are
+            removed. If a number is given, sets all margins to that number.
         :param title: Title to add to the plot
         :param x_label: Label of the x-axis
         :param y_label: Label of the y-axis
@@ -750,8 +879,18 @@ class PlotHelper:
         :param y_limit: Initial limits for the y-axis. Can be changed if
             the plot is saved as an HTML object. Only applies if orientation
             is vertical.
+        :param tick_size: Size of the font of the axis tick labels.
+        :param axis_label_size: Size of the font of the axis label.
         :param widget: If True, returns a go.FigureWidget object instead of
             a go.Figure object.
+        :param row: If Figure has multiple subplots, specifies which row
+            to use for the plot. Indexing starts at 1. Note that some
+            formatting args (such as figsize) may still be applied to all
+            subplots. Both row and col must be provided together.
+        :param col: If Figure has multiple subplots, specifies which
+            col to use for the plot. Indexing starts at 1. Note that some
+            formatting args (such as figsize) may still be applied to all
+            subplots. Both row and col must be provided together.
         :param kwargs: Depending on name, passed to go.Bar or to
             go.Figure.update_traces(). The following kwargs are passed to
             go.Bar: 'hoverinfo', 'marker', 'width'.
@@ -779,9 +918,13 @@ class PlotHelper:
                   if k not in self._bar_kwargs}
 
         # Build the figure and start plotting
-        if figure: fig = figure
-        elif widget: fig = go.FigureWidget()
-        else: fig = go.Figure()
+        if figure:
+            fig = figure
+        elif widget:
+            fig = go.FigureWidget()
+        else:
+            fig = go.Figure()
+
         for idx, (arr, key) in enumerate(zip(arrays, keys)):
             # err_estimator is used to calculate errorbars
             if err_estimator:
@@ -837,13 +980,16 @@ class PlotHelper:
 
             trace = go.Bar(x=x, y=y, error_x=error_x, error_y=error_y,
                            name=key, **bar_kwargs)
-            fig.add_trace(trace)
+            fig.add_traces(trace, rows=row, cols=col)
 
         # Format plot on the way out
         fig = self._apply_format_figure(fig, figsize, title,
                                         x_label, y_label, x_limit, y_limit,
-                                        axis_type='default', barmode=barmode)
-        fig.update_traces(**kwargs)
+                                        legend, tick_size, axis_label_size,
+                                        axis_type='default',
+                                        barmode=barmode, margin=margin,
+                                        row=row, col=col)
+        fig.update_traces(**kwargs, row=row, col=col)
 
         return fig
 
@@ -871,12 +1017,17 @@ class PlotHelper:
                        legend: bool = True,
                        figure: Union[go.Figure, go.FigureWidget] = None,
                        figsize: Tuple[int] = (None, None),
+                       margin: str = 'auto',
                        title: str = None,
                        x_label: str = None,
                        y_label: str = None,
                        x_limit: Tuple[float] = None,
                        y_limit: Tuple[float] = None,
+                       tick_size: float = None,
+                       axis_label_size: float = None,
                        widget: bool = False,
+                       row: int = None,
+                       col: int = None,
                        **kwargs
                        ) -> Union[go.Figure, go.FigureWidget]:
         """Builds a Plotly Figure object plotting a histogram of each of the
@@ -947,6 +1098,9 @@ class PlotHelper:
             the plot instead of a blank figure.
         :param figsize: Height and width of the plot in pixels. Must be a tuple
             of length two. To leave height or width unchanged, set as None.
+        :param margin: Set the size of the margins. If 'auto', all margins
+            are set to defualt values. If 'zero' or 'tight', margins are
+            removed. If a number is given, sets all margins to that number.
         :param title: Title to add to the plot
         :param x_label: Label of the x-axis
         :param y_label: Label of the y-axis
@@ -956,8 +1110,18 @@ class PlotHelper:
         :param y_limit: Initial limits for the y-axis. Can be changed if
             the plot is saved as an HTML object. Only applies if orientation
             is vertical.
+        :param tick_size: Size of the font of the axis tick labels.
+        :param axis_label_size: Size of the font of the axis label.
         :param widget: If True, returns a go.FigureWidget object instead of
             a go.Figure object.
+        :param row: If Figure has multiple subplots, specifies which row
+            to use for the plot. Indexing starts at 1. Note that some
+            formatting args (such as figsize) may still be applied to all
+            subplots. Both row and col must be provided together.
+        :param col: If Figure has multiple subplots, specifies which
+            col to use for the plot. Indexing starts at 1. Note that some
+            formatting args (such as figsize) may still be applied to all
+            subplots. Both row and col must be provided together.
         :param kwargs: Depending on name, kwargs are passed to either
             go.Histogram or the line kwarg of go.Scatter if a kernel density
             estimate is included. The following kwargs are passed to "line":
@@ -989,9 +1153,12 @@ class PlotHelper:
                   if k not in self._line_kwargs}
 
         # Build the figure and start plotting
-        if figure: fig = figure
-        elif widget: fig = go.FigureWidget()
-        else: fig = go.Figure()
+        if figure:
+            fig = figure
+        elif widget:
+            fig = go.FigureWidget()
+        else:
+            fig = go.Figure()
 
         for idx, (arr, key) in enumerate(zip(arrays, keys)):
             if orientation in ('v', 'vertical'):
@@ -1024,7 +1191,7 @@ class PlotHelper:
                                      ybins=dict(size=binsize),
                                      marker=marker_kwargs,
                                      **kwargs)
-                fig.add_trace(trace)
+                fig.add_traces(trace, rows=row, cols=col)
 
             # Estimate and plot KDE
             if include_kde:
@@ -1070,13 +1237,16 @@ class PlotHelper:
                 line = go.Scatter(x=x, y=y,
                                   legendgroup=key, name=key, fill=fill,
                                   mode='lines', line=line_kwargs)
-                fig.add_trace(line)
+                fig.add_traces(line, rows=row, cols=col)
 
         # Format plot on the way out
         fig = self._apply_format_figure(fig, figsize, title,
                                         x_label, y_label, x_limit, y_limit,
-                                        axis_type='default', barmode=barmode,
-                                        bargap=bargap, bargroupgap=bargroupgap)
+                                        legend, tick_size, axis_label_size,
+                                        axis_type='default',
+                                        barmode=barmode, margin=margin,
+                                        bargap=bargap, bargroupgap=bargroupgap,
+                                        row=row, col=col)
 
         return fig
 
@@ -1098,12 +1268,17 @@ class PlotHelper:
                     legend: bool = True,
                     figure: Union[go.Figure, go.FigureWidget] = None,
                     figsize: Tuple[int] = (None, None),
+                    margin: str = 'auto',
                     title: str = None,
                     x_label: str = None,
                     y_label: str = None,
                     x_limit: Tuple[float] = None,
                     y_limit: Tuple[float] = None,
+                    tick_size: float = None,
+                    axis_label_size: float = None,
                     widget: bool = False,
+                    row: int = None,
+                    col: int = None,
                     **kwargs
                     ) -> Union[go.Figure, go.FigureWidget]:
         """
@@ -1137,6 +1312,7 @@ class PlotHelper:
             violin plot.
         :param show_points: If True, individual data points are overlaid over
             the violin plot.
+        :param show_mean: If True, dashed line is plotted at the mean value.
         :param spanmode: Determines how far the tails of the violin plot are
             extended. If 'hard', the plot spans as far as the data. If 'soft',
             the tails are extended.
@@ -1150,6 +1326,9 @@ class PlotHelper:
             the plot instead of a blank figure.
         :param figsize: Height and width of the plot in pixels. Must be a tuple
             of length two. To leave height or width unchanged, set as None.
+        :param margin: Set the size of the margins. If 'auto', all margins
+            are set to defualt values. If 'zero' or 'tight', margins are
+            removed. If a number is given, sets all margins to that number.
         :param title: Title to add to the plot
         :param x_label: Label of the x-axis
         :param y_label: Label of the y-axis
@@ -1159,8 +1338,18 @@ class PlotHelper:
         :param y_limit: Initial limits for the y-axis. Can be changed if
             the plot is saved as an HTML object. Only applies if orientation
             is veritcal.
+        :param tick_size: Size of the font of the axis tick labels.
+        :param axis_label_size: Size of the font of the axis label.
         :param widget: If True, returns a go.FigureWidget object instead of
             a go.Figure object.
+        :param row: If Figure has multiple subplots, specifies which row
+            to use for the plot. Indexing starts at 1. Note that some
+            formatting args (such as figsize) may still be applied to all
+            subplots. Both row and col must be provided together.
+        :param col: If Figure has multiple subplots, specifies which
+            col to use for the plot. Indexing starts at 1. Note that some
+            formatting args (such as figsize) may still be applied to all
+            subplots. Both row and col must be provided together.
         :param kwargs: Depending on name, passed to go.Violin or to
             go.Figure.update_traces(). The following kwargs are passed to
             go.Violin: 'bandwidth', 'fillcolor', 'hoverinfo', 'jitter', 'line',
@@ -1204,9 +1393,13 @@ class PlotHelper:
         meanline_kw = {'visible': show_mean, 'width': 3}
 
         # Build the figure and start plotting
-        if figure: fig = figure
-        elif widget: fig = go.FigureWidget()
-        else: fig = go.Figure()
+        if figure:
+            fig = figure
+        elif widget:
+            fig = go.FigureWidget()
+        else:
+            fig = go.Figure()
+
         for idx, (arr, key) in enumerate(zip(arrays, keys)):
             # Set the data key based on orientation
             if orientation in ('v', 'vertical'):
@@ -1233,7 +1426,7 @@ class PlotHelper:
                               points=show_points, hoverinfo='skip',
                               line=line, meanline=meanline_kw,
                               **violin_kwargs)
-            fig.add_trace(trace)
+            fig.add_traces(trace, rows=row, cols=col)
 
             # Add the other half of the distributions if needed
             if neg_arrays:
@@ -1250,13 +1443,15 @@ class PlotHelper:
                                       points=show_points, hoverinfo='skip',
                                       line=line, meanline=meanline_kw,
                                       **violin_kwargs)
-                fig.add_trace(neg_trace)
+                fig.add_traces(neg_trace, rows=row, cols=col)
 
         # Format plot on the way out
         fig = self._apply_format_figure(fig, figsize, title,
                                         x_label, y_label, x_limit, y_limit,
+                                        legend, tick_size, axis_label_size,
                                         axis_type='default',
-                                        violinmode=violinmode)
+                                        violinmode=violinmode, margin=margin,
+                                        row=row, col=col)
         fig.update_traces(**kwargs)
 
         return fig
@@ -1274,12 +1469,17 @@ class PlotHelper:
                        legend: bool = True,
                        figure: Union[go.Figure, go.FigureWidget] = None,
                        figsize: Tuple[int] = (None, None),
+                       margin: str = 'auto',
                        title: str = None,
                        x_label: str = None,
                        y_label: str = None,
                        x_limit: Tuple[float] = None,
                        y_limit: Tuple[float] = None,
+                       tick_size: float = None,
+                       axis_label_size: float = None,
                        widget: bool = False,
+                       row: int = None,
+                       col: int = None,
                        **kwargs
                        ) -> Union[go.Figure, go.FigureWidget]:
         """
@@ -1314,6 +1514,9 @@ class PlotHelper:
             the plot instead of a blank figure.
         :param figsize: Height and width of the plot in pixels. Must be a tuple
             of length two. To leave height or width unchanged, set as None.
+        :param margin: Set the size of the margins. If 'auto', all margins
+            are set to defualt values. If 'zero' or 'tight', margins are
+            removed. If a number is given, sets all margins to that number.
         :param title: Title to add to the plot
         :param x_label: Label of the x-axis
         :param y_label: Label of the y-axis
@@ -1323,8 +1526,18 @@ class PlotHelper:
         :param y_limit: Initial limits for the y-axis. Can be changed if
             the plot is saved as an HTML object. Only applies if orientation
             is veritcal.
+        :param tick_size: Size of the font of the axis tick labels.
+        :param axis_label_size: Size of the font of the axis label.
         :param widget: If True, returns a go.FigureWidget object instead of
             a go.Figure object.
+        :param row: If Figure has multiple subplots, specifies which row
+            to use for the plot. Indexing starts at 1. Note that some
+            formatting args (such as figsize) may still be applied to all
+            subplots. Both row and col must be provided together.
+        :param col: If Figure has multiple subplots, specifies which
+            col to use for the plot. Indexing starts at 1. Note that some
+            formatting args (such as figsize) may still be applied to all
+            subplots. Both row and col must be provided together.
         :param kwargs: Depending on name, passed to go.Violin or to
             go.Figure.update_traces(). The following kwargs are passed to
             go.Violin: 'bandwidth', 'fillcolor', 'hoverinfo', 'jitter', 'line',
@@ -1339,14 +1552,17 @@ class PlotHelper:
                                show_box=show_box, show_points=show_points,
                                show_mean=show_mean, figure=figure, widget=widget,
                                add_cell_numbers=add_cell_numbers,
-                               side='positive', orientation='h', **kwargs)
+                               side='positive', orientation='h',
+                               row=row, col=col, **kwargs)
 
         # Some settings for making a ridgeline out of the violin plot
         fig = self._apply_format_figure(fig, figsize, title,
                                         x_label, y_label, x_limit, y_limit,
+                                        legend, tick_size, axis_label_size,
                                         axis_type='default',
                                         xaxis_showgrid=False,
-                                        xaxis_zeroline=False)
+                                        xaxis_zeroline=False, margin=margin,
+                                        row=row, col=col)
         fig.update_traces(width=overlap)
 
         return fig
@@ -1359,14 +1575,20 @@ class PlotHelper:
                      zmax: float = None,
                      robust_z: bool = False,
                      reverse: bool = False,
+                     sort: str = None,
                      figure: Union[go.Figure, go.FigureWidget] = None,
                      figsize: Tuple[int] = (None, None),
+                     margin: str = 'auto',
                      title: str = None,
                      x_label: str = None,
                      y_label: str = None,
                      x_limit: Tuple[float] = None,
                      y_limit: Tuple[float] = None,
+                     tick_size: float = None,
+                     axis_label_size: float = None,
                      widget: bool = False,
+                     row: int = None,
+                     col: int = None,
                      **kwargs
                      ) -> Union[go.Figure, go.FigureWidget]:
         """
@@ -1388,10 +1610,20 @@ class PlotHelper:
         :param robust_z: If True, uses percentiles to set zmin and zmax instead
             of extremes of the dataset.
         :param reverse: If True, the color mapping is reversed.
+        :param sort: If the name of a distance metric, will sort the array
+            according to that metric before producing the heatmap. Valid values
+            are ‘cityblock’, ‘cosine’, ‘euclidean’, ‘l1’, ‘l2’, ‘manhattan’,
+            ‘braycurtis’, ‘canberra’, ‘chebyshev’, ‘correlation’, ‘dice’,
+            ‘hamming’, ‘jaccard’, ‘kulsinski’, ‘mahalanobis’, ‘minkowski’,
+            ‘rogerstanimoto’, ‘russellrao’, ‘seuclidean’, ‘sokalmichener’,
+            ‘sokalsneath’, ‘sqeuclidean’, and ‘yule’.
         :param figure: If a go.Figure object is given, will be used to make
             the plot instead of a blank figure.
         :param figsize: Height and width of the plot in pixels. Must be a tuple
             of length two. To leave height or width unchanged, set as None.
+        :param margin: Set the size of the margins. If 'auto', all margins
+            are set to defualt values. If 'zero' or 'tight', margins are
+            removed. If a number is given, sets all margins to that number.
         :param title: Title to add to the plot
         :param x_label: Label of the x-axis
         :param y_label: Label of the y-axis
@@ -1401,8 +1633,18 @@ class PlotHelper:
         :param y_limit: Initial limits for the y-axis. Can be changed if
             the plot is saved as an HTML object. Only applies if orientation
             is veritcal.
+        :param tick_size: Size of the font of the axis tick labels.
+        :param axis_label_size: Size of the font of the axis label.
         :param widget: If True, returns a go.FigureWidget object instead of
             a go.Figure object.
+        :param row: If Figure has multiple subplots, specifies which row
+            to use for the plot. Indexing starts at 1. Note that some
+            formatting args (such as figsize) may still be applied to all
+            subplots. Both row and col must be provided together.
+        :param col: If Figure has multiple subplots, specifies which
+            col to use for the plot. Indexing starts at 1. Note that some
+            formatting args (such as figsize) may still be applied to all
+            subplots. Both row and col must be provided together.
         :param kwargs: Passed to go.Heatmap.
 
         :return: Figure object.
@@ -1416,9 +1658,12 @@ class PlotHelper:
         assert len(figsize) == 2
 
         # Build the figure and make the heatmap
-        if figure: fig = figure
-        elif widget: fig = go.FigureWidget()
-        else: fig = go.Figure()
+        if figure:
+            fig = figure
+        elif widget:
+            fig = go.FigureWidget()
+        else:
+            fig = go.Figure()
 
         # Similar to how seaborn determines robust quantiles
         if robust_z:
@@ -1426,14 +1671,22 @@ class PlotHelper:
             zmax = np.nanpercentile(array, 98)
             zmid = None
 
+        if sort:
+            darr = metrics.pairwise_distances(array, metric=sort)
+            idx = darr[0, :].argsort()
+            array = array[idx]
+
         trace = go.Heatmap(z=array, zmin=zmin, zmax=zmax,
                            zmid=zmid, colorscale=colorscale,
                            reversescale=reverse, **kwargs)
-        fig.add_trace(trace)
+        fig.add_traces(trace, rows=row, cols=col)
 
+        # None is for the legend kwarg
         fig = self._apply_format_figure(fig, figsize, title,
                                         x_label, y_label, x_limit, y_limit,
-                                        axis_type='noline')
+                                        None, tick_size, axis_label_size,
+                                        axis_type='noline', margin=margin,
+                                        row=row, col=col)
 
         return fig
 
@@ -1451,12 +1704,17 @@ class PlotHelper:
                        histnorm: str = "",
                        figure: Union[go.Figure, go.FigureWidget] = None,
                        figsize: Tuple[int] = (None, None),
+                       margin: str = 'auto',
                        title: str = None,
                        x_label: str = None,
                        y_label: str = None,
                        x_limit: Tuple[float] = None,
                        y_limit: Tuple[float] = None,
+                       tick_size: float = None,
+                       axis_label_size: float = None,
                        widget: bool = False,
+                       row: int = None,
+                       col: int = None,
                        **kwargs
                        ) -> Union[go.Figure, go.FigureWidget]:
         """
@@ -1504,6 +1762,9 @@ class PlotHelper:
             the plot instead of a blank figure.
         :param figsize: Height and width of the plot in pixels. Must be a tuple
             of length two. To leave height or width unchanged, set as None.
+        :param margin: Set the size of the margins. If 'auto', all margins
+            are set to defualt values. If 'zero' or 'tight', margins are
+            removed. If a number is given, sets all margins to that number.
         :param title: Title to add to the plot.
         :param x_label: Label of the x-axis
         :param y_label: Label of the y-axis
@@ -1513,8 +1774,18 @@ class PlotHelper:
         :param y_limit: Initial limits for the y-axis. Can be changed if
             the plot is saved as an HTML object. Only applies if orientation
             is veritcal.
+        :param tick_size: Size of the font of the axis tick labels.
+        :param axis_label_size: Size of the font of the axis label.
         :param widget: If True, returns a go.FigureWidget object instead of
             a go.Figure object.
+        :param row: If Figure has multiple subplots, specifies which row
+            to use for the plot. Indexing starts at 1. Note that some
+            formatting args (such as figsize) may still be applied to all
+            subplots. Both row and col must be provided together.
+        :param col: If Figure has multiple subplots, specifies which
+            col to use for the plot. Indexing starts at 1. Note that some
+            formatting args (such as figsize) may still be applied to all
+            subplots. Both row and col must be provided together.
         :param kwargs: Passed to go.Histogram2d.
 
         :return: Figure object
@@ -1535,9 +1806,13 @@ class PlotHelper:
             zmid = None
 
         # Build the figure and plot the density histogram
-        if figure: fig = figure
-        elif widget: fig = go.FigureWidget()
-        else: fig = go.Figure()
+        if figure:
+            fig = figure
+        elif widget:
+            fig = go.FigureWidget()
+        else:
+            fig = go.Figure()
+
         trace = go.Histogram2d(x=x_array, y=y_array,
                                colorscale=colorscale,
                                histfunc=histfunc,
@@ -1546,11 +1821,13 @@ class PlotHelper:
                                xbins=dict(size=xbinsize),
                                ybins=dict(size=ybinsize),
                                **kwargs)
-        fig.add_trace(trace)
+        fig.add_traces(trace, rows=row, cols=col)
 
         fig = self._apply_format_figure(fig, figsize, title,
                                         x_label, y_label, x_limit, y_limit,
-                                        axis_type='noline')
+                                        tick_size, axis_label_size,
+                                        axis_type='noline', margin=margin,
+                                        row=row, col=col)
 
         return fig
 
@@ -1558,22 +1835,29 @@ class PlotHelper:
                        x_array: np.ndarray,
                        y_array: np.ndarray,
                        colorscale: str = 'viridis',
+                       fill: bool = True,
                        zmin: float = None,
                        zmid: float = None,
                        zmax: float = None,
                        robust_z: bool = False,
+                       width: float = 0.5,
                        xbinsize: float = None,
                        ybinsize: float = None,
                        histfunc: str = 'count',
                        histnorm: str = "",
                        figure: Union[go.Figure, go.FigureWidget] = None,
                        figsize: Tuple[int] = (None, None),
+                       margin: str = 'auto',
                        title: str = None,
                        x_label: str = None,
                        y_label: str = None,
                        x_limit: Tuple[float] = None,
                        y_limit: Tuple[float] = None,
+                       tick_size: float = None,
+                       axis_label_size: float = None,
                        widget: bool = False,
+                       row: int = None,
+                       col: int = None,
                        **kwargs
                        ) -> Union[go.Figure, go.FigureWidget]:
         """
@@ -1590,6 +1874,8 @@ class PlotHelper:
             "Blackbody", "Bluered", "Blues", "Cividis", "Earth", "Electric",
             "Greens", "Greys", "Hot", "Jet", "Picnic", "Portland", "Rainbow",
             "RdBu", "Reds", "Viridis", "YlGnBu", and "YlOrRd".
+        :param fill: If True, space between contour lines is filled with color,
+            otherwise, only the lines are colored.
         :param zmin: Sets the lower bound of the color domain. If given, zmax
             must also be given.
         :param zmid: Sets the midpoint of the color domain by setting zmin and
@@ -1598,6 +1884,7 @@ class PlotHelper:
             must also be given.
         :param robust_z: If True, uses percentiles to set zmin and zmax instead
             of extremes of the dataset.
+        :param width: Width of the contour lines.
         :param xbinsize: Size of the bins along the x-axis.
         :param ybinsize: Size of the bins along the y-axis.
         :param histfunc: Specifies the binning function used for
@@ -1621,6 +1908,9 @@ class PlotHelper:
             the plot instead of a blank figure.
         :param figsize: Height and width of the plot in pixels. Must be a tuple
             of length two. To leave height or width unchanged, set as None.
+        :param margin: Set the size of the margins. If 'auto', all margins
+            are set to defualt values. If 'zero' or 'tight', margins are
+            removed. If a number is given, sets all margins to that number.
         :param title: Title to add to the plot
         :param x_label: Label of the x-axis
         :param y_label: Label of the y-axis
@@ -1630,8 +1920,18 @@ class PlotHelper:
         :param y_limit: Initial limits for the y-axis. Can be changed if
             the plot is saved as an HTML object. Only applies if orientation
             is veritcal.
+        :param tick_size: Size of the font of the axis tick labels.
+        :param axis_label_size: Size of the font of the axis label.
         :param widget: If True, returns a go.FigureWidget object instead of
             a go.Figure object.
+        :param row: If Figure has multiple subplots, specifies which row
+            to use for the plot. Indexing starts at 1. Note that some
+            formatting args (such as figsize) may still be applied to all
+            subplots. Both row and col must be provided together.
+        :param col: If Figure has multiple subplots, specifies which
+            col to use for the plot. Indexing starts at 1. Note that some
+            formatting args (such as figsize) may still be applied to all
+            subplots. Both row and col must be provided together.
         :param kwargs: Passed to go.Heatmap2dContour
 
         :return: Figure object
@@ -1651,23 +1951,36 @@ class PlotHelper:
             zmax = np.nanpercentile(_arr, 98)
             zmid = None
 
+        if fill:
+            contours = {'coloring': 'fill'}
+        else:
+            contours = {'coloring': 'lines'}
+        line = {'width': width}
+
         # Build the figure and plot the contours
-        if figure: fig = figure
-        elif widget: fig = go.FigureWidget()
-        else: fig = go.Figure()
+        if figure:
+            fig = figure
+        elif widget:
+            fig = go.FigureWidget()
+        else:
+            fig = go.Figure()
+
         trace = go.Histogram2dContour(x=x_array, y=y_array,
                                       colorscale=colorscale,
+                                      contours=contours, line=line,
                                       histfunc=histfunc,
                                       histnorm=histnorm,
                                       zmin=zmin, zmid=zmid, zmax=zmax,
                                       xbins=dict(size=xbinsize),
                                       ybins=dict(size=ybinsize),
                                       **kwargs)
-        fig.add_trace(trace)
+        fig.add_traces(trace, rows=row, cols=col)
 
         fig = self._apply_format_figure(fig, figsize, title,
                                         x_label, y_label, x_limit, y_limit,
-                                        axis_type='noline')
+                                        tick_size, axis_label_size,
+                                        axis_type='noline', margin=margin,
+                                        row=row, col=col)
 
         return fig
 
@@ -1769,7 +2082,7 @@ class PlotHelper:
                     background = go.Scatter(x=time, y=trace, line=line_kwargs,
                                             showlegend=False, mode='lines',
                                             **kwargs)
-                    fig.add_trace(background, row=r, col=c)
+                    fig.add_traces(background, row=r, col=c)
 
                     # Plot regions of the traces that will be different colors
                     for carr, thres in zip(color_arrays, color_thres):
@@ -1781,7 +2094,7 @@ class PlotHelper:
                                             line=line_kwargs,
                                             showlegend=False, mode='lines',
                                             **kwargs)
-                        fig.add_trace(ctrace, row=r, col=c)
+                        fig.add_traces(ctrace, row=r, col=c)
 
                     trace_idx += 1
                 except IndexError:

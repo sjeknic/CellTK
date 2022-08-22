@@ -104,6 +104,30 @@ class Process(BaseProcess):
 
         return flat_outputs
 
+    @ImageHelper(by_frame=False, as_tuple=True)
+    def crop_to_area(self,
+                     image: Image[Optional] = tuple([]),
+                     mask: Mask[Optional] = tuple([]),
+                     crop_factor: float = 0.6
+                     ) -> Stack:
+        """
+        """
+        flat_inputs = image + mask
+        sizes = [s.shape for s in flat_inputs]
+        assert len(tuple(groupby(sizes))) == 1, 'Stacks must be same shape'
+        _, x, y = sizes[0]
+
+        axis_factor = crop_factor ** 0.5
+        x_amount = np.floor((axis_factor * x) / 2)
+        y_amount = np.floor((axis_factor * y) / 2)
+        crop_vals = (int(x_amount), int(y_amount))
+
+        out = [crop_array(f, crop_vals) for f in flat_inputs]
+        out = [crop_array(f, (-1 * crop_vals[0], -1 * crop_vals[1]))
+               for f in out]
+
+        return out
+
     @ImageHelper(by_frame=True, as_tuple=True)
     def tile_images(self,
                     image: Image[Optional] = tuple([]),

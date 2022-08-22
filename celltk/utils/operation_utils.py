@@ -655,19 +655,12 @@ def shift_array(array: np.ndarray,
 
 def crop_array(array: np.ndarray,
                crop_vals: Tuple[int] = None,
-               crop_area: float = 0.6
                ) -> np.ndarray:
     """Crops an image to the specified dimensions.
 
     TODO:
-        - crop_vals is None - use crop area to calc crop vals
         - There must be a much neater way to write this function
-        - Incorporate crop_area
     """
-    if crop_vals is None:
-        # TODO: calculate crop coordinates for area
-        pass
-
     y, x = crop_vals
 
     if y == 0 and x == 0:
