@@ -1,5 +1,6 @@
 import itertools
 import functools
+import warnings
 from copy import deepcopy
 from typing import Collection, Union, Callable, Generator, Tuple
 
@@ -1058,7 +1059,7 @@ class PlotHelper:
             the estimators. Normalizes the error as well. Can be 'minmax' or
             'maxabs', or a callable that inputs an array and outputs an array
             of the same shape.
-        :param nbins: Maximum number of bins allowed. Ignored if
+        :param nbins: Approximate number of bins to use. Ignored if
             binsize is set.
         :param binsize: Size of each bin.
         :param bargap: Gap between bars in adjacent locations.
@@ -1135,7 +1136,14 @@ class PlotHelper:
         :raises AssertionError: If figsize is not a tuple of length two.
 
         TODO:
-            - Add NORMALIZATION of the KDEs
+            - Normalization of KDEs is slighlty imprecise. This is due to not
+              having the exact bins from go.Histogram. So a new histogram is
+              calculated with np.histogram. They, for whatever reason, don't
+              line up exactly. In order to change this, the histogram should
+              be calculated with np.histogram and the plot should be made
+              using go.Bar. This is not high priority, as the bins are very
+              close. There might even be a way to pre-calculate exactly the
+              bins that go.Histogram will use, using np.linspace.
         """
         # Format data
         arrays = self._format_arrays(arrays)
@@ -1180,13 +1188,17 @@ class PlotHelper:
             line_kwargs.update({'color': _c})
             cum_kwargs = {'enabled': cumulative}
 
+            # nbins refers to MAX number of bins, so to keep things
+            # consistent for the kde, re-calculate the bins
+            if nbins and not binsize:
+                binsize = (np.nanmax(arr) - np.nanmin(arr)) / nbins
+
             # Make individual distributions on the plot
             if include_histogram:
                 trace = go.Histogram(x=x, y=y, name=key, legendgroup=key,
                                      histfunc=histfunc, histnorm=histnorm,
                                      orientation=orientation,
                                      cumulative=cum_kwargs,
-                                     nbinsx=nbins, nbinsy=nbins,
                                      xbins=dict(size=binsize),
                                      ybins=dict(size=binsize),
                                      marker=marker_kwargs,
@@ -1195,6 +1207,11 @@ class PlotHelper:
 
             # Estimate and plot KDE
             if include_kde:
+                if histfunc != 'count':
+                    warnings.warn('KDE not supported for histogram '
+                                  f'function {histfunc}.')
+                    break
+
                 data = arr[~np.isnan(arr)]
 
                 # Set up the KDE estimator
@@ -1207,7 +1224,7 @@ class PlotHelper:
                     extend_kde = 0
                 left = data.min() - kde.factor * extend_kde
                 right = data.max() + kde.factor * extend_kde
-                num = 100 if nbins is None else max(nbins, 100)
+                num = np.ceil((data.max() - data.min()) / binsize).astype(int)
                 support = np.linspace(left, right, num)
 
                 # Calculate the estimated kernel density
@@ -1216,6 +1233,27 @@ class PlotHelper:
                                          for s in support])
                 else:
                     kde_line = kde.evaluate(support)
+
+                # In order to scale kde, calculate new histogram
+                if histnorm != 'probability density':
+                    hist, edges = np.histogram(data, num, density=False)
+
+                    if histnorm in ("probability",):
+                        hist = hist.astype(float) / hist.sum()
+                    elif histnorm in ("percent",):
+                        hist = hist.astype(float) / hist.sum() * 100
+                    elif histnorm in ("density",):
+                        hist = hist.astype(float) / np.diff(edges)
+
+                    if cumulative:
+                        if histnorm in ("probability", "percent", ""):
+                            hist = hist.cumsum()
+                        elif histnorm in ("density",):
+                            hist = (hist * np.diff(edges)).cumsum()
+
+                        kde_line *= hist.max()
+                    else:
+                        kde_line *= (hist * np.diff(edges)).sum()
 
                 if orientation in ('v', 'vertical'):
                     x = support
