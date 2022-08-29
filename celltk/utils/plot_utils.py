@@ -1224,6 +1224,12 @@ class PlotHelper:
                     extend_kde = 0
                 left = data.min() - kde.factor * extend_kde
                 right = data.max() + kde.factor * extend_kde
+                if not binsize:
+                    if include_histogram:
+                        warnings.warn('Set the binsize or number of bins to'
+                                      ' ensure consistent KDE estimation.')
+                    binsize = (data.max() - data.min()) / 100
+
                 num = np.ceil((data.max() - data.min()) / binsize).astype(int)
                 support = np.linspace(left, right, num)
 
