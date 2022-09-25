@@ -1,10 +1,11 @@
 """Unmerges masks of multiple merged objects"""
 from itertools import product
 
-import cvxopt
+# sjeknic(20220924 changed to kvxopt instead of cvxopt)
+import kvxopt
 import numpy as np
-from cvxopt import glpk
-from cvxopt.glpk import ilp as int_lin_prog
+from kvxopt import glpk
+from kvxopt.glpk import ilp as int_lin_prog
 from scipy.ndimage.morphology import distance_transform_edt
 from skimage.morphology import disk
 from skimage.segmentation import watershed
@@ -83,7 +84,7 @@ def find_best_matches(seed_points, object_centers):
                                                                 np.arange(len(seed_points))))}
     index_edge_variables = {v[0]: k for k, v in edge_variables.items()}
     n_variables = len(edge_variables)
-    costs = cvxopt.matrix([edge_variables[index_key][1]
+    costs = kvxopt.matrix([edge_variables[index_key][1]
                            for index_key in sorted(edge_variables.keys())])
 
     # optim problem: each object center needs to be assigned to a seed point
@@ -94,7 +95,7 @@ def find_best_matches(seed_points, object_centers):
                       for i_obj in range(len(object_centers))
                       for j_point in range(len(seed_points))]
     ind_i, ind_j = list(zip(*matrix_indices))
-    eq_constraints = cvxopt.spmatrix(1, ind_i, ind_j,
+    eq_constraints = kvxopt.spmatrix(1, ind_i, ind_j,
                                      (len(object_centers),
                                       len(index_edge_variables)))
     b_eq = len(object_centers) * [1]
@@ -105,26 +106,26 @@ def find_best_matches(seed_points, object_centers):
                       for i_point in range(len(seed_points))
                       for j_obj in range(len(object_centers))]
     ind_i, ind_j = list(zip(*matrix_indices))
-    in_flow = cvxopt.spmatrix(1, ind_i, ind_j,
+    in_flow = kvxopt.spmatrix(1, ind_i, ind_j,
                               (len(seed_points),
                                len(index_edge_variables)))
     ieq_constraints.append(in_flow)
     b_ieq = [1] * len(seed_points)
 
-    upper_border = cvxopt.spmatrix(1, range(n_variables),
+    upper_border = kvxopt.spmatrix(1, range(n_variables),
                                    range(n_variables), (n_variables, n_variables))
     ieq_constraints.append(upper_border)
     b_ieq.extend([1] * n_variables)
-    lower_border = cvxopt.spmatrix(-1, range(n_variables),
+    lower_border = kvxopt.spmatrix(-1, range(n_variables),
                                    range(n_variables), (n_variables, n_variables))
     ieq_constraints.append(lower_border)
     b_ieq.extend([0] * n_variables)
 
     integer_vars = set(edge_variables.keys())
-    status, x = int_lin_prog(costs, cvxopt.sparse(ieq_constraints),
-                             cvxopt.matrix(b_ieq, tc='d'),
-                             cvxopt.sparse(eq_constraints),
-                             cvxopt.matrix(b_eq, tc='d'), integer_vars)
+    status, x = int_lin_prog(costs, kvxopt.sparse(ieq_constraints),
+                             kvxopt.matrix(b_ieq, tc='d'),
+                             kvxopt.sparse(eq_constraints),
+                             kvxopt.matrix(b_eq, tc='d'), integer_vars)
 
     result = [edge_variables[id_variable][0]
               for id_variable, var_value in enumerate(x) if var_value > 0]
@@ -147,7 +148,7 @@ def match_pred_succ(predecessors, successors):
                                                                 np.arange(len(predecessors))))}
     index_edge_variables = {v[0]: k for k, v in edge_variables.items()}
     n_variables = len(edge_variables)
-    costs = cvxopt.matrix([edge_variables[index_key][1]
+    costs = kvxopt.matrix([edge_variables[index_key][1]
                            for index_key in sorted(edge_variables.keys())])
     # optim problem: each successor needs to be assigned to a predecessor
     # and at most two successors are assigned to a predecessor,
@@ -158,7 +159,7 @@ def match_pred_succ(predecessors, successors):
                       for i_obj in range(len(successors))
                       for j_point in range(len(predecessors))]
     ind_i, ind_j = list(zip(*matrix_indices))
-    eq_constraints = cvxopt.spmatrix(1, ind_i, ind_j, (len(successors), len(index_edge_variables)))
+    eq_constraints = kvxopt.spmatrix(1, ind_i, ind_j, (len(successors), len(index_edge_variables)))
     b_eq = len(successors) * [1]
 
     # ieq constraints: assign predecessors at least one, at most two successors
@@ -167,22 +168,22 @@ def match_pred_succ(predecessors, successors):
                       for i_point in range(len(predecessors))
                       for j_obj in range(len(successors))]
     ind_i, ind_j = list(zip(*matrix_indices))
-    in_flow_min = cvxopt.spmatrix(-1, ind_i, ind_j, (len(predecessors), len(index_edge_variables)))
+    in_flow_min = kvxopt.spmatrix(-1, ind_i, ind_j, (len(predecessors), len(index_edge_variables)))
     ieq_constraints.append(in_flow_min)
     b_ieq = [-1] * len(predecessors)
 
-    upper_border = cvxopt.spmatrix(1, range(n_variables), range(n_variables), (n_variables, n_variables))
+    upper_border = kvxopt.spmatrix(1, range(n_variables), range(n_variables), (n_variables, n_variables))
     ieq_constraints.append(upper_border)
     b_ieq.extend([1] * n_variables)
-    lower_border = cvxopt.spmatrix(-1, range(n_variables), range(n_variables), (n_variables, n_variables))
+    lower_border = kvxopt.spmatrix(-1, range(n_variables), range(n_variables), (n_variables, n_variables))
     ieq_constraints.append(lower_border)
     b_ieq.extend([0] * n_variables)
 
     integer_vars = set(edge_variables.keys())
-    status, x = int_lin_prog(costs, cvxopt.sparse(ieq_constraints),
-                             cvxopt.matrix(b_ieq, tc='d'),
-                             cvxopt.sparse(eq_constraints),
-                             cvxopt.matrix(b_eq, tc='d'), integer_vars)
+    status, x = int_lin_prog(costs, kvxopt.sparse(ieq_constraints),
+                             kvxopt.matrix(b_ieq, tc='d'),
+                             kvxopt.sparse(eq_constraints),
+                             kvxopt.matrix(b_eq, tc='d'), integer_vars)
 
     result = [edge_variables[id_variable][0]
               for id_variable, var_value in enumerate(x)
