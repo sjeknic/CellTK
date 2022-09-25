@@ -28,7 +28,7 @@ setuptools.setup(
     install_requires=[
         'setuptools>=41.2.0',
         'tensorflow>=2.7.0,<2.9.0 ; platform_machine != "arm64"',
-        'tensorflow-macos>=2.7.0<2.9.0 ; platform_machine == "arm64"'
+        'tensorflow-macos>=2.7.0<2.9.0 ; platform_machine == "arm64"',
         'numpy>=1.20,<1.23',  # Upper bound on version is from umap-learn?
         'scipy>=1.6.3',
         'scikit_learn>=1.0.1',
