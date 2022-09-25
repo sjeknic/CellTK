@@ -5,7 +5,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setuptools.setup(
     name="celltk",
-    version="0.4.3",
+    version="0.4.3b1",
     author="Stevan Jeknic",
     author_email="sjeknic@stanford.edu",
     description="A tool kit for working with large amounts of live-cell microscopy data.",
@@ -28,7 +28,7 @@ setuptools.setup(
     install_requires=[
         'setuptools>=41.2.0',
         'tensorflow>=2.7.0,<2.9.0 ; platform_machine != "arm64"',
-        'tensorflow-macos>=2.7.0<2.9.0 ; platform_machine == "arm64"',
+        'tensorflow-macos>=2.7.0,<2.9.0 ; platform_machine == "arm64"',
         'numpy>=1.20,<1.23',  # Upper bound on version is from umap-learn?
         'scipy>=1.6.3',
         'scikit_learn>=1.0.1',
@@ -36,7 +36,7 @@ setuptools.setup(
         'matplotlib>=3.4.1',
         'plotly>=5.6.0',
         'pandas>=1.3.1',
-        'cvxopt~=1.2.7',
+        'kvxopt~=1.3.0.2',
         'gurobipy>=9.5.0',
         'h5py>=3.6.0',
         'imageio>=2.13.0',
@@ -45,9 +45,9 @@ setuptools.setup(
         'PyYAML>=6.0',
         'SimpleITK>=2.1.1',
         'tifffile>=2021.11.2',
-        'btrack>=0.4.2',
+        'btrack==0.4.2',  # lbep not found with 0.4.6, fix later (20220925)
         'colorcet~=3.0.0',
         'seaborn~=0.11.2'
     ],
-    python_requires=">=3.8",
+    python_requires=">=3.9",
 )

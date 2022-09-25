@@ -19,8 +19,9 @@ class TestPipeline():
     _output_path = os.path.join(_img_path, '_output')
     _nuc_weight_path = os.path.join(par, 'config/unet_example_cell_weights.tf')
     _peak_weight_path = os.path.join(par, 'config/upeak_example_weights.tf')
+    _bayes_config_path = os.path.join(par, 'config/bayes_config.json')
 
-    def _make_operations(self):
+    def _make_operations(self, tracker=None):
 
         pro = ctk.Process(images=['channel000'], force_rerun=True)
         pro.add_function('unet_predict', weight_path=self._nuc_weight_path,
@@ -37,10 +38,16 @@ class TestPipeline():
                                       limits=[(25, 100), (0.85, 1.)])
 
         tra = ctk.Track(images=['channel000'], masks=['seg'], output='nuc', force_rerun=True)
-        tra.add_function('linear_tracker_w_properties',
-                                      properties=['centroid', 'total_intensity', 'area'],
-                                      weights=[1, 1, 1], mass_thres=0.2, displacement_thres=20)
-        tra.add_function('detect_cell_division')
+
+        if not tracker:
+            tra.add_function('linear_tracker_w_properties',
+                                          properties=['centroid', 'total_intensity', 'area'],
+                                          weights=[1, 1, 1], mass_thres=0.2, displacement_thres=20)
+            tra.add_function('detect_cell_division')
+        elif tracker == 'kit':
+            tra.add_function('kit_sch_ge_tracker')
+        elif tracker == 'btrack':
+            tra.add_function('bayesian_tracker', config_path=self._bayes_config_path)
 
         ex = ctk.Extract(images=['channel000', 'channel001'], masks=['nuc'],
                             channels=['tritc', 'fitc'], regions=['nuc'], force_rerun=True,
@@ -106,6 +113,28 @@ class TestPipeline():
         # Check that frame was skipped
         test_arr = iio.imread(os.path.join(self._output_path, 'nuc', 'mask2.tiff'))
         assert (test_arr == 0).all()
+
+    def _test_pipeline_kit(self):
+        # Test making pipeline and operations
+        pipe = ctk.Pipeline(parent_folder=self._img_path,
+                            output_folder=self._output_path,
+                            skip_frames=(2,))
+        ops = self._make_operations(tracker='kit')
+        pipe.add_operations(ops)
+
+        # Test running
+        pipe.run()
+
+    def test_pipeline_btrack(self):
+        # Test making pipeline and operations
+        pipe = ctk.Pipeline(parent_folder=self._img_path,
+                            output_folder=self._output_path,
+                            skip_frames=(2,))
+        ops = self._make_operations(tracker='btrack')
+        pipe.add_operations(ops)
+
+        # Test running
+        pipe.run()
 
     def test_orchestrator(self):
 
