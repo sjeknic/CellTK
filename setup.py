@@ -5,7 +5,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setuptools.setup(
     name="celltk",
-    version="0.4.3",
+    version="0.4.3b1",
     author="Stevan Jeknic",
     author_email="sjeknic@stanford.edu",
     description="A tool kit for working with large amounts of live-cell microscopy data.",
