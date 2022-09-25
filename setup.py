@@ -5,7 +5,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setuptools.setup(
     name="celltk",
-    version="0.4.3",
+    version="0.4.2",
     author="Stevan Jeknic",
     author_email="sjeknic@stanford.edu",
     description="A tool kit for working with large amounts of live-cell microscopy data.",
@@ -27,8 +27,7 @@ setuptools.setup(
     include_package_data=True,
     install_requires=[
         'setuptools>=41.2.0',
-        'tensorflow>=2.7.0,<2.9.0 ; platform_machine != "arm64"',
-        'tensorflow-macos>=2.7.0<2.9.0 ; platform_machine == "arm64"'
+        'tensorflow>=2.7.0,<2.9.0',
         'numpy>=1.20,<1.23',  # Upper bound on version is from umap-learn?
         'scipy>=1.6.3',
         'scikit_learn>=1.0.1',
