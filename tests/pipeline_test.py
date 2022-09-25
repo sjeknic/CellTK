@@ -114,7 +114,7 @@ class TestPipeline():
         test_arr = iio.imread(os.path.join(self._output_path, 'nuc', 'mask2.tiff'))
         assert (test_arr == 0).all()
 
-    def test_pipeline_kit(self):
+    def _test_pipeline_kit(self):
         # Test making pipeline and operations
         pipe = ctk.Pipeline(parent_folder=self._img_path,
                             output_folder=self._output_path,
