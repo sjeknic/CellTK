@@ -1,10 +1,5 @@
-try:
-    from tensorflow.keras.models import load_model
-    from tensorflow.keras.utils import get_file
-    import tensorflow as tf
-except ImportError:
-    raise ImportError('Did not find tensorflow. At installation, use '
-                      'pip install celltk2[default] or pip install celltk2[m1]')
+from tensorflow.keras.models import load_model
+from tensorflow.keras.utils import get_file 
 import os
 import numpy as np
 from skimage.feature import shape_index
@@ -13,7 +8,7 @@ from skimage.feature import shape_index
 #  Fixed update path (sjeknic 20220331)
 from celltk.external.misic.utils import *
 from celltk.external.misic.extras import *
-
+import tensorflow as tf
 
 
 class MiSiC():
