@@ -45,7 +45,7 @@ setuptools.setup(
         'PyYAML>=6.0',
         'SimpleITK>=2.1.1',
         'tifffile>=2021.11.2',
-        'btrack>=0.4.2',
+        'btrack==0.4.2',  # lbep not found with 0.4.6, fix later (20220925)
         'colorcet~=3.0.0',
         'seaborn~=0.11.2'
     ],
