@@ -10,13 +10,17 @@ import skimage.feature as feat
 import skimage.util as util
 import sklearn.preprocessing as preproc
 from sklearn.preprocessing import MinMaxScaler, MaxAbsScaler
-from tensorflow.keras.layers import (Conv1D, MaxPooling1D, UpSampling1D,
-                                     Conv2D, MaxPooling2D, UpSampling2D,
-                                     BatchNormalization, Input, Activation,
-                                     Concatenate, Layer)
-from tensorflow.keras import backend as K
-from keras.layers.advanced_activations import LeakyReLU
-import tensorflow.keras.models
+try:
+    from tensorflow.keras.layers import (Conv1D, MaxPooling1D, UpSampling1D,
+                                         Conv2D, MaxPooling2D, UpSampling2D,
+                                         BatchNormalization, Input, Activation,
+                                         Concatenate, Layer)
+    from tensorflow.keras import backend as K
+    from keras.layers.advanced_activations import LeakyReLU
+    import tensorflow.keras.models
+except ImportError:
+    raise ImportError('Did not find tensorflow. At installation, use '
+                      'pip install celltk2[default] or pip install celltk2[m1]')
 import celltk.external.misic.extras as miext
 import celltk.external.misic.utils as miutil
 
