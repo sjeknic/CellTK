@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "celltk2"
-version = "0.4.3b1"
+version = "0.4.3b2"
 authors = [{name="sjeknic", email="sjeknic@stanford.edu"}]
 description = "A toolkit for analysis of live-cell microscopy images"
 readme = "README.md"

@@ -3,9 +3,6 @@ import warnings
 from typing import Tuple, Collection
 
 import numpy as np
-import btrack
-import btrack.utils as butils
-import btrack.constants as bconstants
 import skimage.measure as meas
 import skimage.segmentation as segm
 import scipy.optimize as opti
@@ -27,11 +24,21 @@ from celltk.utils.metric_utils import total_intensity
 import celltk.utils.metric_utils as metric_utils
 
 # Tracking algorithm specific imports
-from celltk.external.kit_sch_ge.tracker.extract_data import get_indices_pandas
-from celltk.utils.kit_sch_ge_utils import (TrackingConfig, MultiCellTracker,
-                                           ExportResults)
-from celltk.utils.bayes_utils import (bayes_extract_tracker_data,
-                                      bayes_update_mask)
+try:
+    from celltk.external.kit_sch_ge.tracker.extract_data import get_indices_pandas
+    from celltk.utils.kit_sch_ge_utils import (TrackingConfig, MultiCellTracker,
+                                               ExportResults)
+except ImportError:
+    warnings.warn('kit_sch_ge not found. kit_sch_ge_tracker not available.')
+
+try:
+    import btrack
+    import btrack.utils as butils
+    import btrack.constants as bconstants
+    from celltk.utils.bayes_utils import (bayes_extract_tracker_data,
+                                          bayes_update_mask)
+except ImportError:
+    warnings.warn('btrack not found. bayesian_tracker not available.')
 
 
 class Track(BaseTrack):
@@ -492,6 +499,13 @@ class Track(BaseTrack):
 
         .. _Katharina Loeffler and colleagues: https://git.scc.kit.edu/KIT-Sch-GE/2021-cell-tracking
         """
+        # Check the kit_sch_ge is loaded
+        try:
+            ExportResults
+        except NameError:
+            raise NameError('kit_sch_ge not found. Use pip '
+                            'install celltk2[kit] to install.')
+
         # If nothing is in mask, return an empty stack
         if not mask.sum():
             return np.zeros_like(mask)
@@ -558,6 +572,13 @@ class Track(BaseTrack):
             - Add display with navari
             - Supress output with stdout_redirected()
         """
+        # Check that btrack is loaded
+        try:
+            bconstants
+        except NameError:
+            raise NameError('btrack not found. Use pip install '
+                            'celltk2[btrack] to install.')
+
         # Convert mask to useable objects in btrack
         objects = butils.segmentation_to_objects(mask,
                                                  use_weighted_centroid=False)
