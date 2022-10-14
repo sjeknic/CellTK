@@ -15,7 +15,11 @@ from tensorflow.keras.layers import (Conv1D, MaxPooling1D, UpSampling1D,
                                      BatchNormalization, Input, Activation,
                                      Concatenate, Layer)
 from tensorflow.keras import backend as K
-from keras.layers.advanced_activations import LeakyReLU
+try:
+    from keras.layers.advanced_activations import LeakyReLU
+except ImportError:
+    # Needed for compatibility with new keras versions
+    from keras.layers.activation.leaky_relu import LeakyReLU
 import tensorflow.keras.models
 import celltk.external.misic.extras as miext
 import celltk.external.misic.utils as miutil
