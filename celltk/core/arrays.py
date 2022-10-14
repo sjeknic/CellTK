@@ -1145,7 +1145,7 @@ class ExperimentArray:
 
         # Save arrays if given
         if arrays is not None:
-            [self.__setitem__(None, a) for a in arrays]
+            [self.__setitem__(a.name, a) for a in arrays]
 
         # Build dictionary for saving masks
         self.masks = {k: {} for k in self.sites}
