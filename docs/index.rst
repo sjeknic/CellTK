@@ -8,7 +8,7 @@
 Welcome to CellTK2!
 ===================
 
-CellTK is collection of tools to simplify working with live-cell and fixed-cell microscopy data. It contains tools for segmenting, tracking, and analyzing images of both mammalian cells and bacterial microcolonies. Once the data are extracted, CellTK further includes, among others, tools for filtering data, building plots, finding peaks, and calculating mutual information. These tools can be used as stand-alone functions or as part of a larger analysis pipeline. More tools are on the way, and if there is anything you would like to see added, please create an issue on github.
+CellTK is collection of tools to simplify working with live-cell and fixed-cell microscopy data. It contains tools for segmenting, tracking, and analyzing images of both mammalian cells and bacterial microcolonies. Once the data are extracted, CellTK further includes, among others, tools for filtering data, building plots, and finding peaks. These tools can be used as stand-alone functions or as part of a larger analysis pipeline. More tools are on the way, and if there is anything you would like to see added, please create an issue on github.
 
 
 Installation
@@ -17,7 +17,22 @@ The easiest way to install CellTK is to use pip.
 
 | ``pip install celltk2``
 
-That's it! You should be good to go. If you run into any problems, please open an issue on github.
+To install BayesianTracker_
+
+| ``pip install celltk2[btrack]``
+
+Note: If you are using a Mac with Apple silicon processor, you may run into some issues with this installation. Your best bet may be to try to use conda to install cvxopt before doing the pip install above.
+
+To install graph-based tracking_ method:
+
+| ``pip install celltk2[kit]``
+
+If you run into any problems, please open an issue.
+
+
+Acknowledgments
+---------------
+This would not be possible without the original CellTK: [https://github.com/braysia/CellTK](https://github.com/braysia/CellTK)
 
 
 .. toctree::
@@ -38,3 +53,6 @@ Indices and tables
 * :ref:`genindex`
 * :ref:`modindex`
 * :ref:`search`
+
+.. _BayesianTracker: https://github.com/quantumjot/BayesianTracker
+.. _tracking: https://git.scc.kit.edu/KIT-Sch-GE/2021-cell-tracking
