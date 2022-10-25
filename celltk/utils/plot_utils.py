@@ -1869,7 +1869,7 @@ class PlotHelper:
 
         fig = self._apply_format_figure(fig, figsize, title,
                                         x_label, y_label, x_limit, y_limit,
-                                        tick_size, axis_label_size,
+                                        False, tick_size, axis_label_size,
                                         axis_type='noline', margin=margin,
                                         row=row, col=col)
 
@@ -2022,7 +2022,7 @@ class PlotHelper:
 
         fig = self._apply_format_figure(fig, figsize, title,
                                         x_label, y_label, x_limit, y_limit,
-                                        tick_size, axis_label_size,
+                                        False, tick_size, axis_label_size,
                                         axis_type='noline', margin=margin,
                                         row=row, col=col)
 
@@ -2126,7 +2126,7 @@ class PlotHelper:
                     background = go.Scatter(x=time, y=trace, line=line_kwargs,
                                             showlegend=False, mode='lines',
                                             **kwargs)
-                    fig.add_traces(background, row=r, col=c)
+                    fig.add_traces(background, rows=r, cols=c)
 
                     # Plot regions of the traces that will be different colors
                     for carr, thres in zip(color_arrays, color_thres):
@@ -2138,7 +2138,7 @@ class PlotHelper:
                                             line=line_kwargs,
                                             showlegend=False, mode='lines',
                                             **kwargs)
-                        fig.add_traces(ctrace, row=r, col=c)
+                        fig.add_traces(ctrace, rows=r, cols=c)
 
                     trace_idx += 1
                 except IndexError:
