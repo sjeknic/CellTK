@@ -16,8 +16,12 @@ class Evaluate(BaseEvaluate):
                         track: Mask,
                         array: Array
                         ) -> Mask:
-        """Creates a track from the input track
-        that only includes the cells that are present in array."""
+        """Creates a mask from the input track
+        that only includes the cells that are present in array.
+
+        :param track:
+        :param array: ConditionArray containing lineage information
+        """
         # Figure out all the cells that were kept
         kept_cells = np.unique(array[:, :, 'label']).astype(int)
 
@@ -48,6 +52,14 @@ class Evaluate(BaseEvaluate):
         """
         Crops a window around the coordinates of a single cell
         in array.
+
+        :param image:
+        :param array:
+        :param cell_id:
+        :param position_id:
+        :param window_size:
+        :param region:
+        :param channel:
         """
         # Simpler if it's limited to even numbers only
         assert all([not (w % 2) for w in window_size])
@@ -93,7 +105,13 @@ class Evaluate(BaseEvaluate):
                        boundaries: bool = False,
                        mode: str = 'inner'
                        ) -> Image:
-        """Overlays the labels of objects over the reference image."""
+        """Overlays the labels of objects over the reference image.
+
+        :param image:
+        :param track:
+        :param boundaries:
+        :param mode:
+        """
         if (track < 0).any():
             track = track_to_mask(track)
         if boundaries:

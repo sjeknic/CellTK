@@ -148,7 +148,7 @@ class Segment(BaseSegment):
                                 image: Image = None,
                                 ) -> Mask:
         """Removes objects from a labeled image based on shape properties.
-        Acceptable properties are ones available for
+        Accepted properties are ones available for
         skimage.measure.regionprops.
 
         :param mask:
@@ -200,10 +200,11 @@ class Segment(BaseSegment):
         """Labels pixels above or below a threshold value.
 
         :param image:
-        :param thres:
-        :param negative:
+        :param thres: Threshold value to use
+        :param negative: If True, labels pixels below thres
         :param connectivity:
-        :param relative:
+        :param relative: If True, threshold is set relative
+            to maximum pixel value in image.
 
         :return: Labeled binary mask
         """
@@ -253,8 +254,9 @@ class Segment(BaseSegment):
         :param image:
         :param nbins:
         :param connectivity:
-        :param buffer:
-        :param fill_holes:
+        :param buffer: Adjust threshold value by a specific buffer.
+        :param fill_holes: If True, applies binary fill hole operation after
+            thresholding
 
         :return:
         """
@@ -282,11 +284,11 @@ class Segment(BaseSegment):
         only returning some of the classes.
 
         :param image:
-        :param classes:
+        :param classes: Which classes to be included in final image.
         :param roi:
         :param nbins:
         :param hist:
-        :param binarize:
+        :param binarize: If True, a binary image is returned.
 
         :return:
         """
@@ -390,8 +392,9 @@ class Segment(BaseSegment):
         filters, can be used.
 
         :param mask:
-        :param filters:
-        :param kwargs:
+        :param filters: List of filters from SimpleITK to apply.
+        :param kwargs: List of dictionaries containing the kwargs for
+            the selected filters. Length must equal length of filters.
 
         :return:
         """
@@ -895,7 +898,9 @@ class Segment(BaseSegment):
         which holes are holes in a larger object.
 
         :param mask:
-        :param fill_border:
+        :param fill_border: If True, attempts to fill holes on boundary
+            of image. Note, there is ambiguity in defining a hole on
+            the boundary.
         :param iterations:
         :parma kernel_radius:
         :param max_length:
@@ -1034,7 +1039,17 @@ class Segment(BaseSegment):
                              multiplier: float = 4.5,
                              iterations: int = 10
                              ) -> Mask:
-        """"""
+        """Uses mean and variance to connect pixels that are within a
+        specified window (multiplier) of the values in the seed region.
+
+        :param image:
+        :param seeds:
+        :param radius:
+        :param multiplier:
+        :param iterations:
+
+        :return:
+        """
         # Set up filter
         fil = sitk.ConfidenceConnectedImageFilter()
         fil.SetMultiplier(multiplier)
@@ -1144,14 +1159,14 @@ class Segment(BaseSegment):
 
     @ImageHelper(by_frame=False, as_tuple=True)
     def label_by_voting(self,
-                        mask: Mask,
+                        masks: Mask,
                         label_undecided: int = 0
                         ) -> Mask:
         """Applies a voting algorithm to determine the value
         of each pixel. Can be used to get the combined result
         from multiple masks.
 
-        :param mask:
+        :param masks: List of masks to use in voting.
         :param label_undecided:
 
         :return:
@@ -1161,7 +1176,7 @@ class Segment(BaseSegment):
         fil.SetLabelForUndecidedPixels(label_undecided)
 
         # Get the images
-        imgs = [sitk.GetImageFromArray(m) for m in mask]
+        imgs = [sitk.GetImageFromArray(m) for m in masks]
         imgs = [cast_sitk(i, 'sitkUInt16') for i in imgs]
         if len(imgs) > 5:
             mask = fil.Execute(imgs)

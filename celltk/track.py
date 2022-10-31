@@ -145,8 +145,13 @@ class Track(BaseTrack):
         thresholds on the distance and difference in intensity for
         two linked objects.
 
-        TODO:
-            - Include custom thresholds for the properties
+        :param image:
+        :param mask:
+        :param properties:
+        :param weights:
+        :param thresholds:
+        :param displacement_thres:
+        :param mass_thres:
         """
         # Get any properties in metric utils
         extra_props = []
@@ -480,7 +485,7 @@ class Track(BaseTrack):
 
         NOTE:
             - The underlying tracking algorithm was developed by
-              `Katharina Loeffler and colleagues`_.
+              `Katharina Loffler and colleagues`_.
 
         :param image: Image with intensity information
         :param mask: Mask with objects to be tracked
@@ -497,7 +502,7 @@ class Track(BaseTrack):
             - Add citation for kit sch ge
             - Add saving of lineage file (probably in a separate run_operation function)
 
-        .. _Katharina Loeffler and colleagues: https://git.scc.kit.edu/KIT-Sch-GE/2021-cell-tracking
+        .. _Katharina Loffler and colleagues: https://git.scc.kit.edu/KIT-Sch-GE/2021-cell-tracking
         """
         # Check the kit_sch_ge is loaded
         try:
@@ -555,7 +560,11 @@ class Track(BaseTrack):
                          update_method: str = 'exact',
                          ) -> Mask[np.int16]:
         """Wrapper for btrack, a Bayesian-based tracking algorithm.
-        Please see: https://github.com/quantumjot/BayesianTracker
+
+        NOTE:
+            - The underlying tracking algorithm was developed by `Ulicna
+            and colleagues`_.
+            Please see: https://github.com/quantumjot/BayesianTracker
 
         :param mask: Mask with objects to be segmented
         :param config_path: Path to configuration file. Must be JSON.
@@ -571,6 +580,8 @@ class Track(BaseTrack):
             - Speed up bayes_extract_tracker_data
             - Add display with navari
             - Supress output with stdout_redirected()
+
+        .. _Ulicna and colleagues: https://github.com/quantumjot/BayesianTracker
         """
         # Check that btrack is loaded
         try:

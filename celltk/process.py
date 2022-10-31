@@ -106,13 +106,19 @@ class Process(BaseProcess):
 
     @ImageHelper(by_frame=False, as_tuple=True)
     def crop_to_area(self,
-                     image: Image[Optional] = tuple([]),
-                     mask: Mask[Optional] = tuple([]),
+                     images: Image[Optional] = tuple([]),
+                     masks: Mask[Optional] = tuple([]),
                      crop_factor: float = 0.6
                      ) -> Stack:
+        """Crops provided images to a specifc area set by crop_factor.
+
+        :param images:
+        :param masks:
+        :param crop_factor:
+
+        :return:
         """
-        """
-        flat_inputs = image + mask
+        flat_inputs = images + masks
         sizes = [s.shape for s in flat_inputs]
         assert len(tuple(groupby(sizes))) == 1, 'Stacks must be same shape'
         _, x, y = sizes[0]
@@ -171,8 +177,7 @@ class Process(BaseProcess):
                         sigma: float = 2.5,
                         dtype: type = np.float32
                         ) -> Image:
-        """
-        Applies a multidimensional Gaussian filter to the image.
+        """Applies a multidimensional Gaussian filter to the image.
 
         :param image:
         :param sigma:
@@ -192,7 +197,11 @@ class Process(BaseProcess):
                       image: Image,
                       iterations: int = 7
                       ) -> Image:
-        """Applies a binomial blur to the image."""
+        """Applies a binomial blur to the image.
+
+        :param image:
+        :param iterations:
+        """
         fil = sitk.BinomialBlurImageFilter()
         fil.SetRepetitions(iterations)
 
@@ -204,8 +213,10 @@ class Process(BaseProcess):
                                 image: Image,
                                 sigma: float = 2.5,
                                 ) -> Image:
-        """
-        Multidimensional Laplace filter using Gaussian second derivatives.
+        """Multidimensional Laplace filter using Gaussian second derivatives.
+
+        :param image:
+        :param sigma:
 
         TODO:
             - Test applying to a stack with sigma = (s1, s1, 0)
@@ -220,7 +231,13 @@ class Process(BaseProcess):
                        mode: str = 'reflect',
                        cval: int = 0
                        ) -> Image:
-        """Applies a multidimensional uniform filter to the input image."""
+        """Applies a multidimensional uniform filter to the input image.
+
+        :param image:
+        :param size:
+        :param mode:
+        :param cval:
+        """
         return ndi.uniform_filter(image, size=size,
                                   mode=mode, cval=cval)
 
@@ -235,6 +252,13 @@ class Process(BaseProcess):
         """
         Estimate background intensity by rolling/translating a kernel, and
         subtract from the input image.
+
+        :param image:
+        :param radius:
+        :param kernel:
+        :param nansafe:
+        :param return_bg: If True, returns background instead of image
+            with background subtracted.
         """
         bg = rest.rolling_ball(image, radius=radius,
                                kernel=kernel, nansafe=nansafe)
@@ -258,6 +282,17 @@ class Process(BaseProcess):
         Applies N4 bias field correction to the image. Can optionally return
         the calculated log bias field, which can be applied to the image with
         ``Process.apply_log_bias_field``.
+
+        :param image:
+        :param mask:
+        :param iterations:
+        :param num_points:
+        :param histogram_bins:
+        :param spline_order:
+        :param subsample_factor: Amount to shrink image before calculating
+            log_bias_field. Speeds up calculation.
+        :param save_bias_field: If True, returns calculated log bias field
+            instead of corrected image.
         """
         # Check the inputs
         if (image < 1).any():
@@ -328,7 +363,11 @@ class Process(BaseProcess):
                              bias_field: Image
                              ) -> Image:
         """Applies a log bias field (for example, calculated using N4
-        bias illumination correction) to the input image."""
+        bias illumination correction) to the input image.
+
+        :param image:
+        :param bias_field:
+        """
         return image / np.exp(bias_field)
 
     @ImageHelper(by_frame=True)
@@ -339,7 +378,13 @@ class Process(BaseProcess):
                                         conductance: float = 1.
                                         ) -> Image:
         """Applies curvature anisotropic diffusion blurring to the image. Useful
-        for smoothing out noise, while preserving the edges of objects."""
+        for smoothing out noise, while preserving the edges of objects.
+
+        :param image:
+        :param iterations:
+        :param time_step:
+        :param conductance:
+        """
         # Set up the filter
         fil = sitk.CurvatureAnisotropicDiffusionImageFilter()
         fil.SetNumberOfIterations(iterations)
@@ -367,6 +412,10 @@ class Process(BaseProcess):
         Calculates gradients and inverts them on the range [0, 1],
         such that pixels close to borders have values close to 0, while
         all other pixels have values close to 1.
+
+        :param image:
+        :param alpha:
+        :param sigma:
         """
         return util.img_as_uint(
             segm.inverse_gaussian_gradient(image, alpha, sigma)
@@ -381,6 +430,9 @@ class Process(BaseProcess):
         Applies Sobel filter for edge detection. Can detect
         edges in only one dimension by using the orientation
         argument.
+
+        :param image:
+        :param orientation:
 
         TODO:
             - Could be run faster on whole stack
@@ -411,6 +463,8 @@ class Process(BaseProcess):
         Similar to ``Process.sobel_edge_detection``, but returns
         the magnitude of the gradient at each pixel, without regard
         for direction.
+
+        :param image:
         """
         y = ndi.sobel(image, axis=1)
         x = ndi.sobel(image, axis=0)
@@ -418,7 +472,10 @@ class Process(BaseProcess):
 
     @ImageHelper(by_frame=True)
     def roberts_edge_detection(self, image: Image) -> Image:
-        """Applies Roberts filter for edge detection."""
+        """Applies Roberts filter for edge detection.
+
+        :param image:
+        """
         return filt.roberts(image)
 
     @ImageHelper(by_frame=True)
@@ -427,7 +484,12 @@ class Process(BaseProcess):
                                   sigma: float = 1.,
                                   use_direction: bool = True
                                   ) -> Image:
-        """Applies recursive Gaussian filters to detect edges."""
+        """Applies recursive Gaussian filters to detect edges.
+
+        :param image:
+        :param sigma:
+        :param use_direction:
+        """
         # Set up the filter
         fil = sitk.GradientRecursiveGaussianImageFilter()
         fil.SetSigma(sigma)
@@ -449,7 +511,11 @@ class Process(BaseProcess):
                                    sigma: float = 1.,
                                    ) -> Image:
         """Applies recursive Gaussian filters to detect edges
-        and returns the gradient magnitude at each pixel."""
+        and returns the gradient magnitude at each pixel.
+
+        :param image:
+        :param sigma:
+        """
         # Only constraint on type is to be Real
         fil = sitk.GradientMagnitudeRecursiveGaussianImageFilter()
         fil.SetSigma(sigma)
@@ -480,6 +546,13 @@ class Process(BaseProcess):
         alpha and beta based on the minimum value along an edge (k1)
         and the average value away from an edge (k2). If no parameters
         are supplied, this function will attempt to guess.
+
+        :param image:
+        :param method:
+        :param alpha:
+        :param beta:
+        :param k1:
+        :param k2:
         """
         # Cast to float first to avoid precision errors
         image = util.img_as_float32(image)
@@ -538,7 +611,14 @@ class Process(BaseProcess):
                                  use_image_spacing: bool = False
                                  ) -> Image:
         """Applies a filter to calculate the distance map of a binary
-        image with objects. The distance inside objects is negative."""
+        image with objects. The distance inside objects is negative.
+
+        :param image:
+        :param value_range:
+        :param inside_positive:
+        :param use_euclidean:
+        :param use_image_spacing:
+        """
         # Needs to be integer image in most cases
         img = sitk.GetImageFromArray(image)
         img = cast_sitk(img, 'sitkUInt16')
@@ -559,6 +639,12 @@ class Process(BaseProcess):
         Rescales input image frames to match the intensity
         of a reference image. By default, the reference image
         is the first frame of the input image stack.
+
+        :param image:
+        :param bins:
+        :param match_pts:
+        :param threshold:
+        :param ref_frame:
         """
         # Get frame that will set the histogram
         reference_frame = image[ref_frame]
@@ -594,6 +680,14 @@ class Process(BaseProcess):
         """
         Uses discrete wavelet transformation to estimate and remove
         the background from an image.
+
+        :param image:
+        :param wavelet:
+        :param mode:
+        :param level:
+        :param blur:
+        :param return_bg: If True, returns estimated background,
+            instead of image with background subtracted.
         """
         # Pad image to even before starting
         padder = PadHelper(target='even', axis=[1, 2], mode='edge')
@@ -629,6 +723,13 @@ class Process(BaseProcess):
         """
         Uses discrete wavelet transformation to estimate and remove
         noise from an image.
+
+        :param image:
+        :param noise_level:
+        :param thres:
+        :param wavelet:
+        :param mode:
+        :param level:
         """
         # Pad image to even before starting
         padder = PadHelper(target='even', axis=[1, 2], mode='edge')

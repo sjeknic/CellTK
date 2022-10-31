@@ -1,5 +1,5 @@
-Segmenter
-=========
+Segment
+=======
 
 .. automodule:: celltk.segment
     :members:
