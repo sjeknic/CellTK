@@ -11,8 +11,8 @@ from celltk.utils.filter_utils import outside, inside
 def segment_peaks_agglomeration(traces: np.ndarray,
                                 probabilities: np.ndarray,
                                 steps: int = 15,
-                                min_seed_prob: float = 0.9,
-                                min_peak_prob: float = 0.3,
+                                min_seed_prob: float = 0.6,
+                                min_peak_prob: float = 0.5,
                                 min_seed_length: int = 2,
                                 **kwargs  # Messy fix for running this from derived metrics
                                 ) -> np.ndarray:
@@ -26,40 +26,33 @@ def segment_peaks_agglomeration(traces: np.ndarray,
     assert traces.shape[:2] == probabilities.shape[:2]
 
     # Apply to each trace
+    assert probabilities.ndim == 3
+    if probabilities.shape[-1] == 3:
+        # Background probability is not needed
+        probabilities = probabilities[..., 1:]
+    elif probabilities.shape[-1] < 2 or probabilities.shape[-1] > 3:
+        raise ValueError('Expected 2 or 3 classes in probabilities. '
+                         f'Got {probabilities.shape[-1]}.')
+
+    # Extract individual probabilities
+    slope, plateau = (probabilities[..., 0],
+                      probabilities[..., 1])
+
     out = np.zeros(traces.shape, dtype=np.uint8)
-    for n, (t, p) in enumerate(zip(traces, probabilities)):
-        out[n] = _peak_labeler(t, p)
+    for n, (t, s, p) in enumerate(zip(traces, slope, plateau)):
+        out[n] = _peak_labeler(t, s, p,
+                               min_seed_prob=min_seed_prob,
+                               min_peak_prob=min_peak_prob,
+                               min_seed_length=min_seed_length)
 
     return out
 
 
-def _peak_labeler(trace: np.ndarray,
-                  probability: np.ndarray,
-                  steps: int = 15,
-                  min_seed_prob: float = 0.9,
-                  min_peak_prob: float = 0.3,
-                  min_seed_length: int = 2
-                  ) -> np.ndarray:
-    """Gets 1D trace and returns with peaks labeled
-    """
-    # Get seeds based on constant probability
-    seeds = _idxs_to_labels(
-        trace, _constant_thres_peaks(probability, min_seed_prob,
-                                     min_seed_length)
-    )
-
-    # Use iterative watershed to segment
-    peaks = _agglom_watershed_peaks(trace, seeds, probability,
-                                    steps, min_peak_prob)
-
-    return peaks
-
-
-def _constant_thres_peaks(probability: np.ndarray,
-                          min_probability: float = 0.8,
-                          min_length: int = 8,
-                          max_gap: int = 2
-                          ) -> List[np.ndarray]:
+def constant_thres_peaks(probability: np.ndarray,
+                         min_probability: float = 0.8,
+                         min_length: int = 8,
+                         max_gap: int = 2
+                         ) -> List[np.ndarray]:
     """"""
     candidate_pts = np.where(probability >= min_probability)[0]
 
@@ -68,6 +61,29 @@ def _constant_thres_peaks(probability: np.ndarray,
     bounds = np.where(diffs >= max_gap)[0]
 
     return [p for p in np.split(candidate_pts, bounds) if len(p) >= min_length]
+
+
+def _peak_labeler(trace: np.ndarray,
+                  slope: np.ndarray,
+                  plateau: np.ndarray,
+                  steps: int = 15,
+                  min_seed_prob: float = 0.6,
+                  min_peak_prob: float = 0.5,
+                  min_seed_length: int = 2
+                  ) -> np.ndarray:
+    """Gets 1D trace and returns with peaks labeled
+    """
+    # Get seeds based on constant probability
+    seeds = _idxs_to_labels(
+        trace, constant_thres_peaks(plateau, min_seed_prob,
+                                    min_seed_length)
+    )
+
+    # Use iterative watershed to segment
+    peaks = _agglom_watershed_peaks(trace, seeds, slope + plateau,
+                                    steps, min_peak_prob)
+
+    return peaks
 
 
 def _agglom_watershed_peaks(trace: np.ndarray,
