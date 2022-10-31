@@ -132,6 +132,11 @@ class ConditionArray():
         return self.coords['metrics']
 
     @property
+    def ncells(self):
+        """Number of cells present in array"""
+        return self._arr.shape[3]
+
+    @property
     def keys(self):
         """All the possible keys that can be used to index the data array."""
         return list(itertools.product(self.coords['regions'],
@@ -1218,6 +1223,11 @@ class ExperimentArray:
     def metrics(self):
         """Returns list of the names of the metrics in each ConditionArray."""
         return next(iter(self.sites.values())).metrics
+
+    @property
+    def ncells(self):
+        """Returns list of the number of cells in each ConditionArray."""
+        return next(iter(self.sites.values())).ncells
 
     @property
     def time(self):
