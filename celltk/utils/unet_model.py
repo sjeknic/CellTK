@@ -15,7 +15,11 @@ from tensorflow.keras.layers import (Conv1D, MaxPooling1D, UpSampling1D,
                                      BatchNormalization, Input, Activation,
                                      Concatenate, Layer)
 from tensorflow.keras import backend as K
-from keras.layers.advanced_activations import LeakyReLU
+try:
+    from keras.layers.advanced_activations import LeakyReLU
+except ImportError:
+    # Needed for compatibility with new keras versions
+    from keras.layers.activation.leaky_relu import LeakyReLU
 import tensorflow.keras.models
 import celltk.external.misic.extras as miext
 import celltk.external.misic.utils as miutil
@@ -353,9 +357,9 @@ class UPeakModel(_UNetStructure):
     1 - Slope
     """
     _norm_methods = ['amplitude', 'zscore']
-    _norm_kwargs = [{}, {}]
-    _norm_inplace = [True, False]
-    _model_kws = dict(classes=2, kernel=4, steps=2, layers=2,
+    _norm_kwargs = [{}, {'norm': False}]
+    _norm_inplace = [True, True]
+    _model_kws = dict(classes=3, kernel=4, steps=3, layers=2,
                       init_filters=64, transfer=False, activation='leaky',
                       padding='same', mode=0, momentum=0.9)
 
@@ -383,14 +387,15 @@ class UPeakModel(_UNetStructure):
 
     def predict(self,
                 array: np.ndarray,
-                roi: Tuple[int] = 1,
+                roi: Tuple[int] = (1, 2),
                 min_nonnan: int = 2
                 ) -> np.ndarray:
         """
         By default, returns slope and plateau summed
         """
         # Create default output - all nans
-        out = np.empty(array.shape)
+        if isinstance(roi, int): roi = (roi,)
+        out = np.empty((*array.shape, len(roi)))
         out[:] = np.nan
 
         # Cells with all or nearly all nans need to be removed
@@ -414,7 +419,7 @@ class UPeakModel(_UNetStructure):
         preds = self.undo_padding(preds, pads)
 
         # Add predictions back to out
-        out[~nan_mask, :] = preds[..., roi]
+        out[~nan_mask, ...] = preds[..., roi]
 
         # Returns a 3D arr...
         return out
@@ -612,7 +617,7 @@ class MisicModel(FluorUNetModel):
     # TODO: Add logging of citation information
     # TODO: Add custom build of structure
     '''
-    NOTE: I tried building out a model with a separate input layer that
+    TODO: I tried building out a model with a separate input layer that
     would allow for calculations on the whole frame at once. Unfortunately,
     I couldn't get this to work. Possibly completely unrelated to the model
     structure though, so if I have time, then maybe something to try. I'm leaving

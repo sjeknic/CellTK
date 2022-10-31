@@ -24,7 +24,7 @@ Next, build a set of ``Operations`` that you would like to use on those images. 
 
 ::
 
-    seg = celltk.Segmenter(images=['channel000'], output='seg', save=True, force_rerun=False)
+    seg = celltk.Segment(images=['channel000'], output='seg', save=True, force_rerun=False)
 
 Next, we add the functions to the operation. For this example, we want to use UNet to find the nuclei followed by a simple constant threshold and cleaning to label the nuclei. Any kwargs those functions require can be passed to ``add_function``. We will use the example weights for UNet, but if you have your own weights, you can pass them with the kwarg ``weight_path``. For any function, you can add the kwarg ``save_as`` to save those output files. It's best to add this to time consuming operations so that they do not need to be repeated.
 
@@ -38,7 +38,7 @@ Next, we will add a tracking operation using the same format as above. This time
 
 ::
 
-    tra = celltk.Tracker(images=['channel000'], masks='seg', output='nuc',
+    tra = celltk.Track(images=['channel000'], masks='seg', output='nuc',
                          save=True, force_rerun=False)
     tra.add_function('kit_sch_ge_tracker')
 

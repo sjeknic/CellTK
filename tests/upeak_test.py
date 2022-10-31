@@ -49,6 +49,6 @@ class TestPeakSegmentation():
         assert self.arr.shape[:2] == self.pred.shape[:2]
 
         # Only pass the peak value
-        out = segment_peaks_agglomeration(self.arr, self.pred[..., 1])
+        out = segment_peaks_agglomeration(self.arr, self.pred)
 
         assert out.shape == self.arr.shape

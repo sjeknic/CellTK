@@ -132,6 +132,11 @@ class ConditionArray():
         return self.coords['metrics']
 
     @property
+    def ncells(self):
+        """Number of cells present in array"""
+        return self._arr.shape[3]
+
+    @property
     def keys(self):
         """All the possible keys that can be used to index the data array."""
         return list(itertools.product(self.coords['regions'],
@@ -867,7 +872,7 @@ class ConditionArray():
         assert data.ndim == 2
 
         # Make the destination metric slots and keys
-        slots = ['peak_prob']
+        slots = ['slope_prob', 'plateau_prob']
         if segment:
             # Add the extra slot here
             self.add_metric_slots(slots + ['peaks'])
@@ -875,16 +880,17 @@ class ConditionArray():
             self.add_metric_slots(slots)
 
         base = self._get_key_components(key, 'metrics')
-        dest_key = base + tuple(slots)
+        dest_keys = [base + (s,) for s in slots]
 
         # Initialize the UPeak model if needed
         if not model:
             model = UPeakModel(weight_path)
 
         # Get predictions of where peaks exist
-        predictions = model.predict(data, roi=1)
-        self[dest_key] = predictions
-        if propagate: self.propagate_values(dest_key, prop_to=propagate)
+        predictions = model.predict(data, roi=(1, 2))
+        for i, d in enumerate(dest_keys):
+            self[d] = predictions[..., i]
+            if propagate: self.propagate_values(d, prop_to=propagate)
 
         # Segment peaks if needed
         if segment:
@@ -1145,7 +1151,7 @@ class ExperimentArray:
 
         # Save arrays if given
         if arrays is not None:
-            [self.__setitem__(None, a) for a in arrays]
+            [self.__setitem__(a.name, a) for a in arrays]
 
         # Build dictionary for saving masks
         self.masks = {k: {} for k in self.sites}
@@ -1218,6 +1224,11 @@ class ExperimentArray:
     def metrics(self):
         """Returns list of the names of the metrics in each ConditionArray."""
         return next(iter(self.sites.values())).metrics
+
+    @property
+    def ncells(self):
+        """Returns list of the number of cells in each ConditionArray."""
+        return next(iter(self.sites.values())).ncells
 
     @property
     def time(self):

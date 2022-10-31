@@ -12,12 +12,15 @@ The easiest installation method is via pip:
 
 `pip install celltk2`
 
-You can also `git clone` the repository and install the requirements in a clean python environment.
-Requires python 3.8+
+To install [BayesianTracker](https://github.com/quantumjot/BayesianTracker) tracking method:
 
-`git clone https://github.com/sjeknic/CellTK`
+`pip install celltk2[btrack]`
 
-`pip install -r requirements.txt`  
+Note: If you are using a Mac with Apple silicon processor, you may run into some issues with this installation. Your best bet may be to try to use conda to install cvxopt before doing the pip install above.
+
+To install [graph-based](https://git.scc.kit.edu/KIT-Sch-GE/2021-cell-tracking) tracking method:
+
+`pip install celltk2[kit]`
 
 If you run into any problems, please open an issue.
 
@@ -27,3 +30,6 @@ More details on getting started coming soon. In the meantime, please see the doc
 
 ## Documentation
 [https://celltk.readthedocs.io/en/latest/](https://celltk.readthedocs.io/en/latest/)
+
+## Credits
+This would not be possible without the original CellTK: [https://github.com/braysia/CellTK](https://github.com/braysia/CellTK)

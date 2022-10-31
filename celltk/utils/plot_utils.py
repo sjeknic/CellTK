@@ -67,6 +67,9 @@ class PlotHelper:
                       'marker', 'opacity', 'pointpos', 'points', 'span',
                       'width', 'hoverinfo')
     _bar_kwargs = ('hoverinfo', 'marker', 'width')
+    _box_kwargs = ('mean', 'lowerfence', 'upperfence', 'notched', 'notchspan',
+                   'notchwidth', 'q1', 'q3', 'quartilemethod', 'sd',
+                   'whiskerwidth')
 
     class _Normalizer:
         def __init__(self, fitter: base.BaseEstimator) -> None:
@@ -1611,6 +1614,177 @@ class PlotHelper:
 
         return fig
 
+    def box_plot(self,
+                 arrays: Collection[np.ndarray],
+                 keys: Collection[str] = [],
+                 colors: Union[str, Collection[str]] = None,
+                 line_colors: Union[str, Collection[str]] = None,
+                 alpha: float = 1.0,
+                 orientation: str = 'v',
+                 show_points: Union[str, bool] = False,
+                 jitter: float = None,
+                 show_mean: bool = False,
+                 width: float = 0,
+                 add_cell_numbers: bool = True,
+                 legend: bool = True,
+                 figure: Union[go.Figure, go.FigureWidget] = None,
+                 figsize: Tuple[int] = (None, None),
+                 margin: str = 'auto',
+                 title: str = None,
+                 x_label: str = None,
+                 y_label: str = None,
+                 x_limit: Tuple[float] = None,
+                 y_limit: Tuple[float] = None,
+                 tick_size: float = None,
+                 axis_label_size: float = None,
+                 widget: bool = False,
+                 row: int = None,
+                 col: int = None,
+                 **kwargs
+                 ) -> Union[go.Figure, go.FigureWidget]:
+        """
+        Builds a Plotly go.Figure object with box and whisker
+        distributions for each of the arrays given.
+
+        :param arrays: List of arrays to plot. Arrays are assumed to be
+            one dimensional.
+        :param keys: Names corresponding to the data arrays. If not provided,
+            the keys will be integers.
+        :param colors: Name of a color palette or map to use to fill boxes.
+            Searches first in seaborn/matplotlib, then in Plotly to find
+            the color map. If not provided, the color map will be glasbey.
+            Can also be list of named CSS colors or hexadecimal or
+            RGBA strings.
+        :param line_colors: Name of a color palette or map to use for outlines
+            of boxes. Searches first in seaborn/matplotlib, then in Plotly to
+            find the color map. If not provided, will use same colormap as
+            colors. Can also be list of named CSS colors or hexadecimal or
+            RGBA strings.
+        :param alpha: Opacity of the fill color of the box plots as a float
+            in the range [0, 1].
+        :param orientation: Orientation of the box plot.
+        :param show_points: If True, individual data points are overlaid over
+            the box plot. If 'outliers' or 'suspectedoutliers', only points
+            that lie outside a certain distance from the interquartile range
+            are shown.
+        :param jitter: Sets the jitter in the sample points drawn. Ranges
+            from 0-1. If 0, points are aligned on distribution axis, if 1,
+            points are drawn in random jitter the width of the boxes.
+        :param show_mean: If True, dashed line is plotted at the mean value.
+        :param width: Sets the width of the boxes. If 0, width is automatically
+            set.
+        :param add_cell_numbers: If True, adds the number of cells to each key
+            in keys.
+        :param legend: If False, no legend is made on the plot.
+        :param figure: If a go.Figure object is given, will be used to make
+            the plot instead of a blank figure.
+        :param figsize: Height and width of the plot in pixels. Must be a tuple
+            of length two. To leave height or width unchanged, set as None.
+        :param margin: Set the size of the margins. If 'auto', all margins
+            are set to defualt values. If 'zero' or 'tight', margins are
+            removed. If a number is given, sets all margins to that number.
+        :param title: Title to add to the plot
+        :param x_label: Label of the x-axis
+        :param y_label: Label of the y-axis
+        :param x_limit: Initial limits for the x-axis. Can be changed if
+            the plot is saved as an HTML object. Only applies if orientation
+            is horizontal.
+        :param y_limit: Initial limits for the y-axis. Can be changed if
+            the plot is saved as an HTML object. Only applies if orientation
+            is veritcal.
+        :param tick_size: Size of the font of the axis tick labels.
+        :param axis_label_size: Size of the font of the axis label.
+        :param widget: If True, returns a go.FigureWidget object instead of
+            a go.Figure object.
+        :param row: If Figure has multiple subplots, specifies which row
+            to use for the plot. Indexing starts at 1. Note that some
+            formatting args (such as figsize) may still be applied to all
+            subplots. Both row and col must be provided together.
+        :param col: If Figure has multiple subplots, specifies which
+            col to use for the plot. Indexing starts at 1. Note that some
+            formatting args (such as figsize) may still be applied to all
+            subplots. Both row and col must be provided together.
+        :param kwargs: Depending on name, passed to go.Box or to
+            go.Figure.update_traces(). The following kwargs are passed to
+            go.Box: 'mean', 'lowerfence', 'upperfence', 'notched', 'notchspan',
+            'notchwidth', 'q1', 'q3', 'quartilemethod', 'sd',
+            'whiskerwidth'.
+
+        :return: Figure object
+
+        :raises AssertionError: If not all entries in arrays or neg_arrays are
+            np.ndarray
+        :raises AssertionError: If any entry in arrays or neg_arrays have more
+            than one dimension.
+        :raises AssertionError: If neg_arrays is given, and
+            len(arrays) != len(neg_arrays)
+        :raises AssertionError: If figsize is not a tuple of length two.
+        """
+        # Format inputs
+        arrays = self._format_arrays(arrays)
+        arrays = [np.squeeze(a) for a in arrays]
+        keys = self._format_keys(keys, default='dist', arrays=arrays,
+                                 add_cell_numbers=add_cell_numbers)
+        assert all([a.ndim in (1, 0) for a in arrays])
+        assert orientation in ('v', 'h', 'horizontal', 'vertical')
+        if show_points == True: show_points = 'all'
+        assert show_points in ('all', 'outliers', None,
+                               'suspectedoutliers', False)
+        assert len(figsize) == 2
+
+        # Convert any inputs that need converting
+        if line_colors is None:
+            # Don't apply alpha to the lines
+            line_colors = self._build_colormap(colors, len(arrays))
+        else:
+            line_colors = self._build_colormap(line_colors, len(arrays))
+        colors = self._build_colormap(colors, len(arrays), alpha)
+
+        box_kwargs = {k: v for k, v in kwargs.items()
+                      if k in self._box_kwargs}
+        kwargs = {k: v for k, v in kwargs.items()
+                  if k not in self._box_kwargs}
+
+        # Build the figure and start plotting
+        if figure:
+            fig = figure
+        elif widget:
+            fig = go.FigureWidget()
+        else:
+            fig = go.Figure()
+
+        for idx, (arr, key) in enumerate(zip(arrays, keys)):
+            # Set the data key based on orientation
+            if orientation in ('v', 'vertical'):
+                y = arr
+                x = None
+            elif orientation in ('h', 'horizontal'):
+                y = None
+                x = arr
+
+            # Set up the colors
+            _c = next(colors)
+            _lc = next(line_colors)
+            box_kwargs.update({'fillcolor': _c})
+            line = {'color': _lc}
+
+            # Make individual distributions on the plot
+            trace = go.Box(x=x, y=y, name=key, legendgroup=key,
+                           hoverinfo='skip', line=line, width=width,
+                           boxpoints=show_points, jitter=jitter,
+                           boxmean=show_mean, **box_kwargs)
+            fig.add_traces(trace, rows=row, cols=col)
+
+        # Format plot on the way out
+        fig = self._apply_format_figure(fig, figsize, title,
+                                        x_label, y_label, x_limit, y_limit,
+                                        legend, tick_size, axis_label_size,
+                                        axis_type='default', margin=margin,
+                                        row=row, col=col)
+        fig.update_traces(**kwargs)
+
+        return fig
+
     def heatmap_plot(self,
                      array: np.ndarray,
                      colorscale: str = 'viridis',
@@ -1869,7 +2043,7 @@ class PlotHelper:
 
         fig = self._apply_format_figure(fig, figsize, title,
                                         x_label, y_label, x_limit, y_limit,
-                                        tick_size, axis_label_size,
+                                        False, tick_size, axis_label_size,
                                         axis_type='noline', margin=margin,
                                         row=row, col=col)
 
@@ -2022,7 +2196,7 @@ class PlotHelper:
 
         fig = self._apply_format_figure(fig, figsize, title,
                                         x_label, y_label, x_limit, y_limit,
-                                        tick_size, axis_label_size,
+                                        False, tick_size, axis_label_size,
                                         axis_type='noline', margin=margin,
                                         row=row, col=col)
 
@@ -2126,7 +2300,7 @@ class PlotHelper:
                     background = go.Scatter(x=time, y=trace, line=line_kwargs,
                                             showlegend=False, mode='lines',
                                             **kwargs)
-                    fig.add_traces(background, row=r, col=c)
+                    fig.add_traces(background, rows=r, cols=c)
 
                     # Plot regions of the traces that will be different colors
                     for carr, thres in zip(color_arrays, color_thres):
@@ -2138,7 +2312,7 @@ class PlotHelper:
                                             line=line_kwargs,
                                             showlegend=False, mode='lines',
                                             **kwargs)
-                        fig.add_traces(ctrace, row=r, col=c)
+                        fig.add_traces(ctrace, rows=r, cols=c)
 
                     trace_idx += 1
                 except IndexError:

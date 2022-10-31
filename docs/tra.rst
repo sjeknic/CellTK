@@ -1,5 +1,5 @@
-Tracker
-=======
+Track
+=====
 
 .. automodule:: celltk.track
     :members:
