@@ -32,7 +32,7 @@ If you run into any problems, please open an issue.
 
 Acknowledgments
 ---------------
-This would not be possible without the original CellTK: [https://github.com/braysia/CellTK](https://github.com/braysia/CellTK)
+This would not be possible without the original CellTK_.
 
 
 .. toctree::
@@ -56,3 +56,4 @@ Indices and tables
 
 .. _BayesianTracker: https://github.com/quantumjot/BayesianTracker
 .. _tracking: https://git.scc.kit.edu/KIT-Sch-GE/2021-cell-tracking
+.. _CellTK: https://github.com/braysia/CellTK
